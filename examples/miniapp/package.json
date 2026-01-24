@@ -24,7 +24,7 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@openrouter/ai-sdk-provider": "^1.1.2",
+		"@openrouter/ai-sdk-provider": "^2.0.0",
 		"@coinbase/onchainkit": "latest",
 		"@farcaster/miniapp-sdk": "^0.1.8",
 		"@tanstack/react-query": "^5.81.5",
