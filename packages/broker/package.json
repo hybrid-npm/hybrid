@@ -1,0 +1,43 @@
+{
+	"name": "@hybrd/broker",
+	"version": "0.0.1",
+	"description": "Stateful Connection Broker for managing persistent provider connections",
+	"type": "module",
+	"main": "./dist/index.js",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"import": "./dist/index.js",
+			"types": "./dist/index.d.ts"
+		}
+	},
+	"files": ["dist"],
+	"scripts": {
+		"build": "tsup",
+		"build:watch": "tsup --watch",
+		"lint": "biome lint ./src",
+		"lint:fix": "biome lint --write ./src",
+		"typecheck": "tsc --noEmit",
+		"test": "vitest run",
+		"test:watch": "vitest"
+	},
+	"dependencies": {
+		"@hybrd/types": "workspace:*",
+		"@hybrd/utils": "workspace:*",
+		"hono": "^4.7.7",
+		"ioredis": "^5.4.1",
+		"ws": "^8.18.0",
+		"zod": "^3.24.1"
+	},
+	"devDependencies": {
+		"@types/node": "^22.10.10",
+		"@types/ws": "^8.5.13",
+		"tsup": "8.3.6",
+		"typescript": "5.9.2",
+		"vitest": "2.1.8"
+	},
+	"peerDependencies": {
+		"typescript": "^5.0.0"
+	}
+}
