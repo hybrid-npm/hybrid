@@ -35,7 +35,7 @@ export type {
 }
 
 /**
- * Core Agent implementation using AI SDK 5 directly.
+ * Core Agent implementation using AI SDK 6 directly.
  * This class provides a flexible interface for creating AI agents with
  * dynamic configuration, tool support, and streaming capabilities.
  */
@@ -195,7 +195,7 @@ export class Agent<TRuntimeExtension = DefaultRuntimeExtension>
 	async generate(
 		messages: UIMessage[],
 		options: GenerateOptions<TRuntimeExtension>
-	) {
+	): Promise<Awaited<ReturnType<typeof generateText>>> {
 		try {
 			const extendedRuntime = await this.createRuntimeContext(options.runtime)
 
@@ -216,11 +216,11 @@ export class Agent<TRuntimeExtension = DefaultRuntimeExtension>
 					)
 				: undefined
 
-			const result = await generateText({
-				...this.generationDefaults,
-				...aiSdkOptions,
-				model,
-				messages: convertToModelMessages(preparedMessages),
+const result = await generateText({
+			...this.generationDefaults,
+			...aiSdkOptions,
+			model,
+			messages: await convertToModelMessages(preparedMessages),
 				tools: aiSDKTools,
 				toolChoice:
 					aiSDKTools && Object.keys(aiSDKTools).length > 0 ? "auto" : undefined,
@@ -273,11 +273,11 @@ export class Agent<TRuntimeExtension = DefaultRuntimeExtension>
 					)
 				: undefined
 
-			const result = await streamText({
-				...this.streamDefaults,
-				...aiSdkOptions,
-				model,
-				messages: convertToModelMessages(preparedMessages),
+const result = await streamText({
+			...this.streamDefaults,
+			...aiSdkOptions,
+			model,
+			messages: await convertToModelMessages(preparedMessages),
 				tools: aiSDKTools,
 				toolChoice:
 					aiSDKTools && Object.keys(aiSDKTools).length > 0 ? "auto" : undefined,

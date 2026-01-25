@@ -22,7 +22,7 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@openrouter/ai-sdk-provider": "^1.1.2"
+		"@openrouter/ai-sdk-provider": "^2.0.0"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.4",

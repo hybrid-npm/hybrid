@@ -10,8 +10,8 @@ catalog:
 
 catalogs:
   ai:
-    "ai": "^5.0.15"
-    "@openrouter/ai-sdk-provider": "^1.1.2"
+    "ai": "^6.0.0"
+    "@openrouter/ai-sdk-provider": "^2.0.0"
 
   react19:
     react: 19.0.0
