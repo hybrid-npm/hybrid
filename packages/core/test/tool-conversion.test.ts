@@ -78,7 +78,7 @@ describe("toAISDKTool", () => {
 
 		const aiSdkTool = toAISDKTool(tool, mockRuntime, mockMessages)
 
-		await aiSdkTool.execute!({ input: "test-value" }, mockToolOptions)
+		await aiSdkTool.execute?.({ input: "test-value" }, mockToolOptions)
 
 		expect(executeMock).toHaveBeenCalledWith({
 			input: { input: "test-value" },
@@ -98,7 +98,7 @@ describe("toAISDKTool", () => {
 
 		const aiSdkTool = toAISDKTool(tool, mockRuntime, mockMessages)
 
-		const result = await aiSdkTool.execute!({}, mockToolOptions)
+		const result = await aiSdkTool.execute?.({}, mockToolOptions)
 
 		expect(result).toEqual(expectedResult)
 	})
@@ -129,7 +129,7 @@ describe("toAISDKTool", () => {
 			options: { precision: 2 }
 		}
 
-		await aiSdkTool.execute!(input, mockToolOptions)
+		await aiSdkTool.execute?.(input, mockToolOptions)
 
 		expect(executeMock).toHaveBeenCalledWith({
 			input: {
@@ -153,7 +153,7 @@ describe("toAISDKTool", () => {
 
 		const aiSdkTool = toAISDKTool(tool, mockRuntime, mockMessages)
 
-		const result = await aiSdkTool.execute!({}, mockToolOptions)
+		const result = await aiSdkTool.execute?.({}, mockToolOptions)
 
 		expect(result).toEqual({ delayed: true })
 	})
@@ -169,7 +169,7 @@ describe("toAISDKTool", () => {
 
 		const aiSdkTool = toAISDKTool(tool, mockRuntime, mockMessages)
 
-		await expect(aiSdkTool.execute!({}, mockToolOptions)).rejects.toThrow(
+		await expect(aiSdkTool.execute?.({}, mockToolOptions)).rejects.toThrow(
 			"Tool execution failed"
 		)
 	})
@@ -236,8 +236,8 @@ describe("toAISDKTools", () => {
 
 		const aiSdkTools = toAISDKTools(tools, mockRuntime, mockMessages)
 
-		await aiSdkTools.tool1.execute!({ x: "test" }, mockToolOptions)
-		await aiSdkTools.tool2.execute!({ y: 42 }, mockToolOptions)
+		await aiSdkTools.tool1.execute?.({ x: "test" }, mockToolOptions)
+		await aiSdkTools.tool2.execute?.({ y: 42 }, mockToolOptions)
 
 		expect(execute1).toHaveBeenCalledWith({
 			input: { x: "test" },
@@ -414,7 +414,7 @@ describe("Tool Runtime Extension Support", () => {
 			extendedRuntime as unknown as AgentRuntime & DefaultRuntimeExtension,
 			mockMessages
 		)
-		const result = await aiSdkTool.execute!({}, mockToolOptions)
+		const result = await aiSdkTool.execute?.({}, mockToolOptions)
 
 		expect(customService.doSomething).toHaveBeenCalled()
 		expect(result).toEqual({ result: "custom result" })

@@ -670,7 +670,7 @@ describe("Agent AISDK Integration - Tool Execution", () => {
 		mockGenerateText.mockImplementation(async (options) => {
 			// Simulate calling the tool with required AISDK options
 			const toolOptions = { toolCallId: "tc-1", messages: [] }
-			const toolResult = await options.tools?.greet.execute!(
+			const toolResult = await options.tools?.greet.execute?.(
 				{ name: "World" },
 				toolOptions
 			)
@@ -728,7 +728,7 @@ describe("Agent AISDK Integration - Tool Execution", () => {
 
 		mockGenerateText.mockImplementation(async (options) => {
 			const toolOptions = { toolCallId: "tc-1", messages: [] }
-			await options.tools?.contextTool.execute!({}, toolOptions)
+			await options.tools?.contextTool.execute?.({}, toolOptions)
 			return {
 				text: "Done",
 				toolCalls: [],
