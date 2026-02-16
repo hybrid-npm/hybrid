@@ -217,7 +217,7 @@ export function runAgent(
 				}
 			} catch (err) {
 				const errorMessage = err instanceof Error ? err.message : "Agent error"
-				console.error(`[agent] error in pull():`, err)
+				console.error("[agent] error in pull():", err)
 				try {
 					controller.enqueue(
 						encodeSSEJson({ type: "error", content: errorMessage })
