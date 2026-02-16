@@ -50,6 +50,7 @@ xmtp-production-*
 xmtp-development-*
 .data/
 
+.context/
 .ponder/
 sandbox/
 scratchpad.md
