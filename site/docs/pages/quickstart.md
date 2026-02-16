@@ -1,0 +1,67 @@
+# Quickstart
+
+Get the Hybrid agent server running locally in under 5 minutes.
+
+## Prerequisites
+
+- [Node.js](https://nodejs.org) v22+
+- [pnpm](https://pnpm.io) 9.15.5+
+- An [Anthropic API key](https://console.anthropic.com)
+
+## Clone and install
+
+```bash
+git clone https://github.com/ian/hybrid.git
+cd hybrid
+pnpm install
+```
+
+## Build the agent server
+
+```bash
+pnpm build
+```
+
+This uses esbuild to bundle `apps/agent/src/server/index.ts` into `apps/agent/dist/server/index.js`.
+
+## Run locally
+
+```bash
+cd apps/agent
+pnpm dev
+```
+
+The server starts on `http://localhost:4100`.
+
+## Verify it's running
+
+```bash
+curl http://localhost:4100/health
+```
+
+```json
+{ "ok": true, "service": "agent-server" }
+```
+
+## Send a request
+
+```bash
+curl -N http://localhost:4100/api/agent \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      { "id": "1", "role": "user", "content": "Hello!" }
+    ],
+    "systemPrompt": "You are a helpful assistant.",
+    "temperature": 0.7
+  }'
+```
+
+The response streams back as Server-Sent Events. See the [SSE Protocol](/server/sse) docs for the full event format.
+
+## Next steps
+
+- [Architecture](/architecture) — Understand how the server is structured
+- [HTTP API](/server/api) — Full API reference
+- [Sub-Agents](/server/sub-agents) — How request routing works
+- [Docker deployment](/deployment/docker) — Deploy with Docker

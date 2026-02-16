@@ -1,0 +1,78 @@
+# System Prompt
+
+The system prompt controls the agent's personality, capabilities, and behavior. Hybrid builds the final system prompt by combining two sources.
+
+## Prompt assembly
+
+When a request arrives at `POST /api/agent`, the server constructs the full system prompt by joining:
+
+1. **`systemPrompt`** from the request body — provided by the client
+2. **`AGENT.md`** — loaded from disk at server startup
+
+```typescript
+function buildFullSystemPrompt(req: ContainerRequest): string {
+  const sections = [
+    req.systemPrompt,
+    AGENT_MD,
+  ].filter(Boolean)
+
+  return sections.join("\n\n")
+}
+```
+
+Empty sections are filtered out, so either source can be omitted.
+
+## AGENT.md
+
+The `AGENT.md` file lives at the project root (`apps/agent/AGENT.md`) and is loaded once when the server starts. It serves as the base system prompt shared across all requests.
+
+The default `AGENT.md`:
+
+```markdown
+# Agent
+
+You are a helpful assistant. You have access to skills that provide
+specialized knowledge and capabilities. Use the Skill tool to load
+relevant skills when needed.
+
+## Guidelines
+
+- Be concise and direct in your responses
+- Use skills when the user's request matches a skill's domain
+- If you're unsure about something, say so rather than guessing
+```
+
+### Customizing AGENT.md
+
+Edit `apps/agent/AGENT.md` to change the base behavior for all requests. Common customizations:
+
+- Agent persona and tone
+- Domain-specific knowledge boundaries
+- Default instructions for tool usage
+- Safety guidelines
+
+After editing, rebuild and redeploy the container for changes to take effect.
+
+## Project root resolution
+
+The server locates `AGENT.md` by:
+
+1. Checking the `AGENT_PROJECT_ROOT` environment variable
+2. Walking up from `__dirname` (up to 5 levels) looking for a directory containing `AGENT.md`
+3. Falling back to `__dirname/../../` as a last resort
+
+## Client-side system prompts
+
+The `systemPrompt` field in the request body lets clients customize behavior per-request without modifying the server. This is prepended before `AGENT.md` in the final prompt.
+
+```bash
+curl -N http://localhost:4100/api/agent \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [{ "id": "1", "role": "user", "content": "Hi" }],
+    "systemPrompt": "You are a customer service agent for Acme Corp. Always be polite and professional.",
+    "temperature": 0.7
+  }'
+```
+
+The agent will receive both the client's system prompt and `AGENT.md` as its combined instructions.

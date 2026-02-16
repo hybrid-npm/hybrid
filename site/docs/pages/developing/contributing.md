@@ -1,0 +1,122 @@
+---
+title: Contributing to Hybrid
+description: Guide to contributing to the Hybrid agent server
+---
+
+# Contributing
+
+## Prerequisites
+
+- **Node.js 22+**
+- **pnpm 9.15.5+**
+- **Git**
+- **Docker** (for container testing)
+
+## Setup
+
+```bash
+# Fork and clone
+git clone https://github.com/YOUR_USERNAME/hybrid.git
+cd hybrid
+
+# Install dependencies
+pnpm install
+
+# Build the agent server
+pnpm build
+```
+
+## Development
+
+The agent server lives in `apps/agent/`. Key files:
+
+```
+apps/agent/
+├── src/server/
+│   ├── index.ts        # Hono HTTP server and routes
+│   ├── agent.ts        # Claude Agent SDK integration
+│   ├── sse.ts          # SSE encoding and tool tracking
+│   └── types.ts        # TypeScript interfaces
+├── AGENT.md            # Base system prompt
+├── skills/             # Skill definitions
+├── build.mjs           # esbuild config
+├── Dockerfile          # Container image
+└── start.sh            # Container entrypoint
+```
+
+### Running locally
+
+```bash
+cd apps/agent
+pnpm dev
+```
+
+The server starts at `http://localhost:4100`. Test with:
+
+```bash
+curl http://localhost:4100/health
+```
+
+### Testing with Docker
+
+```bash
+cd apps/agent
+pnpm build
+docker build -t hybrid-agent .
+docker run -p 4100:4100 -e ANTHROPIC_API_KEY=your-key hybrid-agent
+```
+
+## Code style
+
+We use **Biome** for formatting and linting:
+
+```bash
+pnpm lint:fix
+```
+
+Conventions:
+
+- `interfaces` over `types` for object shapes
+- `unknown` instead of `any`
+- Const objects with `as const` instead of enums
+- Files/folders: `kebab-case`
+- Classes/interfaces: `PascalCase`
+- Functions/variables: `camelCase`
+
+## Submitting changes
+
+### Before you submit
+
+```bash
+pnpm lint:fix    # Format and lint
+pnpm typecheck   # Check types
+pnpm build       # Build everything
+```
+
+### Branch naming
+
+- `feature/your-feature` — new features
+- `fix/the-bug` — bug fixes
+- `docs/what-changed` — documentation
+
+### Commit format
+
+```
+feat(agent): add new sub-agent for billing
+fix(sse): handle missing tool call ID
+docs(site): update deployment guide
+```
+
+### Pull requests
+
+- Describe what changed and why
+- Note any breaking changes
+- Include testing steps
+
+## Reporting issues
+
+[Open an issue](https://github.com/ian/hybrid/issues) with:
+
+- What you expected vs. what happened
+- Steps to reproduce
+- Environment details (OS, Node version)
