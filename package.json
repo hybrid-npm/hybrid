@@ -11,26 +11,15 @@
 	"packageManager": "pnpm@9.15.5",
 	"scripts": {
 		"build": "turbo run build --ui stream",
-		"build:watch": "turbo run build:watch --ui stream",
-		"build:packages": "turbo run build --ui stream --filter=./packages/**",
 		"clean": "pnpm -r clean",
 		"nuke": "find . -name 'node_modules' -type d -exec rm -rf {} +",
 		"test": "turbo run test --ui stream",
 		"lint": "turbo run lint --continue --ui stream",
 		"lint:fix": "turbo run lint:fix --continue --ui stream",
-		"typecheck": "turbo run typecheck --ui stream",
-		"generate": "pnpm -r generate",
-		"readmes": "plop --plopfile scripts/readmes.js packages",
-		"bump": "tsx scripts/bump.ts",
-		"bump:patch": "tsx scripts/bump.ts patch",
-		"bump:minor": "tsx scripts/bump.ts minor",
-		"bump:major": "tsx scripts/bump.ts major",
-		"release": "pnpm build:packages && pnpm -r publish --force --access public --no-git-checks",
-		"ruler": "npx @intellectronica/ruler apply"
+		"typecheck": "turbo run typecheck --ui stream"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "1.9.4",
-		"plop": "^4.0.3",
 		"tsx": "4.19.3",
 		"turbo": "2.5.0",
 		"typescript": "5.9.2"

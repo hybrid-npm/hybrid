@@ -1,0 +1,23 @@
+{
+	"name": "agent",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"build": "node build.mjs",
+		"dev": "tsx src/server/index.ts",
+		"lint": "biome lint --unsafe",
+		"lint:fix": "biome lint --write --unsafe",
+		"typecheck": "NODE_OPTIONS='--max-old-space-size=4096' tsc --noEmit"
+	},
+	"dependencies": {
+		"@anthropic-ai/claude-agent-sdk": "^0.2.38",
+		"@hono/node-server": "^1.14.1",
+		"hono": "catalog:stack"
+	},
+	"devDependencies": {
+		"@anthropic-ai/sdk": "^0.74.0",
+		"@types/node": "catalog:stack",
+		"esbuild": "^0.27.3",
+		"tsx": "^4.20.5"
+	}
+}

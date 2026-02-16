@@ -1,24 +1,10 @@
 packages:
   - apps/*
-  - config/*
-  - packages/*
-  - sandbox/*
-  - site
 
 catalog:
   zod: ^3.22.0 || ^4
 
 catalogs:
-  ai:
-    "ai": "^6.0.0"
-    "@openrouter/ai-sdk-provider": "^2.0.0"
-
-  react19:
-    react: 19.0.0
-    react-dom: 19.0.0
-    "@types/react": 19.0.0
-    "@types/react-dom": 19.0.0
-
   stack:
     "@types/node": 22.8.6
     "hono": 4.9.2
