@@ -1,5 +1,5 @@
 import { Hono } from "hono"
-import { AGENT_ENDPOINT, AGENT_PORT, HEALTH_CHECK_PATH, type ContainerRequest } from "./types"
+import { AGENT_ENDPOINT, HEALTH_CHECK_PATH, type ContainerRequest } from "./types"
 import { runAgent } from "./agent"
 
 const app = new Hono()

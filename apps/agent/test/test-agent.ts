@@ -38,11 +38,11 @@ const payload: ContainerRequest = {
 	temperature,
 }
 
-console.log(`\n--- test-agent ---`)
+console.log("\n--- test-agent ---")
 console.log(`endpoint: ${endpoint}`)
 console.log(`message:  "${message}"`)
 console.log(`temperature: ${temperature}`)
-console.log(`---\n`)
+console.log("---\n")
 
 async function run() {
 	const response = await fetch(endpoint, {
