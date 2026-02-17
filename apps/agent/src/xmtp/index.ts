@@ -4,7 +4,18 @@ import { runAgent } from "../server/agent"
 import { collectTextFromStream } from "./collect"
 
 export async function startXmtpAgent(): Promise<void> {
+	console.log("[xmtp] connecting...")
 	const agent = await Agent.createFromEnv()
+
+	const address = agent.client.accountIdentifier?.identifier
+	const inboxId = agent.client.inboxId
+	const network = agent.client.options?.env ?? "unknown"
+	const registered = agent.client.isRegistered
+
+	console.log("[xmtp] network:", network)
+	console.log("[xmtp] address:", address ?? "unknown")
+	console.log("[xmtp] inbox ID:", inboxId)
+	console.log("[xmtp] registered:", registered)
 
 	agent.on("text", async (ctx) => {
 		const incomingText = ctx.message.content ?? ""
@@ -47,5 +58,5 @@ export async function startXmtpAgent(): Promise<void> {
 	})
 
 	await agent.start()
-	console.log("[xmtp] agent started")
+	console.log("[xmtp] listening for messages")
 }
