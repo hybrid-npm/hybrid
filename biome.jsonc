@@ -24,6 +24,6 @@
 		"indentStyle": "tab"
 	},
 	"files": {
-		"ignore": ["node_modules", "dist", ".turbo"]
+		"ignore": ["node_modules", "dist", ".turbo", ".source", ".next", "out"]
 	}
 }

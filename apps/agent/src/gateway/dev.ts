@@ -1,5 +1,8 @@
+import { loadDevVars } from "../env"
+loadDevVars()
+
 import { serve } from "@hono/node-server"
-import app from "./index"
+import app from "./adapters/node"
 import { GATEWAY_PORT } from "../server/types"
 
 serve({ fetch: app.fetch, port: GATEWAY_PORT }, (info) => {

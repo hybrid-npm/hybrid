@@ -1,3 +1,6 @@
+import { loadDevVars } from "../env"
+loadDevVars()
+
 import { serve } from "@hono/node-server"
 import app from "./index"
 import { startXmtpAgent } from "../xmtp/index"
