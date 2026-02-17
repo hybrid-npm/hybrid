@@ -3,5 +3,23 @@
 	"main": "src/gateway/index.ts",
 	"compatibility_date": "2025-12-01",
 	"compatibility_flags": ["nodejs_compat_v2"],
-	"vars": { "CONTAINER_URL": "http://localhost:4100" }
+	"vars": {
+		"CONTAINER_URL": "http://localhost:4100",
+		"CLOUDFLARE_R2_ACCOUNT_ID": "",
+		"CLOUDFLARE_R2_BUCKET_NAME": "agent-storage"
+	},
+	"r2_buckets": [
+		{
+			"binding": "STORAGE_BUCKET",
+			"bucket_name": "agent-storage"
+		}
+	],
+	"containers": [
+		{
+			"class_name": "Sandbox",
+			"tag": "agent-sandbox",
+			"max_instances": 10,
+			"instance_type": "standard"
+		}
+	]
 }

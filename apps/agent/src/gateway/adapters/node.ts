@@ -1,6 +1,9 @@
 import { Hono } from "hono"
 import { AGENT_ENDPOINT, HEALTH_CHECK_PATH } from "../../server/types"
 import { proxyToContainer } from "../proxy"
+import { mountLocalStorage } from "../storage/node"
+
+mountLocalStorage()
 
 const app = new Hono()
 
