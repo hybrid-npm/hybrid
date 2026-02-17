@@ -3,10 +3,12 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import {
 	type AgentDefinition,
+	type HookCallback,
 	type Options,
+	type PreToolUseHookInput,
 	query
 } from "@anthropic-ai/claude-agent-sdk"
-import type { ContainerRequest } from "./types"
+import type { ContainerRequest, UIMessageLite } from "./types"
 import {
 	ToolBlockTracker,
 	buildUsagePayload,
@@ -45,33 +47,72 @@ function loadMarkdownFile(relativePath: string): string {
 }
 
 const AGENT_MD = loadMarkdownFile("AGENT.md")
+const GENERAL_SKILL = loadMarkdownFile("src/skills/general.md")
+const SUPPORT_SKILL = loadMarkdownFile("src/skills/support.md")
+
+const SECRET_ENV_VARS = ["ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"]
+
+function createSanitizeBashHook(): HookCallback {
+	return async (input, _toolUseId, _context) => {
+		const preInput = input as PreToolUseHookInput
+		const command = (preInput.tool_input as { command?: string })?.command
+		if (!command) return {}
+
+		const unsetPrefix = `unset ${SECRET_ENV_VARS.join(" ")} 2>/dev/null; `
+		return {
+			hookSpecificOutput: {
+				hookEventName: "PreToolUse" as const,
+				updatedInput: {
+					...(preInput.tool_input as Record<string, unknown>),
+					command: unsetPrefix + command,
+				},
+			},
+		}
+	}
+}
+
+function formatConversationHistory(messages: UIMessageLite[]): string {
+	const prior = messages.slice(0, -1)
+	if (prior.length === 0) return ""
+
+	const formatted = prior
+		.filter((m) => m.role === "user" || m.role === "assistant")
+		.map((m) => {
+			const role = m.role === "user" ? "User" : "Assistant"
+			return `${role}: ${m.content}`
+		})
+		.join("\n\n")
+
+	if (!formatted) return ""
+	return `## Conversation History\n\n${formatted}`
+}
 
 export function buildSubagents(): Record<string, AgentDefinition> {
 	return {
 		general: {
 			description:
 				"Handles general questions, conversational help, and any query that does not match a more specific agent.",
-			prompt: "",
-			tools: ["Skill"],
-			skills: ["general"],
+			prompt: GENERAL_SKILL,
+			model: "inherit",
 			maxTurns: 100
 		},
 		support: {
 			description:
 				"Handles troubleshooting, technical problems, feedback capture, and support requests. Use when the user says something is broken, needs help, or provides corrections.",
-			prompt: "",
-			tools: ["Skill"],
-			skills: ["support"],
+			prompt: SUPPORT_SKILL,
+			model: "inherit",
 			maxTurns: 100
 		},
-		// TODO: bank account sub-agent
 	}
 }
 
 export function buildFullSystemPrompt(req: ContainerRequest): string {
+	const history = formatConversationHistory(req.messages)
+
 	const sections = [
 		req.systemPrompt,
 		AGENT_MD,
+		history,
 	].filter(Boolean)
 
 	return sections.join("\n\n")
@@ -109,11 +150,13 @@ export function runAgent(
 		permissionMode: "bypassPermissions",
 		allowDangerouslySkipPermissions: true,
 		tools: [],
-		allowedTools: ["Task"],
-		disallowedTools: ["Bash"],
+		allowedTools: ["Task", "Bash"],
 		agents,
 		maxTurns: 25,
 		includePartialMessages: true,
+		hooks: {
+			PreToolUse: [{ matcher: "Bash", hooks: [createSanitizeBashHook()] }],
+		},
 		env: {
 			...process.env,
 			ENABLE_TOOL_SEARCH: "auto",
