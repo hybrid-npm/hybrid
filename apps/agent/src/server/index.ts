@@ -35,21 +35,4 @@ app.post(AGENT_ENDPOINT, async (c) => {
 	}
 })
 
-process.on("uncaughtException", (err) => {
-	console.error("[agent] uncaughtException:", err)
-	process.exit(1)
-})
-
-process.on("unhandledRejection", (reason) => {
-	console.error("[agent] unhandledRejection:", reason)
-	process.exit(1)
-})
-
-if (typeof process !== "undefined" && process.argv[1]?.includes("server")) {
-	const { serve } = await import("@hono/node-server")
-	serve({ fetch: app.fetch, port: AGENT_PORT }, (info) => {
-		console.log(`agent-server listening on http://localhost:${info.port}`)
-	})
-}
-
 export default app

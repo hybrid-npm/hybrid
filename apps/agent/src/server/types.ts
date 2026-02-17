@@ -13,6 +13,8 @@ export interface UIMessageLite {
 
 export const AGENT_PORT = 4100
 
+export const GATEWAY_PORT = 4200
+
 export const HEALTH_CHECK_PATH = "/health"
 
 export const AGENT_ENDPOINT = "/api/agent"

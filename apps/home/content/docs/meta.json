@@ -1,0 +1,16 @@
+{
+	"title": "Documentation",
+	"pages": [
+		"index",
+		"---Getting Started---",
+		"...getting-started",
+		"---Server---",
+		"...server",
+		"---Configuration---",
+		"...configuration",
+		"---Deployment---",
+		"...deployment",
+		"---Development---",
+		"...development"
+	]
+}

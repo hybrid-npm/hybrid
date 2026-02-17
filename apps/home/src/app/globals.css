@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+@theme {
+	--font-sans: "Inter Variable", "Inter", system-ui, sans-serif;
+	--font-mono: ui-monospace, SFMono-Regular, monospace;
+
+	--color-brand: #F87400;
+	--color-brand-hover: #e06800;
+
+	--animate-accordion-down: accordion-down 0.2s ease-out;
+	--animate-accordion-up: accordion-up 0.2s ease-out;
+}
+
+@keyframes accordion-down {
+	from {
+		height: 0;
+	}
+	to {
+		height: var(--radix-accordion-content-height);
+	}
+}
+
+@keyframes accordion-up {
+	from {
+		height: var(--radix-accordion-content-height);
+	}
+	to {
+		height: 0;
+	}
+}
+
+@source "../components/**/*.{ts,tsx}";
+@source "../../content/**/*.{md,mdx}";

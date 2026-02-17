@@ -4,7 +4,7 @@
 	"tasks": {
 		"build": {
 			"dependsOn": ["^build"],
-			"outputs": [".cache/tsbuildinfo.json", ".react-email/**", "dist/**", ".vocs/**"]
+			"outputs": [".cache/tsbuildinfo.json", ".react-email/**", "dist/**", ".next/**"]
 		},
 		"build:watch": {
 			"dependsOn": ["^build"],

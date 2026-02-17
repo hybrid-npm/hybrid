@@ -1,0 +1,7 @@
+{
+	"name": "agent-gateway",
+	"main": "src/gateway/index.ts",
+	"compatibility_date": "2025-12-01",
+	"compatibility_flags": ["nodejs_compat_v2"],
+	"vars": { "CONTAINER_URL": "http://localhost:4100" }
+}

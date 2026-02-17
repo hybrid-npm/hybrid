@@ -1,0 +1,155 @@
+@import "fumadocs-ui/style.css";
+
+.dark,
+:root {
+	--fd-background: 0 0% 0%;
+	--fd-foreground: 0 0% 98%;
+	--fd-card: 0 0% 5%;
+	--fd-card-foreground: 0 0% 98%;
+	--fd-popover: 0 0% 5%;
+	--fd-popover-foreground: 0 0% 98%;
+	--fd-primary: 28 100% 49%;
+	--fd-primary-foreground: 0 0% 98%;
+	--fd-secondary: 0 0% 12%;
+	--fd-secondary-foreground: 0 0% 98%;
+	--fd-muted: 0 0% 12%;
+	--fd-muted-foreground: 0 0% 64%;
+	--fd-accent: 0 0% 12%;
+	--fd-accent-foreground: 0 0% 98%;
+	--fd-border: 0 0% 18%;
+	--fd-ring: 28 100% 49%;
+}
+
+body {
+	background: black !important;
+}
+
+[data-rehype-pretty-code-figure] pre {
+	background: rgb(9 9 11) !important;
+	border: 1px solid rgb(39 39 42) !important;
+}
+
+[data-rehype-pretty-code-figure] code {
+	background: transparent !important;
+}
+
+.fd-sidebar,
+[data-fd-sidebar],
+aside {
+	background: black !important;
+	background-color: black !important;
+	border-color: rgb(39 39 42) !important;
+}
+
+[data-fd-sidebar] > div,
+[data-fd-sidebar] [data-radix-scroll-area-viewport],
+aside > div,
+aside [data-radix-scroll-area-viewport] {
+	background: black !important;
+}
+
+.fd-layout > aside,
+.fd-layout aside > div {
+	background: black !important;
+}
+
+.fd-nav {
+	background: rgba(0, 0, 0, 0.8) !important;
+	backdrop-filter: blur(12px);
+	border-color: rgb(39 39 42) !important;
+}
+
+.fd-toc {
+	border-color: rgb(39 39 42) !important;
+}
+
+.prose {
+	--tw-prose-body: rgb(161 161 170);
+	--tw-prose-headings: rgb(250 250 250);
+	--tw-prose-links: rgb(248 116 0);
+	--tw-prose-bold: rgb(250 250 250);
+	--tw-prose-code: rgb(250 250 250);
+	--tw-prose-pre-bg: rgb(9 9 11);
+	--tw-prose-pre-code: rgb(161 161 170);
+	--tw-prose-quotes: rgb(161 161 170);
+	--tw-prose-quote-borders: rgb(63 63 70);
+	--tw-prose-hr: rgb(39 39 42);
+}
+
+.prose a {
+	text-decoration-color: rgb(248 116 0) !important;
+}
+
+.prose a:hover {
+	text-decoration-color: rgb(251 146 60) !important;
+}
+
+a:not(.prose a) {
+	color: rgb(161 161 170);
+}
+
+a:not(.prose a):hover {
+	color: rgb(250 250 250);
+}
+
+.fd-sidebar a[data-active="true"] {
+	background: rgb(39 39 42) !important;
+	color: white !important;
+}
+
+.fd-sidebar a:hover {
+	background: rgb(24 24 27) !important;
+}
+
+[data-radix-scroll-area-viewport],
+[data-radix-scroll-area-viewport] > div {
+	background: black !important;
+	background-color: black !important;
+}
+
+button, [role="button"] {
+	transition: all 0.15s ease;
+}
+
+.fd-search-dialog {
+	background: rgb(9 9 11) !important;
+	border: 1px solid rgb(39 39 42) !important;
+}
+
+[data-fd-sidebar-tabs],
+[class*="sidebar-tabs"],
+aside [role="tablist"] {
+	display: none !important;
+}
+
+[data-fd-sidebar] nav,
+[data-fd-sidebar] [data-fd-tree],
+aside nav {
+	display: flex !important;
+	flex-direction: column !important;
+	width: 100% !important;
+}
+
+[data-fd-sidebar] nav > *,
+[data-fd-sidebar] [data-fd-tree] > * {
+	display: block !important;
+	width: 100% !important;
+}
+
+[data-fd-sidebar] [data-fd-folder],
+[data-fd-sidebar] [data-collapsible] {
+	display: flex !important;
+	flex-direction: column !important;
+	width: 100% !important;
+}
+
+aside[data-fd-sidebar] nav a,
+aside[data-fd-sidebar] nav button {
+	width: 100% !important;
+	display: flex !important;
+}
+
+aside[data-fd-sidebar] [data-separator] {
+	margin: 0.75rem 0 !important;
+	width: 100% !important;
+}

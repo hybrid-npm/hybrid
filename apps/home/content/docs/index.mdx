@@ -1,0 +1,21 @@
+---
+title: Introduction
+description: Containerized AI Agent Server powered by Claude Agent SDK
+---
+
+Hybrid is a containerized HTTP server that wraps the [Claude Agent SDK](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/sdk) behind a streaming API. It receives conversation messages over HTTP, routes them through specialized sub-agents, and streams responses back via Server-Sent Events.
+
+## Features
+
+- **HTTP API** — Simple POST endpoint that accepts conversation messages and streams responses
+- **SSE Streaming** — Real-time streaming via Server-Sent Events with text, tool calls, and usage metrics
+- **Sub-Agent Routing** — Specialized agents handle different types of requests
+- **Skills System** — Domain-specific knowledge modules loaded on demand
+- **Docker Deployment** — Built on Cloudflare Sandbox with automatic restart and backoff
+
+## Quick links
+
+- [Quickstart](/docs/getting-started/quickstart) — Get running in under 5 minutes
+- [Architecture](/docs/getting-started/architecture) — Understand how the server works
+- [HTTP API](/docs/server/api) — Full API reference
+- [Docker Deployment](/docs/deployment/docker) — Deploy with Docker

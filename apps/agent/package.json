@@ -4,20 +4,26 @@
 	"type": "module",
 	"scripts": {
 		"build": "node build.mjs",
-		"dev": "tsx src/server/index.ts",
+		"dev": "tsx src/server/dev.ts & tsx src/gateway/dev.ts & wait",
+		"dev:container": "tsx src/server/dev.ts",
+		"dev:gateway": "tsx src/gateway/dev.ts",
+		"dev:wrangler": "wrangler dev",
 		"lint": "biome lint --unsafe",
 		"lint:fix": "biome lint --write --unsafe",
-		"typecheck": "NODE_OPTIONS='--max-old-space-size=4096' tsc --noEmit"
+		"typecheck": "NODE_OPTIONS='--max-old-space-size=4096' tsc --noEmit",
+		"test:agent": "tsx test/test-agent.ts"
 	},
 	"dependencies": {
 		"@anthropic-ai/claude-agent-sdk": "^0.2.38",
 		"@hono/node-server": "^1.14.1",
+		"@xmtp/agent-sdk": "^2.2.0",
 		"hono": "catalog:stack"
 	},
 	"devDependencies": {
 		"@anthropic-ai/sdk": "^0.74.0",
 		"@types/node": "catalog:stack",
 		"esbuild": "^0.27.3",
-		"tsx": "^4.20.5"
+		"tsx": "^4.20.5",
+		"wrangler": "^4.65.0"
 	}
 }
