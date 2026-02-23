@@ -69,7 +69,7 @@ A Cloudflare Workers + Containers deployment for AI agents with XMTP messaging s
 │  │  │  ┌────────────────────────────────────────────────────────────┐  │  │  │
 │  │  │  │  Personality Files                                         │  │  │  │
 │  │  │  │  • SOUL.md        → Core identity and principles           │  │  │  │
-│  │  │  │  • INSTRUCTIONS.md → Behavioral guidelines                 │  │  │  │
+│  │  │  │  • AGENTS.md      → Behavioral guidelines                 │  │  │  │
 │  │  │  └────────────────────────────────────────────────────────────┘  │  │  │
 │  │  │                                                                    │  │  │
 │  │  │  ┌────────────────────────────────────────────────────────────┐  │  │  │
@@ -171,7 +171,7 @@ The container runs an agent server using the Claude Agent SDK.
 ### Personality Files
 
 - **SOUL.md** - Core identity, principles, and style
-- **INSTRUCTIONS.md** - Behavioral guidelines and constraints
+- **AGENTS.md** - Behavioral guidelines and constraints
 
 ### Conversation History
 
@@ -204,7 +204,7 @@ The server maintains a sliding window of the last 20 messages:
 | `src/server/index.ts` | Container agent server |
 | `src/dev-gateway.ts` | Local development gateway |
 | `SOUL.md` | Agent identity and principles |
-| `INSTRUCTIONS.md` | Behavioral guidelines |
+| `AGENTS.md` | Behavioral guidelines |
 | `wrangler.jsonc` | Cloudflare Workers config |
 | `Dockerfile` | Container image definition |
 | `start.sh` | Container entry point |

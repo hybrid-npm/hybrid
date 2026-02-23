@@ -26,7 +26,7 @@ function resolveProjectRoot(): string {
 	let dir = __dirname
 	for (let i = 0; i < 5; i++) {
 		try {
-			readFileSync(join(dir, "INSTRUCTIONS.md"), "utf-8")
+			readFileSync(join(dir, "AGENTS.md"), "utf-8")
 			return dir
 		} catch {
 			dir = dirname(dir)
@@ -45,7 +45,7 @@ function loadMarkdownFile(relativePath: string): string {
 	}
 }
 
-const INSTRUCTIONS_MD = loadMarkdownFile("INSTRUCTIONS.md")
+const AGENTS_MD = loadMarkdownFile("AGENTS.md")
 const SOUL_MD = loadMarkdownFile("SOUL.md")
 
 interface ContainerRequest {
@@ -132,7 +132,7 @@ function extractTextDelta(msg: any): string | null {
 }
 
 function runAgent(req: ContainerRequest): ReadableStream<Uint8Array> {
-	const systemPrompt = [SOUL_MD, req.systemPrompt, INSTRUCTIONS_MD]
+	const systemPrompt = [SOUL_MD, req.systemPrompt, AGENTS_MD]
 		.filter(Boolean)
 		.join("\n\n")
 	const prompt = buildPromptWithHistory(req.messages)
