@@ -1,3 +1,4 @@
+import { serve } from "@hono/node-server"
 import type { UIMessage } from "ai"
 import { Hono } from "hono"
 import { cors } from "hono/cors"
@@ -52,4 +53,4 @@ app.post("/api/chat", async (c) => {
 })
 
 console.log("Dev gateway running on http://localhost:8787")
-Bun.serve({ port: 8787, fetch: app.fetch })
+serve({ port: 8787, fetch: app.fetch })

@@ -3,6 +3,7 @@ import { createRequire } from "node:module"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { type Options, query } from "@anthropic-ai/claude-agent-sdk"
+import { serve } from "@hono/node-server"
 import { Hono } from "hono"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -298,10 +299,6 @@ process.on("unhandledRejection", (reason) => {
 })
 
 console.log(`hybrid-agent listening on http://localhost:${AGENT_PORT}`)
-
-Bun.serve({
-	port: AGENT_PORT,
-	fetch: app.fetch
-})
+serve({ port: AGENT_PORT, fetch: app.fetch })
 
 export default app
