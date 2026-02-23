@@ -1,19 +1,9 @@
 {
 	"name": "hybrid",
 	"version": "1.4.5",
-	"keywords": [
-		"xmtp",
-		"agent",
-		"ai",
-		"hybrid",
-		"blockchain",
-		"messaging"
-	],
+	"keywords": ["xmtp", "agent", "ai", "hybrid", "blockchain", "messaging"],
 	"type": "module",
-	"files": [
-		"dist",
-		"src"
-	],
+	"files": ["dist", "src"],
 	"exports": {
 		".": {
 			"types": "./src/index.ts",
@@ -51,7 +41,6 @@
 		"@coinbase/agentkit": "^0.6.2",
 		"@coinbase/coinbase-sdk": "^0.22.0",
 		"@hono/node-server": "^1.13.5",
-		"@hybrd/ponder": "workspace:*",
 		"@hybrd/types": "workspace:*",
 		"@hybrd/utils": "workspace:*",
 		"@hybrd/xmtp": "workspace:*",

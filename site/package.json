@@ -1,20 +1,29 @@
 {
-  "name": "site",
-  "private": true,
-  "version": "0.0.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vocs dev",
-    "build": "vocs build",
-    "preview": "vocs preview"
-  },
-  "dependencies": {
-    "react": "latest",
-    "react-dom": "latest",
-    "vocs": "latest"
-  },
-  "devDependencies": {
-    "@types/react": "latest",
-    "typescript": "latest"
-  }
+	"name": "site",
+	"private": true,
+	"version": "0.0.0",
+	"type": "module",
+	"scripts": {
+		"dev": "next dev --port 6252",
+		"build": "next build",
+		"start": "next start",
+		"lint": "biome lint --unsafe",
+		"lint:fix": "biome lint --write --unsafe",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"fumadocs-core": "^16.4.6",
+		"fumadocs-mdx": "^14.2.4",
+		"fumadocs-ui": "^16.4.6",
+		"next": "^16.1.6",
+		"react": "^19.0.0",
+		"react-dom": "^19.0.0"
+	},
+	"devDependencies": {
+		"@types/mdx": "^2.0.13",
+		"@types/node": "^22.14.0",
+		"@types/react": "^19.0.0",
+		"@types/react-dom": "^19.0.0",
+		"typescript": "^5.9.2"
+	}
 }
