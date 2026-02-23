@@ -1,0 +1,24 @@
+{
+	"name": "create-hybrid",
+	"version": "1.0.0",
+	"type": "module",
+	"bin": {
+		"create-hybrid": "./dist/index.js"
+	},
+	"files": ["dist", "templates"],
+	"scripts": {
+		"build": "tsup",
+		"dev": "tsx src/index.ts",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"prompts": "^2.4.2"
+	},
+	"devDependencies": {
+		"@config/tsconfig": "workspace:*",
+		"@types/node": "catalog:stack",
+		"@types/prompts": "^2.4.9",
+		"tsup": "^8.5.0",
+		"tsx": "^4.19.3"
+	}
+}
