@@ -8,13 +8,12 @@ import { config } from "dotenv"
 import { Hono } from "hono"
 import { privateKeyToAccount } from "viem/accounts"
 
-config({
-	path: join(dirname(fileURLToPath(import.meta.url)), "..", "..", ".env")
-})
-config({ path: join(dirname(fileURLToPath(import.meta.url)), "..", ".env") })
-
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const require = createRequire(import.meta.url)
+
+config({ path: join(__dirname, "..", "..", "..", ".env") })
+config({ path: join(__dirname, "..", "..", ".env") })
+config({ path: join(__dirname, ".env") })
 
 const AGENT_PORT = Number.parseInt(process.env.AGENT_PORT || "4100")
 const AGENT_ENDPOINT = "/api/chat"
