@@ -4,8 +4,14 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { type Options, query } from "@anthropic-ai/claude-agent-sdk"
 import { serve } from "@hono/node-server"
+import { config } from "dotenv"
 import { Hono } from "hono"
 import { privateKeyToAccount } from "viem/accounts"
+
+config({
+	path: join(dirname(fileURLToPath(import.meta.url)), "..", "..", ".env")
+})
+config({ path: join(dirname(fileURLToPath(import.meta.url)), "..", ".env") })
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const require = createRequire(import.meta.url)
