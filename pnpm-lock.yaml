@@ -333,6 +333,9 @@ importers:
       '@xmtp/node-sdk':
         specifier: ^4.1.0
         version: 4.1.0
+      dotenv:
+        specifier: ^16.4.5
+        version: 16.6.1
       hono:
         specifier: ^4.7.4
         version: 4.9.2

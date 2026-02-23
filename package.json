@@ -26,7 +26,8 @@
 		"bump:minor": "tsx scripts/bump.ts minor",
 		"bump:major": "tsx scripts/bump.ts major",
 		"release": "pnpm build:packages && pnpm -r publish --force --access public --no-git-checks",
-		"ruler": "npx @intellectronica/ruler apply"
+		"ruler": "npx @intellectronica/ruler apply",
+		"register": "tsx packages/xmtp/scripts/register-wallet.ts"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "1.9.4",

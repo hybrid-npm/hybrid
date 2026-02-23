@@ -38,6 +38,7 @@
 		"@xmtp/content-type-transaction-reference": "2.0.2",
 		"@xmtp/content-type-wallet-send-calls": "2.0.0",
 		"@xmtp/node-sdk": "^4.1.0",
+		"dotenv": "^16.4.5",
 		"hono": "^4.7.4",
 		"jsonwebtoken": "^9.0.2",
 		"uint8arrays": "^5.1.0",
