@@ -3,6 +3,9 @@ import type { UIMessage } from "ai"
 import { Hono } from "hono"
 import { cors } from "hono/cors"
 
+const GATEWAY_PORT = 8787
+const CONTAINER_PORT = 4100
+
 const app = new Hono()
 
 app.use("*", cors())
@@ -32,16 +35,19 @@ app.post("/api/chat", async (c) => {
 		content: extractTextFromParts(m.parts)
 	}))
 
-	const containerRes = await fetch("http://localhost:4100/api/chat", {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({
-			messages,
-			chatId: body.chatId,
-			teamId: body.teamId,
-			systemPrompt: body.systemPrompt
-		})
-	})
+	const containerRes = await fetch(
+		`http://localhost:${CONTAINER_PORT}/api/chat`,
+		{
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				messages,
+				chatId: body.chatId,
+				teamId: body.teamId,
+				systemPrompt: body.systemPrompt
+			})
+		}
+	)
 
 	return new Response(containerRes.body, {
 		headers: {
@@ -52,5 +58,21 @@ app.post("/api/chat", async (c) => {
 	})
 })
 
-console.log("Dev gateway running on http://localhost:8787")
-serve({ port: 8787, fetch: app.fetch })
+function printStartup() {
+	console.log("\n  ╭──────────────────────────────────────────────────╮")
+	console.log("  │              Dev Gateway (Local)                 │")
+	console.log("  ╰──────────────────────────────────────────────────╯")
+	console.log()
+	console.log(`  Gateway     http://localhost:${GATEWAY_PORT}`)
+	console.log(`  Container   http://localhost:${CONTAINER_PORT}`)
+	console.log()
+	console.log("  ─────────────────────────────────────────────────")
+	console.log()
+	console.log("  Routes:")
+	console.log(`    GET  /health`)
+	console.log(`    POST /api/chat`)
+	console.log()
+}
+
+printStartup()
+serve({ port: GATEWAY_PORT, fetch: app.fetch })

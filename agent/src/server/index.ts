@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url"
 import { type Options, query } from "@anthropic-ai/claude-agent-sdk"
 import { serve } from "@hono/node-server"
 import { Hono } from "hono"
+import { privateKeyToAccount } from "viem/accounts"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const require = createRequire(import.meta.url)
@@ -12,6 +13,30 @@ const require = createRequire(import.meta.url)
 const AGENT_PORT = Number.parseInt(process.env.AGENT_PORT || "4100")
 const AGENT_ENDPOINT = "/api/chat"
 const HEALTH_CHECK_PATH = "/health"
+
+const XMTP_ENV = process.env.XMTP_ENV || "dev"
+const XMTP_WALLET_KEY = process.env.XMTP_WALLET_KEY
+
+function getWalletAddress(): string | null {
+	if (!XMTP_WALLET_KEY) return null
+	try {
+		const key = XMTP_WALLET_KEY.startsWith("0x")
+			? (XMTP_WALLET_KEY as `0x${string}`)
+			: (`0x${XMTP_WALLET_KEY}` as `0x${string}`)
+		const account = privateKeyToAccount(key)
+		return account.address
+	} catch {
+		return null
+	}
+}
+
+function getProviderInfo(): { provider: string; model: string } {
+	const baseUrl = process.env.ANTHROPIC_BASE_URL
+	if (baseUrl?.includes("openrouter.ai")) {
+		return { provider: "OpenRouter", model: "claude-sonnet-4-20250514" }
+	}
+	return { provider: "Anthropic", model: "claude-sonnet-4-20250514" }
+}
 
 function resolveClaudeCodeExecutable(): string {
 	if (process.env.CLAUDE_CODE_EXECUTABLE_PATH)
@@ -298,7 +323,39 @@ process.on("unhandledRejection", (reason) => {
 	process.exit(1)
 })
 
-console.log(`hybrid-agent listening on http://localhost:${AGENT_PORT}`)
+function printStartup() {
+	const walletAddress = getWalletAddress()
+	const { provider, model } = getProviderInfo()
+
+	console.log("\n  ╭──────────────────────────────────────────────────╮")
+	console.log("  │              Hybrid Agent Server                 │")
+	console.log("  ╰──────────────────────────────────────────────────╯")
+	console.log()
+	console.log(`  Server      http://localhost:${AGENT_PORT}`)
+	console.log(`  Health      http://localhost:${AGENT_PORT}/health`)
+	console.log(`  Chat        http://localhost:${AGENT_PORT}${AGENT_ENDPOINT}`)
+	console.log()
+	console.log("  ─────────────────────────────────────────────────")
+	console.log()
+	console.log(`  Provider    ${provider}`)
+	console.log(`  Model       ${model}`)
+	console.log()
+	console.log("  ─────────────────────────────────────────────────")
+	console.log()
+	console.log(`  XMTP Net    ${XMTP_ENV}`)
+	if (walletAddress) {
+		console.log(`  Wallet      ${walletAddress}`)
+	} else {
+		console.log(`  Wallet      (not configured)`)
+	}
+	console.log()
+	console.log("  ─────────────────────────────────────────────────")
+	console.log()
+	console.log("  Ready. Waiting for requests...")
+	console.log()
+}
+
+printStartup()
 serve({ port: AGENT_PORT, fetch: app.fetch })
 
 export default app

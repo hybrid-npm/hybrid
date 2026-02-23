@@ -19,7 +19,8 @@
 		"@hybrd/xmtp": "workspace:*",
 		"ai": "^6.0.0",
 		"hono": "^4.10.8",
-		"hybrid": "workspace:*"
+		"hybrid": "workspace:*",
+		"viem": "^2.46.2"
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20250214.0",
