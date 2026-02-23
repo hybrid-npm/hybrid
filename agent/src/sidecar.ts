@@ -92,20 +92,28 @@ async function startSidecar() {
 
 			if (!response.ok) {
 				console.error(`  ❌ Container error: ${response.status}`)
+				const errorText = await response.text()
+				console.error(`  ❌ Error body: ${errorText}`)
 				return
 			}
 
 			console.log(`  ← Receiving response stream...`)
 
 			const reader = response.body?.getReader()
-			if (!reader) return
+			if (!reader) {
+				console.error(`  ❌ No response body reader`)
+				return
+			}
 
 			let fullResponse = ""
 			const decoder = new TextDecoder()
 
 			while (true) {
 				const { done, value } = await reader.read()
-				if (done) break
+				if (done) {
+					console.log(`  ✓ Stream complete`)
+					break
+				}
 
 				const chunk = decoder.decode(value)
 				const lines = chunk.split("\n")
@@ -113,16 +121,25 @@ async function startSidecar() {
 				for (const line of lines) {
 					if (line.startsWith("data: ")) {
 						const data = line.slice(6)
-						if (data === "[DONE]") continue
+						if (data === "[DONE]") {
+							console.log(`  ✓ Received [DONE]`)
+							continue
+						}
 
 						try {
 							const parsed = JSON.parse(data)
 							if (parsed.type === "text" && parsed.content) {
 								fullResponse += parsed.content
 								process.stdout.write(parsed.content)
+							} else if (parsed.type === "error") {
+								console.error(`  ❌ Agent error: ${parsed.content}`)
+							} else if (parsed.type === "usage") {
+								console.log(
+									`\n  📊 Usage: ${parsed.inputTokens} in / ${parsed.outputTokens} out`
+								)
 							}
-						} catch {
-							// Skip invalid JSON
+						} catch (parseErr) {
+							console.error(`  ⚠️ Failed to parse SSE: ${data.slice(0, 100)}`)
 						}
 					}
 				}
@@ -137,6 +154,7 @@ async function startSidecar() {
 			}
 		} catch (err) {
 			console.error("❌ Error handling text message:", err)
+			console.error("Stack:", err instanceof Error ? err.stack : "no stack")
 		}
 	})
 

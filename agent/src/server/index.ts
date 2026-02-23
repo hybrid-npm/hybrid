@@ -185,7 +185,8 @@ function runAgent(req: ContainerRequest): ReadableStream<Uint8Array> {
 		env: {
 			...process.env,
 			ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL,
-			ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN
+			ANTHROPIC_AUTH_TOKEN:
+				process.env.ANTHROPIC_AUTH_TOKEN ?? process.env.OPENROUTER_API_KEY
 		}
 	}
 
@@ -285,6 +286,10 @@ function runAgent(req: ContainerRequest): ReadableStream<Uint8Array> {
 			} catch (err) {
 				const errorMessage = err instanceof Error ? err.message : "Agent error"
 				console.error(`[agent] error:`, err)
+				console.error(
+					`[agent] error stack:`,
+					err instanceof Error ? err.stack : "no stack"
+				)
 				try {
 					controller.enqueue(
 						encodeSSEJson({ type: "error", content: errorMessage })
@@ -306,7 +311,9 @@ app.get(HEALTH_CHECK_PATH, (c) => {
 })
 
 app.post(AGENT_ENDPOINT, async (c) => {
+	console.log("[agent] received request")
 	const req = await c.req.json<ContainerRequest>()
+	console.log(`[agent] messages: ${req.messages.length}, chatId: ${req.chatId}`)
 	const stream = runAgent(req)
 
 	return new Response(stream, {
@@ -344,6 +351,27 @@ function printStartup() {
 	console.log()
 	console.log(`  Provider    ${provider}`)
 	console.log(`  Model       ${model}`)
+
+	const hasAnthropicKey = !!process.env.ANTHROPIC_API_KEY
+	const hasOpenRouterKey = !!process.env.OPENROUTER_API_KEY
+	const hasAuthToken = !!process.env.ANTHROPIC_AUTH_TOKEN
+	const hasBaseUrl = !!process.env.ANTHROPIC_BASE_URL
+
+	console.log()
+	console.log("  API Keys:")
+	console.log(
+		`    ANTHROPIC_API_KEY     ${hasAnthropicKey ? "✓ set" : "✗ not set"}`
+	)
+	console.log(
+		`    OPENROUTER_API_KEY    ${hasOpenRouterKey ? "✓ set" : "✗ not set"}`
+	)
+	console.log(
+		`    ANTHROPIC_AUTH_TOKEN  ${hasAuthToken ? "✓ set" : "✗ not set"}`
+	)
+	console.log(
+		`    ANTHROPIC_BASE_URL    ${hasBaseUrl ? process.env.ANTHROPIC_BASE_URL : "(default)"}`
+	)
+
 	console.log()
 	console.log("  ─────────────────────────────────────────────────")
 	console.log()
