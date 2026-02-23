@@ -1,6 +1,8 @@
 # Hybrid
 
-TypeScript framework for building AI agents on XMTP.
+TypeScript agent framework for connecting AI agents to XMTP and beyond.
+
+Hybrid makes it easy to wire together messaging, behaviors, and any AI model or service.
 
 ## Architecture Overview
 
@@ -8,20 +10,20 @@ TypeScript framework for building AI agents on XMTP.
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │                              XMTP Network                                     │
 └──────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
+                                     │
+                                     ▼
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │                           XMTP Sidecar (Gateway)                              │
 │  • Message handlers (text, reaction, reply)                                   │
 │  • Agent behaviors (filter, react, thread)                                    │
 │  • Pre/post response middleware                                               │
 └──────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
+                                     │
+                                     ▼
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │                         Agent Container Runner                                │
 │  • Claude Agent SDK / OpenRouter / Vercel AI SDK                              │
-│  • Tool execution (blockchain, XMTP, custom)                                  │
+│  • Connect to any service or API                                              │
 │  • SSE streaming responses                                                    │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -78,35 +80,32 @@ await agent.listen({
 | `reactWith(emoji)` | Auto-react to incoming messages |
 | `threadedReply()` | Send replies as threads |
 
-## Tools
+## Connecting Services
 
-### Blockchain Tools
+Hybrid is designed to connect your agent to any service. Bring your own tools and APIs:
 
 ```typescript
-import { blockchainTools } from "hybrid/tools"
+import { Agent, createTool } from "hybrid"
+import { z } from "zod"
+
+const weatherTool = createTool({
+  description: "Get current weather for a city",
+  inputSchema: z.object({ city: z.string() }),
+  execute: async ({ input }) => {
+    const res = await fetch(`https://api.weather.com/${input.city}`)
+    return res.json()
+  }
+})
 
 const agent = new Agent({
-  tools: blockchainTools,
-  createRuntime: () => ({
-    rpcUrl: process.env.RPC_URL,
-    privateKey: process.env.PRIVATE_KEY as `0x${string}`,
-    defaultChain: "mainnet"
-  })
+  tools: [weatherTool],
+  // ... connect to any API, database, blockchain service, etc.
 })
 ```
 
-| Tool | Description |
-|------|-------------|
-| `getBalance` | Check native token balance |
-| `sendTransaction` | Send native tokens |
-| `getTransaction` | Get transaction details |
-| `getBlock` | Get block information |
-| `getGasPrice` | Current gas prices |
-| `estimateGas` | Estimate transaction gas |
+## XMTP Tools
 
-### XMTP Tools
-
-Automatically included when listening:
+Built-in tools for XMTP messaging (automatically included):
 
 | Tool | Description |
 |------|-------------|
