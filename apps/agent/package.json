@@ -1,0 +1,32 @@
+{
+	"name": "@hybrd/agent",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"build": "node build.mjs",
+		"dev": "tsx src/server/index.ts & tsx src/dev-gateway.ts & wait",
+		"dev:container": "tsx src/server/index.ts",
+		"dev:gateway": "tsx src/dev-gateway.ts",
+		"deploy": "wrangler deploy",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@anthropic-ai/claude-agent-sdk": "^0.2.38",
+		"@cloudflare/sandbox": "^0.7.1",
+		"ai": "^6.0.0",
+		"hybrid": "workspace:*",
+		"@hybrd/types": "workspace:*",
+		"@hybrd/utils": "workspace:*",
+		"@hybrd/xmtp": "workspace:*",
+		"hono": "^4.10.8"
+	},
+	"devDependencies": {
+		"@cloudflare/workers-types": "^4.20250214.0",
+		"@config/tsconfig": "workspace:*",
+		"@types/node": "catalog:stack",
+		"bun-types": "^1.2.0",
+		"tsx": "^4.19.3",
+		"typescript": "^5.9.2",
+		"wrangler": "^4.0.0"
+	}
+}

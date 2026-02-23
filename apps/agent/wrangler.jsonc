@@ -1,0 +1,27 @@
+{
+	"name": "hybrid-agent",
+	"main": "src/gateway/index.ts",
+	"compatibility_date": "2025-05-06",
+	"compatibility_flags": ["nodejs_compat"],
+	"containers": [
+		{
+			"class_name": "Sandbox",
+			"image": "./Dockerfile",
+			"instance_type": "standard-1",
+			"max_instances": 50
+		}
+	],
+	"durable_objects": {
+		"bindings": [{ "class_name": "Sandbox", "name": "Sandbox" }]
+	},
+	"migrations": [{ "tag": "v1", "new_sqlite_classes": ["Sandbox"] }],
+	"r2_buckets": [
+		{
+			"binding": "XMTP_STORAGE",
+			"bucket_name": "hybrid-xmtp-databases"
+		}
+	],
+	"vars": {
+		"AGENT_PORT": "4100"
+	}
+}
