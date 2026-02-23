@@ -4,7 +4,7 @@
 	"type": "module",
 	"scripts": {
 		"build": "node build.mjs",
-		"dev": "concurrently -n container,sidecar -c blue,green \"pnpm dev:container\" \"pnpm dev:sidecar\"",
+		"dev": "concurrently -n agent,xmtp -c blue,green \"pnpm dev:container\" \"pnpm dev:sidecar\"",
 		"dev:container": "tsx src/server/index.ts",
 		"dev:sidecar": "tsx src/sidecar.ts",
 		"deploy": "wrangler deploy",
