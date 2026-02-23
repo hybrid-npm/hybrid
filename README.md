@@ -8,27 +8,48 @@ Hybrid makes it easy to wire together messaging, behaviors, and any AI model or 
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│                              XMTP Network                                     │
+│                          External Networks                                     │
+│  XMTP • Webhooks • ATP (Agent Transfer Protocol) • Custom Integrations        │
 └──────────────────────────────────────────────────────────────────────────────┘
                                      │
                                      ▼
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│                           XMTP Sidecar (Gateway)                              │
-│  • Message handlers (text, reaction, reply)                                   │
-│  • Agent behaviors (filter, react, thread)                                    │
-│  • Pre/post response middleware                                               │
+│                              Gateway (Edge)                                    │
+│  Cloudflare Worker that routes incoming requests                               │
+│  • Webhook endpoints                                                           │
+│  • ATP request handling                                                        │
+│  • Multi-network ingress                                                       │
+│  • Sandbox/container routing                                                   │
 └──────────────────────────────────────────────────────────────────────────────┘
                                      │
                                      ▼
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│                         Agent Container Runner                                │
-│  • Claude Agent SDK / OpenRouter / Vercel AI SDK                              │
-│  • Connect to any service or API                                              │
-│  • SSE streaming responses                                                    │
+│                           XMTP Sidecar (Container)                             │
+│  Connects to XMTP network, handles messaging behaviors                         │
+│  • Message handlers (text, reaction, reply)                                    │
+│  • Agent behaviors (filter, react, thread)                                     │
+│  • Sends responses back to users/groups                                        │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                     │
+                                     ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                         Agent Container Runner                                 │
+│  • Claude Agent SDK / OpenRouter / Vercel AI SDK                               │
+│  • Connect to any service or API                                               │
+│  • SSE streaming responses                                                     │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
 **See [apps/agent/README.md](./apps/agent/README.md) for detailed containerized agent architecture.**
+
+## Gateway vs Sidecar
+
+| Component | Role | Location |
+|-----------|------|----------|
+| **Gateway** | Routes incoming webhooks/ATP requests from any network | Cloudflare Worker (edge) |
+| **Sidecar** | Connects to XMTP, handles behaviors, sends responses | Container service |
+
+The gateway sits at the edge and handles ingress from multiple networks. The sidecar runs alongside the agent and manages XMTP-specific communication.
 
 ## Quickstart
 
@@ -53,7 +74,7 @@ Send a message at [xmtp.chat](https://xmtp.chat/dm/) to your agent.
 
 ## Agent Behaviors
 
-Behaviors are middleware that run before/after agent responses:
+Behaviors are middleware that run before/after agent responses in the XMTP sidecar:
 
 ```typescript
 import { Agent } from "hybrid"
