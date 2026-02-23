@@ -8,7 +8,8 @@
 		"dev:container": "tsx src/server/index.ts",
 		"dev:gateway": "tsx src/dev-gateway.ts",
 		"deploy": "wrangler deploy",
-		"typecheck": "tsc --noEmit"
+		"typecheck": "tsc --noEmit",
+		"register": "tsx ../packages/xmtp/scripts/register-wallet.ts"
 	},
 	"dependencies": {
 		"@anthropic-ai/claude-agent-sdk": "^0.2.38",
