@@ -4,9 +4,8 @@
 	"type": "module",
 	"scripts": {
 		"build": "node build.mjs",
-		"dev": "tsx src/server/index.ts & tsx src/dev-gateway.ts & wait",
+		"dev": "tsx src/server/index.ts & tsx src/sidecar.ts & wait",
 		"dev:container": "tsx src/server/index.ts",
-		"dev:gateway": "tsx src/dev-gateway.ts",
 		"dev:sidecar": "tsx src/sidecar.ts",
 		"deploy": "wrangler deploy",
 		"typecheck": "tsc --noEmit",
