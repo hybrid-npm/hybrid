@@ -3,8 +3,6 @@ title: Quickstart
 description: Speed run through setup, configuration, and deployment of Hybrid agents
 ---
 
-# Quickstart
-
 Get up and running with Hybrid agents in minutes. This guide will take you through setup, configuration, and running your agent.
 
 ## Setup & Installation

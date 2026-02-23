@@ -2,4 +2,357 @@
 
 :root {
 	--fd-primary: 248 116 0;
+	--fd-layout-width: 1400px;
+	--linear-bg: #08090a;
+	--linear-surface: #0d0e10;
+	--linear-border: rgba(255, 255, 255, 0.08);
+	--linear-border-hover: rgba(255, 255, 255, 0.12);
+	--linear-text: rgba(255, 255, 255, 0.9);
+	--linear-text-secondary: rgba(255, 255, 255, 0.5);
+	--linear-text-tertiary: rgba(255, 255, 255, 0.4);
+}
+
+html {
+	scroll-behavior: smooth;
+}
+
+body {
+	font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+.dark {
+	--color-fd-background: var(--linear-bg);
+	--color-fd-card: var(--linear-surface);
+	--color-fd-muted: rgba(255, 255, 255, 0.04);
+	--color-fd-border: 0 0% 100% / 0.08;
+}
+
+article h1 {
+	font-weight: 600;
+	letter-spacing: -0.03em;
+	color: var(--linear-text);
+	font-size: 2.5rem;
+	line-height: 1.1;
+}
+
+article h2,
+article h3,
+article h4 {
+	font-weight: 600;
+	letter-spacing: -0.02em;
+	color: var(--linear-text);
+}
+
+article h2 {
+	font-size: 1.5rem;
+	margin-top: 2.5rem;
+	margin-bottom: 1rem;
+}
+
+article h3 {
+	font-size: 1.125rem;
+	margin-top: 2rem;
+}
+
+article p {
+	color: var(--linear-text-secondary);
+	line-height: 1.6;
+}
+
+article a {
+	color: var(--linear-text);
+	text-decoration: underline;
+	text-underline-offset: 3px;
+	text-decoration-color: rgba(255, 255, 255, 0.2);
+	transition: all 0.15s ease;
+}
+
+article a:hover {
+	text-decoration-color: rgba(255, 255, 255, 0.5);
+}
+
+pre {
+	border-radius: 12px;
+	border: 1px solid var(--linear-border);
+	background: var(--linear-surface) !important;
+	padding: 1rem 1.25rem;
+	font-size: 0.875rem;
+	line-height: 1.6;
+}
+
+.dark pre {
+	background: var(--linear-surface) !important;
+}
+
+code {
+	font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, monospace;
+	font-size: 0.9em;
+	font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+:not(pre) > code {
+	background: rgba(255, 255, 255, 0.06);
+	padding: 0.15em 0.4em;
+	border-radius: 6px;
+	font-weight: 450;
+	color: var(--linear-text);
+	border: 1px solid var(--linear-border);
+}
+
+article ul,
+article ol {
+	margin-left: 1.25rem;
+	color: var(--linear-text-secondary);
+}
+
+article li {
+	margin: 0.375rem 0;
+	line-height: 1.6;
+}
+
+article li::marker {
+	color: rgba(255, 255, 255, 0.3);
+}
+
+article blockquote {
+	border-left: 2px solid rgba(255, 255, 255, 0.15);
+	padding-left: 1.25rem;
+	margin-left: 0;
+	color: var(--linear-text-tertiary);
+	font-style: normal;
+}
+
+[data-card] {
+	border-radius: 12px;
+	border: 1px solid var(--linear-border);
+	background: transparent;
+	transition: all 0.2s ease;
+}
+
+[data-card]:hover {
+	border-color: var(--linear-border-hover);
+	background: rgba(255, 255, 255, 0.02);
+}
+
+.dark [data-card]:hover {
+	background: rgba(255, 255, 255, 0.02);
+}
+
+[data-callout] {
+	border-radius: 10px;
+	border: 1px solid var(--linear-border);
+	background: rgba(255, 255, 255, 0.02);
+}
+
+table {
+	border-radius: 10px;
+	border: 1px solid var(--linear-border);
+	overflow: hidden;
+}
+
+th {
+	background: rgba(255, 255, 255, 0.03);
+	font-weight: 500;
+	color: var(--linear-text);
+	text-align: left;
+}
+
+td {
+	border-top: 1px solid var(--linear-border);
+}
+
+hr {
+	border: none;
+	height: 1px;
+	background: var(--linear-border);
+	margin: 2.5rem 0;
+}
+
+input[type="search"] {
+	background: rgba(255, 255, 255, 0.04);
+	border: 1px solid var(--linear-border);
+	border-radius: 8px;
+}
+
+input[type="search"]:focus {
+	border-color: rgba(255, 255, 255, 0.2);
+	background: rgba(255, 255, 255, 0.06);
+}
+
+button {
+	transition: all 0.15s ease;
+}
+
+nav {
+	border-color: var(--linear-border);
+}
+
+aside {
+	border-color: var(--linear-border);
+}
+
+a[href] {
+	transition: all 0.15s ease;
+}
+
+article h2 {
+	scroll-margin-top: 5rem;
+}
+
+article h3 {
+	scroll-margin-top: 5rem;
+}
+
+::selection {
+	background: rgba(248, 116, 0, 0.3);
+	color: white;
+}
+
+::-webkit-scrollbar {
+	width: 8px;
+	height: 8px;
+}
+
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+	background: rgba(255, 255, 255, 0.1);
+	border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+	background: rgba(255, 255, 255, 0.15);
+}
+
+.fumadocs-search {
+	--fd-background: var(--linear-surface);
+}
+
+nav a,
+aside a {
+	font-weight: 500;
+	letter-spacing: -0.01em;
+}
+
+nav a:hover,
+aside a:hover {
+	background: rgba(255, 255, 255, 0.04);
+}
+
+aside [data-active="true"] {
+	background: rgba(255, 255, 255, 0.04);
+	color: var(--linear-text);
+}
+
+aside [data-active="true"]::before {
+	background: var(--linear-text);
+}
+
+[data-toc] a {
+	font-size: 0.8125rem;
+	color: var(--linear-text-tertiary);
+	transition: color 0.15s ease;
+}
+
+[data-toc] a:hover {
+	color: var(--linear-text-secondary);
+}
+
+[data-toc] [data-active="true"] {
+	color: var(--linear-text);
+}
+
+.fumadocs-content {
+	max-width: 720px;
+}
+
+button[aria-label] {
+	border-radius: 8px;
+}
+
+button[aria-label]:hover {
+	background: rgba(255, 255, 255, 0.04);
+}
+
+article img {
+	border-radius: 12px;
+	border: 1px solid var(--linear-border);
+}
+
+article video {
+	border-radius: 12px;
+	border: 1px solid var(--linear-border);
+}
+
+strong {
+	font-weight: 600;
+	color: var(--linear-text);
+}
+
+em {
+	font-style: italic;
+}
+
+.mdx-icon {
+	color: var(--linear-text-tertiary);
+}
+
+h1 + p {
+	font-size: 1.125rem;
+	color: var(--linear-text-tertiary);
+	margin-top: -0.5rem;
+	margin-bottom: 1.5rem;
+}
+
+pre + pre {
+	margin-top: 1rem;
+}
+
+[data-theme="light"] {
+	--linear-bg: #ffffff;
+	--linear-surface: #fafafa;
+	--linear-border: rgba(0, 0, 0, 0.08);
+	--linear-border-hover: rgba(0, 0, 0, 0.12);
+	--linear-text: rgba(0, 0, 0, 0.9);
+	--linear-text-secondary: rgba(0, 0, 0, 0.6);
+	--linear-text-tertiary: rgba(0, 0, 0, 0.45);
+}
+
+[data-theme="light"] article p {
+	color: var(--linear-text-secondary);
+}
+
+[data-theme="light"] article li::marker {
+	color: rgba(0, 0, 0, 0.25);
+}
+
+[data-theme="light"] article a {
+	color: var(--linear-text);
+	text-decoration-color: rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="light"] article a:hover {
+	text-decoration-color: rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="light"] :not(pre) > code {
+	background: rgba(0, 0, 0, 0.04);
+	border-color: var(--linear-border);
+	color: var(--linear-text);
+}
+
+[data-theme="light"] pre {
+	border-color: var(--linear-border);
+}
+
+[data-theme="light"] article blockquote {
+	border-left-color: var(--linear-border);
+}
+
+[data-theme="light"] article li::marker {
+	color: rgba(0, 0, 0, 0.3);
 }

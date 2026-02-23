@@ -1,10 +1,14 @@
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
+import { Space_Grotesk } from "next/font/google"
 import Script from "next/script"
 import { Provider } from "./provider"
 import "./globals.css"
 
-const inter = Inter({ subsets: ["latin"] })
+const spaceGrotesk = Space_Grotesk({
+	subsets: ["latin"],
+	variable: "--font-space-grotesk",
+	display: "swap"
+})
 
 export const metadata: Metadata = {
 	title: "Hybrid",
@@ -17,8 +21,8 @@ export default function RootLayout({
 	children: React.ReactNode
 }) {
 	return (
-		<html lang="en" suppressHydrationWarning>
-			<body className={inter.className}>
+		<html lang="en" suppressHydrationWarning className={spaceGrotesk.variable}>
+			<body className={spaceGrotesk.className}>
 				<Script
 					defer
 					src="https://datafa.st/js/script.js"

@@ -3,8 +3,6 @@ title: Using Hybrid
 description: Command-line tools and development workflow
 ---
 
-# Using Hybrid
-
 Master the Hybrid CLI and development workflow for building and managing your agents.
 
 ## Key Management

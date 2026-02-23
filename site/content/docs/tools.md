@@ -3,8 +3,6 @@ title: Tools
 description: Creating custom tools and extending agent functionality
 ---
 
-# Tools
-
 Learn how to use built-in tools and create custom tools that extend your agent's capabilities.
 
 ## Built-in Tools

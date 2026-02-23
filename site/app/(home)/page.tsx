@@ -2,15 +2,15 @@ import Link from "next/link"
 
 export default function HomePage() {
 	return (
-		<main className="flex flex-col items-center justify-center flex-1 text-center">
-			<h1 className="text-5xl font-bold mb-4">Hybrid</h1>
-			<p className="text-xl text-fd-muted-foreground mb-8 max-w-lg">
+		<main className="flex flex-col items-center justify-center flex-1 text-center px-4">
+			<h1 className="text-5xl font-semibold tracking-tight mb-4">Hybrid</h1>
+			<p className="text-lg opacity-60 mb-10 max-w-md leading-relaxed">
 				Typescript Framework for building crypto AI Agents
 			</p>
-			<div className="flex gap-4">
+			<div className="flex gap-3">
 				<Link
 					href="/docs"
-					className="px-6 py-3 bg-fd-primary text-fd-primary-foreground rounded-lg font-medium hover:opacity-90 transition-opacity"
+					className="px-5 py-2.5 bg-white text-black rounded-lg font-medium text-sm hover:opacity-90 transition-opacity"
 				>
 					Get Started
 				</Link>
@@ -18,7 +18,7 @@ export default function HomePage() {
 					href="https://github.com/ian/hybrid"
 					target="_blank"
 					rel="noopener noreferrer"
-					className="px-6 py-3 border border-fd-border rounded-lg font-medium hover:bg-fd-muted transition-colors"
+					className="px-5 py-2.5 border border-white/10 rounded-lg font-medium text-sm hover:bg-white/5 transition-colors"
 				>
 					GitHub
 				</a>

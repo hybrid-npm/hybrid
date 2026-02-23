@@ -3,8 +3,6 @@ title: Core Concepts
 description: Fundamental concepts that make Hybrid agents unique
 ---
 
-# Core Concepts
-
 Understanding the fundamental concepts behind Hybrid agents and how they differ from traditional AI applications.
 
 ## What is Hybrid and Why?

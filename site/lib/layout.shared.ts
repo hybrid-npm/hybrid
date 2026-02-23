@@ -3,7 +3,8 @@ import type { BaseLayoutProps } from "fumadocs-ui/layouts/shared"
 export function baseOptions(): BaseLayoutProps {
 	return {
 		nav: {
-			title: "Hybrid"
+			title: "Hybrid",
+			url: "/"
 		},
 		githubUrl: "https://github.com/ian/hybrid",
 		links: [
