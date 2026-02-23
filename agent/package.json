@@ -7,6 +7,7 @@
 		"dev": "tsx src/server/index.ts & tsx src/dev-gateway.ts & wait",
 		"dev:container": "tsx src/server/index.ts",
 		"dev:gateway": "tsx src/dev-gateway.ts",
+		"dev:sidecar": "tsx src/sidecar.ts",
 		"deploy": "wrangler deploy",
 		"typecheck": "tsc --noEmit",
 		"register": "tsx ../packages/xmtp/scripts/register-wallet.ts"
@@ -18,6 +19,7 @@
 		"@hybrd/types": "workspace:*",
 		"@hybrd/utils": "workspace:*",
 		"@hybrd/xmtp": "workspace:*",
+		"@xmtp/agent-sdk": "0.0.14",
 		"ai": "^6.0.0",
 		"dotenv": "^16.4.5",
 		"hono": "^4.10.8",

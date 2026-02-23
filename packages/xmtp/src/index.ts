@@ -20,11 +20,12 @@ export {
 // XMTP Client and Connection Management
 // ===================================================================
 export {
-    createXMTPClient,
-    createSigner as createXMTPSigner,
-    logAgentDetails,
-    validateEnvironment,
-    XMTPConnectionManager
+	createXMTPClient,
+	createSigner as createXMTPSigner,
+	getDbPath,
+	logAgentDetails,
+	validateEnvironment,
+	XMTPConnectionManager
 } from "./client"
 export type { XMTPConnectionConfig } from "./client"
 
