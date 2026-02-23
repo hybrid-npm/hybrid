@@ -40,7 +40,7 @@ Hybrid makes it easy to wire together messaging, behaviors, and any AI model or 
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**See [apps/agent/README.md](./apps/agent/README.md) for detailed containerized agent architecture.**
+**See [agent/README.md](./agent/README.md) for detailed containerized agent architecture.**
 
 ## Gateway vs Sidecar
 
@@ -155,8 +155,7 @@ hybrid/
 │   ├── xmtp/          # XMTP integration (@hybrd/xmtp)
 │   ├── utils/         # Utilities (@hybrd/utils)
 │   └── cli/           # CLI (@hybrd/cli)
-├── apps/
-│   └── agent/         # Containerized agent app
+├── agent/             # Containerized agent app
 ├── config/            # Shared config (biome, tsconfig)
 └── site/              # Documentation
 ```
@@ -178,10 +177,10 @@ Deploy to any Node.js host or use Cloudflare Workers + Containers:
 
 ```bash
 pnpm build
-pnpm deploy    # For apps/agent
+pnpm deploy    # For agent
 ```
 
-See [apps/agent/README.md](./apps/agent/README.md) for containerized deployment.
+See [agent/README.md](./agent/README.md) for containerized deployment.
 
 ## License
 

@@ -1,5 +1,5 @@
 packages:
-  - apps/*
+  - agent
   - config/*
   - packages/*
   - sandbox/*
