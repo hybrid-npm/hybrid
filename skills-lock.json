@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "wrangler": {
+      "source": "cloudflare/skills",
+      "sourceType": "github",
+      "computedHash": "6689701b4ec7e5c626db8f84eea5ecc59e1ea5d4328219a971ba41426361dfde"
+    }
+  }
+}

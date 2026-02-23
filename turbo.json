@@ -4,7 +4,16 @@
 	"tasks": {
 		"build": {
 			"dependsOn": ["^build"],
-			"outputs": [".cache/tsbuildinfo.json", ".react-email/**", "dist/**", ".vocs/**"]
+			"outputs": [
+				".cache/tsbuildinfo.json",
+				".react-email/**",
+				"dist/**",
+				".vocs/**"
+			]
+		},
+		"deploy": {
+			"dependsOn": ["^build"],
+			"cache": false
 		},
 		"build:watch": {
 			"dependsOn": ["^build"],
