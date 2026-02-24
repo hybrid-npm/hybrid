@@ -18,6 +18,11 @@ config({ path: join(__dirname, ".env.local") })
 const AGENT_PORT = Number.parseInt(process.env.AGENT_PORT || "4100")
 const AGENT_ENDPOINT = "/api/chat"
 const HEALTH_CHECK_PATH = "/health"
+const DEBUG = process.env.DEBUG === "true" || process.env.DEBUG === "1"
+
+function debug(...args: unknown[]) {
+	if (DEBUG) console.log("[debug]", ...args)
+}
 
 const XMTP_ENV = process.env.XMTP_ENV || "dev"
 const XMTP_WALLET_KEY = process.env.XMTP_WALLET_KEY
@@ -170,10 +175,20 @@ function runAgent(req: ContainerRequest): ReadableStream<Uint8Array> {
 
 	const abortController = new AbortController()
 
+	const baseUrl = process.env.ANTHROPIC_BASE_URL
+	const isUsingOpenRouter = baseUrl?.includes("openrouter.ai")
+	const authToken =
+		process.env.ANTHROPIC_AUTH_TOKEN ?? process.env.OPENROUTER_API_KEY
+	const model = isUsingOpenRouter
+		? "anthropic/claude-sonnet-4"
+		: "claude-sonnet-4-20250514"
+
+	debug("API config:", { baseUrl, model, hasAuthToken: !!authToken })
+
 	const options: Options = {
 		abortController,
 		systemPrompt,
-		model: "claude-sonnet-4-20250514",
+		model,
 		cwd: PROJECT_ROOT,
 		pathToClaudeCodeExecutable: resolveClaudeCodeExecutable(),
 		settingSources: [],
@@ -184,13 +199,16 @@ function runAgent(req: ContainerRequest): ReadableStream<Uint8Array> {
 		includePartialMessages: true,
 		env: {
 			...process.env,
-			ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL,
-			ANTHROPIC_AUTH_TOKEN:
-				process.env.ANTHROPIC_AUTH_TOKEN ?? process.env.OPENROUTER_API_KEY
+			ANTHROPIC_BASE_URL: baseUrl,
+			ANTHROPIC_AUTH_TOKEN: authToken
 		}
 	}
 
-	console.log(`[agent] calling query() with prompt="${prompt.slice(0, 200)}"`)
+	debug("Options:", JSON.stringify(options, null, 2).slice(0, 500))
+	debug("System prompt:", systemPrompt.slice(0, 200))
+	debug("User prompt:", prompt.slice(0, 200))
+
+	console.log(`[agent] calling query() with model=${model}`)
 
 	const conversation = query({ prompt, options })
 
@@ -202,8 +220,11 @@ function runAgent(req: ContainerRequest): ReadableStream<Uint8Array> {
 			abortController.abort()
 		},
 		async pull(controller) {
+			debug("pull() called, waiting for next message...")
 			try {
 				const { value: msg, done } = await conversation.next()
+				debug("received:", { type: msg?.type, done })
+
 				if (done) {
 					console.log(
 						`[agent] conversation done after ${messageCount} messages`
@@ -217,6 +238,8 @@ function runAgent(req: ContainerRequest): ReadableStream<Uint8Array> {
 
 				if (msg.type === "stream_event") {
 					const event = msg.event as { type: string }
+					debug(`stream_event:`, JSON.stringify(event).slice(0, 300))
+
 					if (event.type !== "content_block_delta") {
 						console.log(
 							`[agent] msg #${messageCount} event.type="${event.type}"`
@@ -225,12 +248,14 @@ function runAgent(req: ContainerRequest): ReadableStream<Uint8Array> {
 
 					const text = extractTextDelta(msg)
 					if (text) {
+						debug(`text delta: "${text.slice(0, 50)}..."`)
 						controller.enqueue(encodeSSEJson({ type: "text", content: text }))
 						return
 					}
 
 					if (event.type === "content_block_start") {
 						const block = (event as any).content_block
+						debug("content_block_start:", block)
 						if (block?.type === "tool_use") {
 							controller.enqueue(
 								encodeSSEJson({
@@ -267,6 +292,7 @@ function runAgent(req: ContainerRequest): ReadableStream<Uint8Array> {
 						return
 					}
 				} else if (msg.type === "result") {
+					debug("result:", JSON.stringify(msg))
 					const usage = msg.usage
 					controller.enqueue(
 						encodeSSEJson({
@@ -278,10 +304,17 @@ function runAgent(req: ContainerRequest): ReadableStream<Uint8Array> {
 						})
 					)
 				} else if (msg.type === "assistant") {
+					debug("assistant message")
 					const text = extractTextDelta(msg)
 					if (text) {
 						controller.enqueue(encodeSSEJson({ type: "text", content: text }))
 					}
+				} else {
+					debug(
+						"unknown message type:",
+						msg.type,
+						JSON.stringify(msg).slice(0, 200)
+					)
 				}
 			} catch (err) {
 				const errorMessage = err instanceof Error ? err.message : "Agent error"
@@ -290,6 +323,7 @@ function runAgent(req: ContainerRequest): ReadableStream<Uint8Array> {
 					`[agent] error stack:`,
 					err instanceof Error ? err.stack : "no stack"
 				)
+				debug("full error:", err)
 				try {
 					controller.enqueue(
 						encodeSSEJson({ type: "error", content: errorMessage })
@@ -371,6 +405,7 @@ function printStartup() {
 	console.log(
 		`    ANTHROPIC_BASE_URL    ${hasBaseUrl ? process.env.ANTHROPIC_BASE_URL : "(default)"}`
 	)
+	console.log(`    DEBUG                 ${DEBUG ? "✓ enabled" : "✗ disabled"}`)
 
 	console.log()
 	console.log("  ─────────────────────────────────────────────────")
