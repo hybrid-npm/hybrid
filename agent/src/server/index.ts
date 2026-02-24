@@ -16,9 +16,11 @@ config({ path: join(__dirname, "..", "..", ".env.local") })
 config({ path: join(__dirname, ".env.local") })
 
 // Auto-configure OpenRouter if OPENROUTER_API_KEY is present
+// See: https://openrouter.ai/docs/guides/guides/claude-code-integration
 if (process.env.OPENROUTER_API_KEY && !process.env.ANTHROPIC_API_KEY) {
-	process.env.ANTHROPIC_BASE_URL = "https://openrouter.ai/api/v1"
+	process.env.ANTHROPIC_BASE_URL = "https://openrouter.ai/api"
 	process.env.ANTHROPIC_AUTH_TOKEN = process.env.OPENROUTER_API_KEY
+	process.env.ANTHROPIC_API_KEY = "" // Must be explicitly empty to prevent conflicts
 }
 
 const AGENT_PORT = Number.parseInt(process.env.AGENT_PORT || "4100")
