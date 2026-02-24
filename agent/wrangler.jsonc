@@ -36,7 +36,7 @@
 		"AGENT_PORT": "4100"
 	},
 	"observability": {
-		"enabled": false,
+		"enabled": true,
 		"head_sampling_rate": 1,
 		"logs": {
 			"enabled": true,
