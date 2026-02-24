@@ -258,12 +258,16 @@ function runAgent(req: ContainerRequest): ReadableStream<Uint8Array> {
 			console.error(`[claude-stderr] ${data}`)
 		},
 		env: {
-			...process.env,
-			ANTHROPIC_BASE_URL: baseUrl,
-			ANTHROPIC_AUTH_TOKEN: authToken,
-			ANTHROPIC_API_KEY: apiKey
+			ANTHROPIC_BASE_URL: baseUrl || undefined,
+			ANTHROPIC_AUTH_TOKEN: authToken || undefined,
+			ANTHROPIC_API_KEY: apiKey || undefined
 		}
 	}
+
+	console.log(`[agent] options.env:`)
+	console.log(`  ANTHROPIC_BASE_URL: ${baseUrl || "(not set)"}`)
+	console.log(`  ANTHROPIC_AUTH_TOKEN: ${authToken ? "***" : "(not set)"}`)
+	console.log(`  ANTHROPIC_API_KEY: ${apiKey || "(not set)"}`)
 
 	debug("Options:", JSON.stringify(options, null, 2).slice(0, 500))
 	debug("System prompt:", systemPrompt.slice(0, 200))
