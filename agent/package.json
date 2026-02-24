@@ -4,9 +4,11 @@
 	"type": "module",
 	"scripts": {
 		"build": "node build.mjs",
-		"dev": "concurrently -n agent,xmtp -c blue,green \"pnpm dev:container\" \"pnpm dev:sidecar\"",
+		"dev": "concurrently -n agent,xmtp -c blue,green \"pnpm watch:container\" \"pnpm watch:sidecar\"",
 		"dev:container": "tsx src/server/index.ts",
 		"dev:sidecar": "tsx src/sidecar.ts",
+		"watch:container": "nodemon --config nodemon.container.json",
+		"watch:sidecar": "nodemon --config nodemon.sidecar.json",
 		"test:agent": "tsx src/test-agent.ts",
 		"deploy": "wrangler deploy",
 		"typecheck": "tsc --noEmit",
@@ -31,6 +33,7 @@
 		"@config/tsconfig": "workspace:*",
 		"@types/node": "catalog:stack",
 		"concurrently": "^9.2.1",
+		"nodemon": "^3.1.14",
 		"tsx": "^4.19.3",
 		"typescript": "^5.9.2",
 		"wrangler": "^4.0.0"
