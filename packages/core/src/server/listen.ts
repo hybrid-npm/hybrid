@@ -76,8 +76,8 @@ export type CreateHonoAppOptions<TRuntimeExtension = DefaultRuntimeExtension> =
  * @param options.agent - The agent instance to handle XMTP messages
  * @returns Promise that resolves to a configured Hono app instance
  *
- * @throws {Error} When XMTP_WALLET_KEY environment variable is not set
- * @throws {Error} When XMTP_DB_ENCRYPTION_KEY environment variable is not set
+ * @throws {Error} When AGENT_WALLET_KEY environment variable is not set
+ * @throws {Error} When AGENT_SECRET environment variable is not set
  *
  * @example
  * ```typescript
@@ -241,11 +241,11 @@ export async function listen({
 		console.log(`Hybrid listening on http://localhost:${httpPort}`)
 
 		// Get XMTP info for "We are online" message
-		const xmtpWalletKey = process.env.XMTP_WALLET_KEY
+		const agentWalletKey = process.env.AGENT_WALLET_KEY
 		const xmtpEnv = process.env.XMTP_ENV || "production"
 
-		if (xmtpWalletKey) {
-			const walletAddress = xmtpWalletKey.replace(/^0x/, "") // Remove 0x prefix if present
+		if (agentWalletKey) {
+			const walletAddress = agentWalletKey.replace(/^0x/, "") // Remove 0x prefix if present
 			console.log(
 				`Chat with your agent: http://xmtp.chat/dm/${walletAddress}?env=${xmtpEnv}`
 			)

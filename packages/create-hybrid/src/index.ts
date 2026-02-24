@@ -696,9 +696,9 @@ ANTHROPIC_API_KEY=your_api_key_here
 # ANTHROPIC_BASE_URL=https://openrouter.ai/api
 # ANTHROPIC_AUTH_TOKEN=your_openrouter_key
 
-# XMTP configuration
-XMTP_WALLET_KEY=your_private_key_here
-XMTP_DB_ENCRYPTION_KEY=your_32_byte_hex_key_here
+# Agent configuration
+AGENT_WALLET_KEY=your_private_key_here
+AGENT_SECRET=your_32_byte_hex_key_here
 XMTP_ENV=${data.env}
 `
 }

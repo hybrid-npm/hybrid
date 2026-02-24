@@ -3,8 +3,7 @@ import { fileURLToPath } from "node:url"
 import { config } from "dotenv"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-config({ path: join(__dirname, "..", "..", ".env.local") })
-config({ path: join(__dirname, "..", ".env.local") })
+config({ path: join(__dirname, "..", ".dev.vars") })
 
 const GATEWAY_PORT = process.env.GATEWAY_PORT || "8787"
 

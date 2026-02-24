@@ -3,9 +3,7 @@ import { fileURLToPath } from "node:url"
 import { config } from "dotenv"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-config({ path: join(__dirname, "..", "..", ".env.local") })
-config({ path: join(__dirname, "..", ".env.local") })
-config({ path: join(__dirname, ".env.local") })
+config({ path: join(__dirname, "..", ".dev.vars") })
 
 import { randomUUID } from "node:crypto"
 import { getDbPath } from "@hybrd/xmtp"

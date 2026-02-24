@@ -1,6 +1,6 @@
+import { logger } from "@hybrd/utils"
 import { Context } from "hono"
 import jwt from "jsonwebtoken"
-import { logger } from "@hybrd/utils"
 
 export interface XMTPToolsPayload {
 	action: "send" | "reply" | "react" | "transaction" | "blockchain-event"
@@ -66,17 +66,17 @@ export function getValidatedPayload(c: Context): XMTPToolsPayload | null {
 
 /**
  * Gets the JWT secret for token signing, with lazy initialization
- * Uses XMTP_DB_ENCRYPTION_KEY environment variable for consistency
+ * Uses AGENT_SECRET environment variable for consistency
  * Only falls back to development secret in development/test environments
  */
 function getJwtSecret(): string {
-	const secret = process.env.XMTP_DB_ENCRYPTION_KEY
+	const secret = process.env.AGENT_SECRET
 	const nodeEnv = process.env.NODE_ENV || "development"
 
 	// In production, require a real JWT secret
 	if (nodeEnv === "production" && !secret) {
 		throw new Error(
-			"XMTP_DB_ENCRYPTION_KEY environment variable is required in production. " +
+			"AGENT_SECRET environment variable is required in production. " +
 				"Generate a secure random secret for JWT token signing."
 		)
 	}
@@ -85,7 +85,7 @@ function getJwtSecret(): string {
 	if (!secret) {
 		logger.warn(
 			"⚠️  [SECURITY] Using fallback JWT secret for development. " +
-				"Set XMTP_DB_ENCRYPTION_KEY environment variable for production."
+				"Set AGENT_SECRET environment variable for production."
 		)
 		return "fallback-secret-for-dev-only"
 	}
@@ -239,10 +239,7 @@ export function validateXMTPToolsToken(token: string): XMTPToolsPayload | null {
 		)
 		return decoded
 	} catch (error) {
-		logger.error(
-			"🔒 Invalid XMTP tools token and not matching API key:",
-			error
-		)
+		logger.error("🔒 Invalid XMTP tools token and not matching API key:", error)
 		const endTime = performance.now()
 		logger.debug(
 			`🔐 [JWT] Token validation failed in ${(endTime - startTime).toFixed(2)}ms`

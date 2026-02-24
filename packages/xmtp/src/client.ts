@@ -1,15 +1,15 @@
+import { getRandomValues } from "node:crypto"
+import fs from "node:fs"
+import path from "node:path"
+import { fileURLToPath } from "node:url"
 import { logger } from "@hybrd/utils"
 import { ReactionCodec } from "@xmtp/content-type-reaction"
 import { ReplyCodec } from "@xmtp/content-type-reply"
 import { TransactionReferenceCodec } from "@xmtp/content-type-transaction-reference"
 import { WalletSendCallsCodec } from "@xmtp/content-type-wallet-send-calls"
 import { Client, IdentifierKind, type Signer, XmtpEnv } from "@xmtp/node-sdk"
-import { getRandomValues } from "node:crypto"
-import fs from "node:fs"
-import path from "node:path"
-import { fileURLToPath } from "node:url"
 import { fromString, toString as uint8arraysToString } from "uint8arrays"
-import { createWalletClient, http, toBytes } from "viem"
+import { http, createWalletClient, toBytes } from "viem"
 import { privateKeyToAccount } from "viem/accounts"
 import { sepolia } from "viem/chains"
 import { revokeOldInstallations } from "../scripts/revoke-installations"
@@ -150,11 +150,11 @@ export async function createXMTPClient(
 
 	if (!signer) {
 		throw new Error(
-			"No signer provided and XMTP_WALLET_KEY environment variable is not set"
+			"No signer provided and AGENT_WALLET_KEY environment variable is not set"
 		)
 	}
 
-	const { XMTP_DB_ENCRYPTION_KEY, XMTP_ENV } = process.env
+	const { AGENT_SECRET, XMTP_ENV } = process.env
 
 	// Get the wallet address to use the correct database
 	const identifier = await signer.getIdentifier()
@@ -175,13 +175,11 @@ export async function createXMTPClient(
 				)
 			}
 
-			if (!XMTP_DB_ENCRYPTION_KEY) {
-				throw new Error(
-					"XMTP_DB_ENCRYPTION_KEY must be set for persistent mode"
-				)
+			if (!AGENT_SECRET) {
+				throw new Error("AGENT_SECRET must be set for persistent mode")
 			}
 
-			const dbEncryptionKey = getEncryptionKeyFromHex(XMTP_DB_ENCRYPTION_KEY)
+			const dbEncryptionKey = getEncryptionKeyFromHex(AGENT_SECRET)
 			const dbPath = await getDbPath(
 				`${XMTP_ENV || "dev"}-${address}`,
 				storagePath
@@ -280,8 +278,8 @@ export async function createXMTPClient(
 					// Try to refresh identity by creating a persistent client first
 					try {
 						console.log("📝 Creating persistent client to refresh identity...")
-						const tempEncryptionKey = XMTP_DB_ENCRYPTION_KEY
-							? getEncryptionKeyFromHex(XMTP_DB_ENCRYPTION_KEY)
+						const tempEncryptionKey = AGENT_SECRET
+							? getEncryptionKeyFromHex(AGENT_SECRET)
 							: getEncryptionKeyFromHex(generateEncryptionKeyHex())
 						const tempClient = await Client.create(signer, {
 							dbEncryptionKey: tempEncryptionKey,

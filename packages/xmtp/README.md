@@ -81,7 +81,7 @@ import {
 } from "@hybrd/xmtp"
 
 // Enhanced connection with reliability features
-const signer = createSigner(process.env.XMTP_WALLET_KEY!)
+const signer = createSigner(process.env.AGENT_WALLET_KEY!)
 
 const connectionConfig: XMTPConnectionConfig = {
   maxRetries: 5,                    // Connection attempts
@@ -189,8 +189,8 @@ Your **QStash-based webhook system** already provides superior reliability compa
 | Variable                 | Description                              | Default                                 |
 | ------------------------ | ---------------------------------------- | --------------------------------------- |
 | `XMTP_STORAGE_PATH`      | Custom path for XMTP database storage    | `.data/xmtp` (relative to project root) |
-| `XMTP_WALLET_KEY`        | Private key for XMTP wallet              | Required                                |
-| `XMTP_DB_ENCRYPTION_KEY` | Encryption key for database              | Required for persistent mode            |
+| `AGENT_WALLET_KEY`        | Private key for agent wallet              | Required                                |
+| `AGENT_SECRET` | Encryption key for database              | Required for persistent mode            |
 | `XMTP_ENV`               | XMTP environment (`dev` or `production`) | `dev`                                   |
 | `PROJECT_ROOT`           | Override project root path               | Auto-detected                           |
 

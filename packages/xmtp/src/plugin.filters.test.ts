@@ -85,15 +85,15 @@ function createTestAgent() {
 beforeEach(() => {
 	vi.resetModules()
 	vi.clearAllMocks()
-	process.env.XMTP_WALLET_KEY = "0xabc"
-	process.env.XMTP_DB_ENCRYPTION_KEY = "secret"
+	process.env.AGENT_WALLET_KEY = "0xabc"
+	process.env.AGENT_SECRET = "secret"
 	process.env.XMTP_ENV = "dev"
 	process.env.XMTP_ENABLE_NODE_STREAM = undefined
 })
 
 afterEach(() => {
-	process.env.XMTP_WALLET_KEY = undefined
-	process.env.XMTP_DB_ENCRYPTION_KEY = undefined
+	process.env.AGENT_WALLET_KEY = undefined
+	process.env.AGENT_SECRET = undefined
 	process.env.XMTP_ENV = undefined
 	process.env.XMTP_ENABLE_NODE_STREAM = undefined
 })

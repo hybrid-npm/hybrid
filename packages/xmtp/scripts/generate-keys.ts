@@ -19,7 +19,7 @@ const publicKey = account.address
 
 console.log("\n# === Generated Keys ===")
 console.log(`# Public Address: ${publicKey}`)
-console.log(`XMTP_WALLET_KEY=${walletKey}`)
-console.log(`XMTP_DB_ENCRYPTION_KEY=${encryptionKeyHex}`)
+console.log(`AGENT_WALLET_KEY=${walletKey}`)
+console.log(`AGENT_SECRET=${encryptionKeyHex}`)
 
 console.log("\nCopy the above environment variables to your .env file")

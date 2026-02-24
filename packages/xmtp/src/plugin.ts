@@ -5,6 +5,7 @@ import {
 	createUser
 } from "@xmtp/agent-sdk"
 
+import { randomUUID } from "node:crypto"
 import type {
 	AgentMessage,
 	AgentRuntime,
@@ -17,7 +18,6 @@ import type {
 	XmtpMessage
 } from "@hybrd/types"
 import { logger } from "@hybrd/utils"
-import { randomUUID } from "node:crypto"
 import { createXMTPClient, getDbPath } from "./client"
 import { ContentTypeReply, ContentTypeText, type Reply } from "./index"
 
@@ -75,8 +75,8 @@ export function XMTPPlugin(): Plugin<PluginContext> {
 		description: "Provides XMTP messaging functionality",
 		apply: async (app, context): Promise<void> => {
 			const {
-				XMTP_WALLET_KEY,
-				XMTP_DB_ENCRYPTION_KEY,
+				AGENT_WALLET_KEY,
+				AGENT_SECRET,
 				XMTP_ENV = "production"
 			} = process.env
 
@@ -85,19 +85,19 @@ export function XMTPPlugin(): Plugin<PluginContext> {
 				behaviors?: BehaviorRegistry
 			}
 
-			if (!XMTP_WALLET_KEY) {
-				throw new Error("XMTP_WALLET_KEY must be set")
+			if (!AGENT_WALLET_KEY) {
+				throw new Error("AGENT_WALLET_KEY must be set")
 			}
 
-			if (!XMTP_DB_ENCRYPTION_KEY) {
-				throw new Error("XMTP_DB_ENCRYPTION_KEY must be set")
+			if (!AGENT_SECRET) {
+				throw new Error("AGENT_SECRET must be set")
 			}
 
-			const user = createUser(XMTP_WALLET_KEY as `0x${string}`)
+			const user = createUser(AGENT_WALLET_KEY as `0x${string}`)
 			const signer = createSigner(user)
 
 			const xmtpClient = await createXMTPClient(
-				XMTP_WALLET_KEY as `0x${string}`
+				AGENT_WALLET_KEY as `0x${string}`
 			)
 
 			const address = user.account.address.toLowerCase()

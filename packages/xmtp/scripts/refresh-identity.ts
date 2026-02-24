@@ -16,10 +16,10 @@ async function refreshXMTPIdentity() {
 	console.log("========================")
 
 	// Validate environment
-	const { XMTP_WALLET_KEY } = validateEnvironment(["XMTP_WALLET_KEY"])
+	const { AGENT_WALLET_KEY } = validateEnvironment(["AGENT_WALLET_KEY"])
 
-	if (!XMTP_WALLET_KEY) {
-		console.error("❌ XMTP_WALLET_KEY is required")
+	if (!AGENT_WALLET_KEY) {
+		console.error("❌ AGENT_WALLET_KEY is required")
 		process.exit(1)
 	}
 
@@ -28,7 +28,7 @@ async function refreshXMTPIdentity() {
 
 		// Step 1: Create client with persistence to force identity refresh
 		console.log("\n📋 Step 1: Creating client with persistence...")
-		const persistentClient = await createXMTPClient(XMTP_WALLET_KEY, {
+		const persistentClient = await createXMTPClient(AGENT_WALLET_KEY, {
 			persist: true
 		})
 
@@ -101,9 +101,9 @@ async function refreshXMTPIdentity() {
 		const err = error as Error
 		console.error("❌ Identity refresh failed:", err)
 
-		if (err.message.includes("XMTP_DB_ENCRYPTION_KEY")) {
-			console.log("\n💡 Add XMTP_DB_ENCRYPTION_KEY to your environment:")
-			console.log("   export XMTP_DB_ENCRYPTION_KEY=your_key_here")
+		if (err.message.includes("AGENT_SECRET")) {
+			console.log("\n💡 Add AGENT_SECRET to your environment:")
+			console.log("   export AGENT_SECRET=your_key_here")
 			console.log(
 				"   Or run: pnpm with-env pnpm --filter @hybrd/xmtp refresh:identity"
 			)

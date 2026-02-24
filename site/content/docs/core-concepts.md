@@ -55,8 +55,8 @@ npx hybrid keys --write
 ```
 
 This creates:
-- **XMTP_WALLET_KEY** - Private key for XMTP identity
-- **XMTP_DB_ENCRYPTION_KEY** - Key for encrypting local message database
+- **AGENT_WALLET_KEY** - Private key for wallet identity
+- **AGENT_SECRET** - Key for encrypting local message database
 
 ### Optional: Blockchain Transaction Capabilities
 
@@ -247,7 +247,7 @@ XMTP_ENV=dev
 
 Each agent is identified by:
 
-- **Ethereum address** - Derived from `XMTP_WALLET_KEY`
+- **Ethereum address** - Derived from `AGENT_WALLET_KEY`
 - **XMTP identity** - Cryptographic identity for messaging
 - **Persistent identity** - Same wallet = same agent across sessions
 
