@@ -21,19 +21,19 @@ async function registerOnXMTP() {
 
 	console.log(`🚀 Starting XMTP ${networkName} Network Registration...`)
 
-	const { XMTP_WALLET_KEY } = validateEnvironment([
-		"XMTP_WALLET_KEY",
-		"XMTP_DB_ENCRYPTION_KEY"
+	const { AGENT_WALLET_KEY } = validateEnvironment([
+		"AGENT_WALLET_KEY",
+		"AGENT_SECRET"
 	])
 
-	if (!XMTP_WALLET_KEY) {
-		console.error("❌ XMTP_WALLET_KEY is required for registration")
+	if (!AGENT_WALLET_KEY) {
+		console.error("❌ AGENT_WALLET_KEY is required for registration")
 		process.exit(1)
 	}
 
 	try {
 		console.log("🔑 Creating signer...")
-		const signer = createSigner(XMTP_WALLET_KEY)
+		const signer = createSigner(AGENT_WALLET_KEY)
 
 		const identifier = await signer.getIdentifier()
 		const address = identifier.identifier
@@ -50,7 +50,7 @@ async function registerOnXMTP() {
 		const dbPath = await getDbPath(`${XMTP_ENV}-${address}`)
 		console.log(`📁 Database path: ${dbPath}`)
 
-		const client = await createXMTPClient(XMTP_WALLET_KEY)
+		const client = await createXMTPClient(AGENT_WALLET_KEY)
 
 		console.log(`✅ Successfully connected to XMTP ${networkName} Network!`)
 
@@ -98,7 +98,7 @@ Next steps:
 				error.message.includes("hex")
 			) {
 				console.log(
-					"🔐 XMTP_DB_ENCRYPTION_KEY must be a valid 64-character hex string (32 bytes)"
+					"🔐 AGENT_SECRET must be a valid 64-character hex string (32 bytes)"
 				)
 			} else {
 				console.log("💡 Make sure your wallet is connected and try again.")
