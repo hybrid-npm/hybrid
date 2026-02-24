@@ -319,147 +319,247 @@ function runAgent(req: ContainerRequest): ReadableStream<Uint8Array> {
 
 	let messageCount = 0
 
-	return new ReadableStream<Uint8Array>({
-		cancel() {
-			console.log("[agent] stream cancelled, aborting agent")
-			abortController.abort()
-		},
-		async pull(controller) {
-			console.log("[agent] pull() called, waiting for next message...")
-			try {
-				const { value: msg, done } = await conversation.next()
-				console.log("[agent] received:", { type: msg?.type, done })
+	// Use push-based streaming instead of pull-based
+	const stream = new ReadableStream<Uint8Array>({
+		start(controller) {
+			// Process the async generator in the background
+			;(async () => {
+				try {
+					for await (const msg of conversation) {
+						messageCount++
+						console.log("[agent] received:", { type: msg?.type })
 
-				if (done) {
+						if (msg.type === "stream_event") {
+							const event = msg.event as { type: string }
+							console.log(`[agent] stream_event: ${event.type}`)
+
+							const text = extractTextDelta(msg)
+							if (text) {
+								controller.enqueue(
+									encodeSSEJson({ type: "text", content: text })
+								)
+							}
+
+							if (event.type === "content_block_start") {
+								const block = (event as any).content_block
+								if (block?.type === "tool_use") {
+									controller.enqueue(
+										encodeSSEJson({
+											type: "tool-call-start",
+											toolCallId: block.id,
+											toolName: block.name
+										})
+									)
+								}
+							}
+
+							if (event.type === "content_block_delta") {
+								const delta = (event as any).delta
+								if (delta?.type === "input_json_delta") {
+									controller.enqueue(
+										encodeSSEJson({
+											type: "tool-call-delta",
+											toolCallId: (event as any).index?.toString(),
+											argsTextDelta: delta.partial_json ?? ""
+										})
+									)
+								}
+							}
+
+							if (event.type === "content_block_stop") {
+								controller.enqueue(
+									encodeSSEJson({
+										type: "tool-call-end",
+										toolCallId: (event as any).index?.toString()
+									})
+								)
+							}
+						} else if (msg.type === "assistant") {
+							const text = extractTextDelta(msg)
+							if (text) {
+								controller.enqueue(
+									encodeSSEJson({ type: "text", content: text })
+								)
+							}
+						} else if (msg.type === "result") {
+							const usage = msg.usage
+							controller.enqueue(
+								encodeSSEJson({
+									type: "usage",
+									inputTokens: usage?.input_tokens ?? 0,
+									outputTokens: usage?.output_tokens ?? 0,
+									totalCostUsd: msg.total_cost_usd ?? 0,
+									numTurns: msg.num_turns ?? 1
+								})
+							)
+						}
+					}
+
 					console.log(
 						`[agent] conversation done after ${messageCount} messages`
 					)
 					controller.enqueue(encodeDone())
 					controller.close()
-					return
-				}
+				} catch (err) {
+					const errorMessage =
+						err instanceof Error ? err.message : "Agent error"
+					console.error(`[agent] error in stream:`, err)
 
-				messageCount++
-
-				if (msg.type === "stream_event") {
-					const event = msg.event as { type: string }
-					console.log(`[agent] stream_event: ${event.type}`)
-
-					if (event.type !== "content_block_delta") {
-						console.log(
-							`[agent] msg #${messageCount} event.type="${event.type}"`
-						)
-					}
-
-					const text = extractTextDelta(msg)
-					if (text) {
-						debug(`text delta: "${text.slice(0, 50)}..."`)
-						controller.enqueue(encodeSSEJson({ type: "text", content: text }))
-						return
-					}
-
-					if (event.type === "content_block_start") {
-						const block = (event as any).content_block
-						debug("content_block_start:", block)
-						if (block?.type === "tool_use") {
-							controller.enqueue(
-								encodeSSEJson({
-									type: "tool-call-start",
-									toolCallId: block.id,
-									toolName: block.name
-								})
+					if (err instanceof Error) {
+						if (
+							errorMessage.includes("401") ||
+							errorMessage.includes("Unauthorized") ||
+							errorMessage.includes("invalid")
+						) {
+							console.error(
+								`[agent] API key error - check ANTHROPIC_API_KEY or OPENROUTER_API_KEY`
 							)
 						}
-						return
-					}
-
-					if (event.type === "content_block_delta") {
-						const delta = (event as any).delta
-						if (delta?.type === "input_json_delta") {
-							controller.enqueue(
-								encodeSSEJson({
-									type: "tool-call-delta",
-									toolCallId: (event as any).index?.toString(),
-									argsTextDelta: delta.partial_json ?? ""
-								})
+						if (
+							errorMessage.includes("terminated") ||
+							errorMessage.includes("ECONNREFUSED")
+						) {
+							console.error(
+								`[agent] Connection error - check ANTHROPIC_BASE_URL`
 							)
 						}
-						return
 					}
 
-					if (event.type === "content_block_stop") {
+					try {
 						controller.enqueue(
-							encodeSSEJson({
-								type: "tool-call-end",
-								toolCallId: (event as any).index?.toString()
-							})
+							encodeSSEJson({ type: "error", content: errorMessage })
 						)
-						return
-					}
-				} else if (msg.type === "result") {
-					debug("result:", JSON.stringify(msg))
-					const usage = msg.usage
-					controller.enqueue(
-						encodeSSEJson({
-							type: "usage",
-							inputTokens: usage?.input_tokens ?? 0,
-							outputTokens: usage?.output_tokens ?? 0,
-							totalCostUsd: msg.total_cost_usd ?? 0,
-							numTurns: msg.num_turns ?? 1
-						})
-					)
-				} else if (msg.type === "assistant") {
-					debug("assistant message")
-					const text = extractTextDelta(msg)
-					if (text) {
-						controller.enqueue(encodeSSEJson({ type: "text", content: text }))
-					}
-				} else {
-					debug(
-						"unknown message type:",
-						msg.type,
-						JSON.stringify(msg).slice(0, 200)
-					)
-				}
-			} catch (err) {
-				const errorMessage = err instanceof Error ? err.message : "Agent error"
-				console.error(`[agent] error in stream:`, err)
-				console.error(
-					`[agent] error stack:`,
-					err instanceof Error ? err.stack : "no stack"
-				)
-
-				// Detect common API key errors
-				if (err instanceof Error) {
-					if (
-						errorMessage.includes("401") ||
-						errorMessage.includes("Unauthorized") ||
-						errorMessage.includes("invalid")
-					) {
-						console.error(
-							`[agent] API key error - check ANTHROPIC_API_KEY or OPENROUTER_API_KEY`
-						)
-					}
-					if (
-						errorMessage.includes("terminated") ||
-						errorMessage.includes("ECONNREFUSED")
-					) {
-						console.error(`[agent] Connection error - check ANTHROPIC_BASE_URL`)
+						controller.enqueue(encodeDone())
+						controller.close()
+					} catch {
+						// Stream already cancelled
 					}
 				}
-
-				debug("full error:", err)
-				try {
-					controller.enqueue(
-						encodeSSEJson({ type: "error", content: errorMessage })
-					)
-					controller.enqueue(encodeDone())
-					controller.close()
-				} catch {
-					// Stream already cancelled
-				}
-			}
+			})()
+		},
+		cancel() {
+			console.log("[agent] stream cancelled, aborting agent")
+			abortController.abort()
 		}
+	})
+
+	return stream
+}
+
+messageCount++
+
+if (msg.type === "stream_event") {
+	const event = msg.event as { type: string }
+	console.log(`[agent] stream_event: ${event.type}`)
+
+	if (event.type !== "content_block_delta") {
+		console.log(`[agent] msg #${messageCount} event.type="${event.type}"`)
+	}
+
+	const text = extractTextDelta(msg)
+	if (text) {
+		debug(`text delta: "${text.slice(0, 50)}..."`)
+		controller.enqueue(encodeSSEJson({ type: "text", content: text }))
+		return
+	}
+
+	if (event.type === "content_block_start") {
+		const block = (event as any).content_block
+		debug("content_block_start:", block)
+		if (block?.type === "tool_use") {
+			controller.enqueue(
+				encodeSSEJson({
+					type: "tool-call-start",
+					toolCallId: block.id,
+					toolName: block.name
+				})
+			)
+		}
+		return
+	}
+
+	if (event.type === "content_block_delta") {
+		const delta = (event as any).delta
+		if (delta?.type === "input_json_delta") {
+			controller.enqueue(
+				encodeSSEJson({
+					type: "tool-call-delta",
+					toolCallId: (event as any).index?.toString(),
+					argsTextDelta: delta.partial_json ?? ""
+				})
+			)
+		}
+		return
+	}
+
+	if (event.type === "content_block_stop") {
+		controller.enqueue(
+			encodeSSEJson({
+				type: "tool-call-end",
+				toolCallId: (event as any).index?.toString()
+			})
+		)
+		return
+	}
+} else if (msg.type === "result") {
+	debug("result:", JSON.stringify(msg))
+	const usage = msg.usage
+	controller.enqueue(
+		encodeSSEJson({
+			type: "usage",
+			inputTokens: usage?.input_tokens ?? 0,
+			outputTokens: usage?.output_tokens ?? 0,
+			totalCostUsd: msg.total_cost_usd ?? 0,
+			numTurns: msg.num_turns ?? 1
+		})
+	)
+} else if (msg.type === "assistant") {
+	debug("assistant message")
+	const text = extractTextDelta(msg)
+	if (text) {
+		controller.enqueue(encodeSSEJson({ type: "text", content: text }))
+	}
+} else {
+	debug("unknown message type:", msg.type, JSON.stringify(msg).slice(0, 200))
+}
+} catch (err)
+{
+	const errorMessage = err instanceof Error ? err.message : "Agent error"
+	console.error(`[agent] error in stream:`, err)
+	console.error(
+		`[agent] error stack:`,
+		err instanceof Error ? err.stack : "no stack"
+	)
+
+	// Detect common API key errors
+	if (err instanceof Error) {
+		if (
+			errorMessage.includes("401") ||
+			errorMessage.includes("Unauthorized") ||
+			errorMessage.includes("invalid")
+		) {
+			console.error(
+				`[agent] API key error - check ANTHROPIC_API_KEY or OPENROUTER_API_KEY`
+			)
+		}
+		if (
+			errorMessage.includes("terminated") ||
+			errorMessage.includes("ECONNREFUSED")
+		) {
+			console.error(`[agent] Connection error - check ANTHROPIC_BASE_URL`)
+		}
+	}
+
+	debug("full error:", err)
+	try {
+		controller.enqueue(encodeSSEJson({ type: "error", content: errorMessage }))
+		controller.enqueue(encodeDone())
+		controller.close()
+	} catch {
+		// Stream already cancelled
+	}
+}
+}
 	})
 }
 
