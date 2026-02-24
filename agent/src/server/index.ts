@@ -247,7 +247,11 @@ function runAgent(req: ContainerRequest): ReadableStream<Uint8Array> {
 	const envVars: Record<string, string | undefined> = {
 		...process.env, // Pass through PATH, HOME, etc.
 		ANTHROPIC_BASE_URL: baseUrl || undefined,
-		ANTHROPIC_AUTH_TOKEN: authToken || undefined
+		ANTHROPIC_AUTH_TOKEN: authToken || undefined,
+		// Use OpenRouter's model selection env var
+		...(isUsingOpenRouter
+			? { ANTHROPIC_SMALL_FAST_MODEL: "anthropic/claude-3.5-sonnet" }
+			: {})
 	}
 
 	// For OpenRouter: API_KEY must be explicitly empty to prevent conflicts
@@ -261,7 +265,7 @@ function runAgent(req: ContainerRequest): ReadableStream<Uint8Array> {
 	const options: Options = {
 		abortController,
 		systemPrompt,
-		model,
+		// Don't specify model - let SDK use default based on env
 		cwd: PROJECT_ROOT,
 		pathToClaudeCodeExecutable: resolveClaudeCodeExecutable(),
 		settingSources: [],
