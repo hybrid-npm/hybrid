@@ -242,6 +242,21 @@ function runAgent(req: ContainerRequest): ReadableStream<Uint8Array> {
 		hasApiKey: !!apiKey
 	})
 
+	// Build env object per OpenRouter docs
+	// See: https://openrouter.ai/docs/guides/guides/claude-code-integration
+	const envVars: Record<string, string | undefined> = {
+		ANTHROPIC_BASE_URL: baseUrl || undefined,
+		ANTHROPIC_AUTH_TOKEN: authToken || undefined
+	}
+
+	// For OpenRouter: API_KEY must be explicitly empty to prevent conflicts
+	// For Anthropic: API_KEY is required
+	if (isUsingOpenRouter) {
+		envVars.ANTHROPIC_API_KEY = "" // Must be explicitly empty
+	} else if (apiKey) {
+		envVars.ANTHROPIC_API_KEY = apiKey
+	}
+
 	const options: Options = {
 		abortController,
 		systemPrompt,
@@ -257,17 +272,19 @@ function runAgent(req: ContainerRequest): ReadableStream<Uint8Array> {
 		stderr: (data: string) => {
 			console.error(`[claude-stderr] ${data}`)
 		},
-		env: {
-			ANTHROPIC_BASE_URL: baseUrl || undefined,
-			ANTHROPIC_AUTH_TOKEN: authToken || undefined,
-			ANTHROPIC_API_KEY: apiKey || undefined
-		}
+		env: envVars
 	}
 
 	console.log(`[agent] options.env:`)
-	console.log(`  ANTHROPIC_BASE_URL: ${baseUrl || "(not set)"}`)
-	console.log(`  ANTHROPIC_AUTH_TOKEN: ${authToken ? "***" : "(not set)"}`)
-	console.log(`  ANTHROPIC_API_KEY: ${apiKey || "(not set)"}`)
+	console.log(
+		`  ANTHROPIC_BASE_URL: ${envVars.ANTHROPIC_BASE_URL || "(not set)"}`
+	)
+	console.log(
+		`  ANTHROPIC_AUTH_TOKEN: ${envVars.ANTHROPIC_AUTH_TOKEN ? "***" : "(not set)"}`
+	)
+	console.log(
+		`  ANTHROPIC_API_KEY: "${envVars.ANTHROPIC_API_KEY ?? "(not set)"}"`
+	)
 
 	debug("Options:", JSON.stringify(options, null, 2).slice(0, 500))
 	debug("System prompt:", systemPrompt.slice(0, 200))
