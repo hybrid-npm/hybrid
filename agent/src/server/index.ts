@@ -321,10 +321,10 @@ function runAgent(req: ContainerRequest): ReadableStream<Uint8Array> {
 			abortController.abort()
 		},
 		async pull(controller) {
-			debug("pull() called, waiting for next message...")
+			console.log("[agent] pull() called, waiting for next message...")
 			try {
 				const { value: msg, done } = await conversation.next()
-				debug("received:", { type: msg?.type, done })
+				console.log("[agent] received:", { type: msg?.type, done })
 
 				if (done) {
 					console.log(
@@ -339,7 +339,7 @@ function runAgent(req: ContainerRequest): ReadableStream<Uint8Array> {
 
 				if (msg.type === "stream_event") {
 					const event = msg.event as { type: string }
-					debug(`stream_event:`, JSON.stringify(event).slice(0, 300))
+					console.log(`[agent] stream_event: ${event.type}`)
 
 					if (event.type !== "content_block_delta") {
 						console.log(
