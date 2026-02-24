@@ -245,6 +245,7 @@ function runAgent(req: ContainerRequest): ReadableStream<Uint8Array> {
 	// Build env object per OpenRouter docs
 	// See: https://openrouter.ai/docs/guides/guides/claude-code-integration
 	const envVars: Record<string, string | undefined> = {
+		...process.env, // Pass through PATH, HOME, etc.
 		ANTHROPIC_BASE_URL: baseUrl || undefined,
 		ANTHROPIC_AUTH_TOKEN: authToken || undefined
 	}
