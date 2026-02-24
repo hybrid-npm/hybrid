@@ -3,17 +3,33 @@ import { fileURLToPath } from "node:url"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
+console.log("[sidecar] Starting XMTP sidecar...")
+console.log("[sidecar] Node version:", process.version)
+
+// Catch all uncaught errors
+process.on("uncaughtException", (err) => {
+	console.error("[sidecar] Uncaught exception:", err)
+	process.exit(1)
+})
+
+process.on("unhandledRejection", (reason, promise) => {
+	console.error("[sidecar] Unhandled rejection at:", promise, "reason:", reason)
+	process.exit(1)
+})
+
+console.log("[sidecar] Importing @hybrd/xmtp...")
+
 import { randomUUID } from "node:crypto"
-import { getDbPath } from "@hybrd/xmtp"
-import {
-	Agent as XmtpAgent,
-	XmtpEnv,
-	createSigner,
-	createUser
-} from "@xmtp/agent-sdk"
+import { createUser, createXMTPClient, getDbPath } from "@hybrd/xmtp"
+
+console.log("[sidecar] Imports loaded")
 
 const AGENT_PORT = process.env.AGENT_PORT || "4100"
 const XMTP_ENV = process.env.XMTP_ENV || "dev"
+
+console.log(`[sidecar] AGENT_PORT=${AGENT_PORT}, XMTP_ENV=${XMTP_ENV}`)
+console.log(`[sidecar] AGENT_WALLET_KEY set: ${!!process.env.AGENT_WALLET_KEY}`)
+console.log(`[sidecar] AGENT_SECRET set: ${!!process.env.AGENT_SECRET}`)
 
 async function startSidecar() {
 	console.log("\n  ╭──────────────────────────────────────────────────╮")
@@ -38,29 +54,44 @@ async function startSidecar() {
 	console.log(`  Agent      http://localhost:${AGENT_PORT}`)
 	console.log()
 
-	const user = createUser(AGENT_WALLET_KEY as `0x${string}`)
-	const signer = createSigner(user)
-	const address = user.account.address.toLowerCase()
+	let user: ReturnType<typeof createUser>
+	let address: string
 
-	console.log(`  Wallet     ${address}`)
-	console.log()
-	console.log("  ─────────────────────────────────────────────────")
-	console.log()
-	console.log("  Connecting to XMTP...")
+	try {
+		user = createUser(AGENT_WALLET_KEY as `0x${string}`)
+		address = user.account.address.toLowerCase()
+		console.log(`  Wallet     ${address}`)
+		console.log()
+		console.log("  ─────────────────────────────────────────────────")
+		console.log()
+		console.log("  Connecting to XMTP...")
+	} catch (err) {
+		console.error("❌ Failed to create wallet from AGENT_WALLET_KEY:", err)
+		process.exit(1)
+	}
 
 	const agentDbPath = await getDbPath(`sidecar-${XMTP_ENV}-${address}`)
 
-	const xmtp = await XmtpAgent.create(signer, {
-		env: XMTP_ENV as XmtpEnv,
-		dbPath: agentDbPath
-	})
-
-	console.log("  ✓ Connected to XMTP")
-	console.log()
-	console.log("  ─────────────────────────────────────────────────")
-	console.log()
-	console.log("  Listening for messages...")
-	console.log()
+	let xmtp: Awaited<ReturnType<typeof createXMTPClient>>
+	try {
+		xmtp = await createXMTPClient(AGENT_WALLET_KEY, {
+			persist: true,
+			storagePath: agentDbPath
+		})
+		console.log("  ✓ Connected to XMTP")
+		console.log()
+		console.log("  ─────────────────────────────────────────────────")
+		console.log()
+		console.log("  Listening for messages...")
+		console.log()
+	} catch (err) {
+		console.error("❌ Failed to connect to XMTP:", err)
+		console.log("  Check that:")
+		console.log("  - AGENT_WALLET_KEY is valid (64 char hex)")
+		console.log("  - AGENT_SECRET is valid (64 char hex)")
+		console.log(`  - XMTP_ENV is valid (dev or production, got: ${XMTP_ENV}`)
+		process.exit(1)
+	}
 
 	xmtp.on("text", async ({ conversation, message }) => {
 		try {

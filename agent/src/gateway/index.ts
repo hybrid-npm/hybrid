@@ -101,7 +101,17 @@ async function ensureAgentServer(sandbox: SandboxStub, env: GatewayEnv) {
 		}
 	}
 
-	// Check if server is already running
+	// Check if server is already running and sidecar is running
+	const processes = await sandbox.listProcesses()
+	const serverRunning = processes.some((p) =>
+		p.command?.includes("server/index.js")
+	)
+	const sidecarRunning = processes.some((p) =>
+		p.command?.includes("sidecar/index.js")
+	)
+
+	// Check server health
+	let serverHealthy = false
 	try {
 		const controller = new AbortController()
 		const timeoutId = setTimeout(() => controller.abort(), 5000)
@@ -111,16 +121,23 @@ async function ensureAgentServer(sandbox: SandboxStub, env: GatewayEnv) {
 			AGENT_PORT
 		)
 		clearTimeout(timeoutId)
-		if (health.ok) {
-			console.log("[gateway] Server already running")
-			return
-		}
+		serverHealthy = health.ok
 	} catch (err) {
-		console.log(`[gateway] Server not running, will start it: ${err}`)
+		console.log(`[gateway] Server health check failed: ${err}`)
+	}
+
+	if (serverHealthy && sidecarRunning) {
+		console.log("[gateway] Server and sidecar already running")
+		return
+	}
+
+	if (serverHealthy && !sidecarRunning) {
+		console.log(
+			"[gateway] Server running but sidecar missing, restarting both..."
+		)
 	}
 
 	// Kill any existing node processes
-	const processes = await sandbox.listProcesses()
 	for (const p of processes) {
 		if (p.command?.includes("node")) {
 			console.log(`[gateway] Killing process ${p.id}`)

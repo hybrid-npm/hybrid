@@ -33,7 +33,8 @@
 		}
 	],
 	"vars": {
-		"AGENT_PORT": "4100"
+		"AGENT_PORT": "4100",
+		"XMTP_ENV": "production"
 	},
 	"observability": {
 		"enabled": true,
