@@ -13,7 +13,7 @@ await build({
 	format: "esm",
 	outfile: "dist/server/index.js",
 	external: ["dotenv"],
-	minify: true
+	minify: false
 })
 
 await build({
@@ -24,7 +24,7 @@ await build({
 	format: "esm",
 	outfile: "dist/sidecar/index.js",
 	external: ["dotenv"],
-	minify: true
+	minify: false
 })
 
 console.log("Build complete")

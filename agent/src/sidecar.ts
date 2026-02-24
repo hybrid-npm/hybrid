@@ -1,28 +1,46 @@
+// Log immediately - this runs before imports in bundled code
+console.log("[sidecar] ========================================")
+console.log("[sidecar] Starting XMTP sidecar (pre-import)...")
+console.log("[sidecar] Node version:", process.version)
+console.log("[sidecar] Platform:", process.platform)
+console.log("[sidecar] Arch:", process.arch)
+console.log("[sidecar] CWD:", process.cwd())
+console.log("[sidecar] ENV keys:", Object.keys(process.env).sort().join(", "))
+console.log("[sidecar] ========================================")
+
+// Catch errors before imports
+process.on("uncaughtException", (err) => {
+	console.error("[sidecar] FATAL Uncaught exception:", err.message)
+	console.error("[sidecar] Stack:", err.stack)
+	process.exit(1)
+})
+
+process.on("unhandledRejection", (reason) => {
+	console.error("[sidecar] FATAL Unhandled rejection:", reason)
+	process.exit(1)
+})
+
+// Now import - any errors will be caught by handlers above
+import { randomUUID } from "node:crypto"
 import { dirname } from "node:path"
 import { fileURLToPath } from "node:url"
+import { createUser, createXMTPClient, getDbPath } from "@hybrd/xmtp"
+
+console.log("[sidecar] All imports successful")
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
-console.log("[sidecar] Starting XMTP sidecar...")
-console.log("[sidecar] Node version:", process.version)
-
 // Catch all uncaught errors
 process.on("uncaughtException", (err) => {
-	console.error("[sidecar] Uncaught exception:", err)
+	console.error("[sidecar] Uncaught exception:", err.message)
+	console.error("[sidecar] Stack:", err.stack)
 	process.exit(1)
 })
 
 process.on("unhandledRejection", (reason, promise) => {
-	console.error("[sidecar] Unhandled rejection at:", promise, "reason:", reason)
+	console.error("[sidecar] Unhandled rejection:", reason)
 	process.exit(1)
 })
-
-console.log("[sidecar] Importing @hybrd/xmtp...")
-
-import { randomUUID } from "node:crypto"
-import { createUser, createXMTPClient, getDbPath } from "@hybrd/xmtp"
-
-console.log("[sidecar] Imports loaded")
 
 const AGENT_PORT = process.env.AGENT_PORT || "4100"
 const XMTP_ENV = process.env.XMTP_ENV || "dev"

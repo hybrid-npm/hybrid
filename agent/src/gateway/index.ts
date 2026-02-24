@@ -113,14 +113,11 @@ async function ensureAgentServer(sandbox: SandboxStub, env: GatewayEnv) {
 	// Check server health
 	let serverHealthy = false
 	try {
-		const controller = new AbortController()
-		const timeoutId = setTimeout(() => controller.abort(), 5000)
 		const health = await sandbox.containerFetch(
 			"http://container/health",
-			{ signal: controller.signal },
+			{},
 			AGENT_PORT
 		)
-		clearTimeout(timeoutId)
 		serverHealthy = health.ok
 	} catch (err) {
 		console.log(`[gateway] Server health check failed: ${err}`)
