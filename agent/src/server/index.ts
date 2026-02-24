@@ -208,6 +208,33 @@ function runAgent(req: ContainerRequest): ReadableStream<Uint8Array> {
 		})
 	}
 
+	// For OpenRouter, authToken is required but apiKey should be empty
+	if (isUsingOpenRouter && !authToken) {
+		const error =
+			"OpenRouter requires ANTHROPIC_AUTH_TOKEN (set OPENROUTER_API_KEY)"
+		console.error(`[agent] ${error}`)
+		return new ReadableStream<Uint8Array>({
+			start(controller) {
+				controller.enqueue(encodeSSEJson({ type: "error", content: error }))
+				controller.enqueue(encodeDone())
+				controller.close()
+			}
+		})
+	}
+
+	// For direct Anthropic, apiKey is required
+	if (!isUsingOpenRouter && !apiKey) {
+		const error = "Anthropic requires ANTHROPIC_API_KEY"
+		console.error(`[agent] ${error}`)
+		return new ReadableStream<Uint8Array>({
+			start(controller) {
+				controller.enqueue(encodeSSEJson({ type: "error", content: error }))
+				controller.enqueue(encodeDone())
+				controller.close()
+			}
+		})
+	}
+
 	debug("API config:", {
 		baseUrl: baseUrl || "(default Anthropic)",
 		model,
@@ -243,10 +270,14 @@ function runAgent(req: ContainerRequest): ReadableStream<Uint8Array> {
 	debug("User prompt:", prompt.slice(0, 200))
 
 	console.log(`[agent] calling query() with model=${model}`)
+	console.log(`[agent] ANTHROPIC_BASE_URL: ${baseUrl || "(default)"}`)
+	console.log(`[agent] ANTHROPIC_AUTH_TOKEN set: ${!!authToken}`)
+	console.log(`[agent] ANTHROPIC_API_KEY: "${apiKey}"`)
 
 	let conversation: AsyncGenerator<any, void, unknown>
 	try {
 		conversation = query({ prompt, options })
+		console.log("[agent] query() returned, starting stream...")
 	} catch (err) {
 		const errorMsg =
 			err instanceof Error ? err.message : "Failed to initialize agent"
