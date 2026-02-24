@@ -1,0 +1,43 @@
+# Secrets
+.dev.vars
+.dev.vars.local
+.wrangler/deploy/env.json
+
+# Build output
+dist/
+
+# Cloudflare Workers
+.wrangler/
+.mf/
+
+# Dependencies
+node_modules/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Test coverage
+coverage/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
