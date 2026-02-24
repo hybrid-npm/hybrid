@@ -186,8 +186,10 @@ function runAgent(req: ContainerRequest): ReadableStream<Uint8Array> {
 	const authToken =
 		process.env.ANTHROPIC_AUTH_TOKEN ?? process.env.OPENROUTER_API_KEY
 	const apiKey = process.env.ANTHROPIC_API_KEY
+	// OpenRouter uses different model names than Anthropic directly
+	// See: https://openrouter.ai/models
 	const model = isUsingOpenRouter
-		? "anthropic/claude-sonnet-4"
+		? "anthropic/claude-3.5-sonnet"
 		: "claude-sonnet-4-20250514"
 
 	// Validate API configuration
