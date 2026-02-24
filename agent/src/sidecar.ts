@@ -16,7 +16,7 @@ import {
 	createUser
 } from "@xmtp/agent-sdk"
 
-const CONTAINER_PORT = process.env.CONTAINER_PORT || "4100"
+const GATEWAY_PORT = process.env.GATEWAY_PORT || "8787"
 const XMTP_ENV = process.env.XMTP_ENV || "dev"
 
 async function startSidecar() {
@@ -38,7 +38,7 @@ async function startSidecar() {
 	}
 
 	console.log(`  XMTP Net   ${XMTP_ENV}`)
-	console.log(`  Container  http://localhost:${CONTAINER_PORT}`)
+	console.log(`  Gateway    http://localhost:${GATEWAY_PORT}`)
 	console.log()
 
 	const user = createUser(XMTP_WALLET_KEY as `0x${string}`)
@@ -79,7 +79,7 @@ async function startSidecar() {
 			console.log(`  → Forwarding to container...`)
 
 			const response = await fetch(
-				`http://localhost:${CONTAINER_PORT}/api/chat`,
+				`http://localhost:${GATEWAY_PORT}/api/chat`,
 				{
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
@@ -177,7 +177,7 @@ async function startSidecar() {
 			console.log(`  → Forwarding to container...`)
 
 			const response = await fetch(
-				`http://localhost:${CONTAINER_PORT}/api/chat`,
+				`http://localhost:${GATEWAY_PORT}/api/chat`,
 				{
 					method: "POST",
 					headers: { "Content-Type": "application/json" },

@@ -6,7 +6,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 config({ path: join(__dirname, "..", "..", ".env.local") })
 config({ path: join(__dirname, "..", ".env.local") })
 
-const CONTAINER_PORT = process.env.AGENT_PORT || "4100"
+const GATEWAY_PORT = process.env.GATEWAY_PORT || "8787"
 
 async function testAgent() {
 	console.log("🧪 Testing agent connection...\n")
@@ -14,20 +14,17 @@ async function testAgent() {
 	const testMessage = "Say 'hello' in one word"
 
 	console.log(`📤 Sending: "${testMessage}"`)
-	console.log(`📡 Endpoint: http://localhost:${CONTAINER_PORT}/api/chat\n`)
+	console.log(`📡 Endpoint: http://localhost:${GATEWAY_PORT}/api/chat\n`)
 
 	try {
-		const response = await fetch(
-			`http://localhost:${CONTAINER_PORT}/api/chat`,
-			{
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					messages: [{ id: "1", role: "user", content: testMessage }],
-					chatId: "test-chat"
-				})
-			}
-		)
+		const response = await fetch(`http://localhost:${GATEWAY_PORT}/api/chat`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				messages: [{ id: "1", role: "user", content: testMessage }],
+				chatId: "test-chat"
+			})
+		})
 
 		console.log(`Status: ${response.status} ${response.statusText}`)
 		console.log(`Content-Type: ${response.headers.get("content-type")}\n`)

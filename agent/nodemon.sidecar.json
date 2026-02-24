@@ -1,6 +1,0 @@
-{
-	"watch": ["src", "../packages/xmtp/src"],
-	"ext": "ts,js,json,md",
-	"ignore": ["src/**/*.test.ts"],
-	"exec": "tsx src/sidecar.ts"
-}

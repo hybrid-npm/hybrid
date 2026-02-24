@@ -4,11 +4,10 @@
 	"type": "module",
 	"scripts": {
 		"build": "node build.mjs",
-		"dev": "concurrently -n agent,xmtp -c blue,green \"pnpm watch:container\" \"pnpm watch:sidecar\"",
+		"dev": "concurrently -n gateway,xmtp -c blue,green \"pnpm dev:gateway\" \"pnpm dev:sidecar\"",
+		"dev:gateway": "wrangler dev --port 8787",
 		"dev:container": "tsx src/server/index.ts",
 		"dev:sidecar": "tsx src/sidecar.ts",
-		"watch:container": "nodemon --config nodemon.container.json",
-		"watch:sidecar": "nodemon --config nodemon.sidecar.json",
 		"test:agent": "tsx src/test-agent.ts",
 		"deploy": "wrangler deploy",
 		"typecheck": "tsc --noEmit",
