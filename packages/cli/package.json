@@ -6,10 +6,7 @@
 		"hybrid": "./dist/cli.js",
 		"hy": "./dist/cli.js"
 	},
-	"files": [
-		"dist",
-		"src"
-	],
+	"files": ["dist", "src"],
 	"exports": {
 		".": {
 			"types": "./src/index.ts",
@@ -31,6 +28,7 @@
 	},
 	"dependencies": {
 		"@hybrd/xmtp": "workspace:*",
+		"concurrently": "^9.2.1",
 		"dotenv": "^16.4.5",
 		"rimraf": "^5.0.10",
 		"tsx": "^4.20.5",
