@@ -128,35 +128,56 @@ async function ensureAgentServer(sandbox: SandboxStub, env: GatewayEnv) {
 		}
 	}
 
-	// Start the server
-	console.log("[gateway] Starting server process...")
-	const proc = await sandbox.startProcess("node /app/dist/server/index.js", {
-		env: {
-			AGENT_WALLET_KEY: env.AGENT_WALLET_KEY ?? "",
-			AGENT_SECRET: env.AGENT_SECRET ?? "",
-			XMTP_ENV: env.XMTP_ENV ?? "dev",
-			ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY ?? "",
-			ANTHROPIC_BASE_URL:
-				env.ANTHROPIC_BASE_URL ??
-				(env.OPENROUTER_API_KEY ? "https://openrouter.ai/api" : ""),
-			ANTHROPIC_AUTH_TOKEN:
-				env.ANTHROPIC_AUTH_TOKEN ?? env.OPENROUTER_API_KEY ?? "",
-			OPENROUTER_API_KEY: env.OPENROUTER_API_KEY ?? "",
-			AGENT_PORT: String(AGENT_PORT)
-		},
-		onOutput: (data) => {
-			console.log(`[gateway] process stdout: ${data}`)
-		},
-		onExit: (code) => {
-			console.log(`[gateway] process exited with code ${code}`)
+	const processEnv = {
+		AGENT_WALLET_KEY: env.AGENT_WALLET_KEY ?? "",
+		AGENT_SECRET: env.AGENT_SECRET ?? "",
+		XMTP_ENV: env.XMTP_ENV ?? "dev",
+		ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY ?? "",
+		ANTHROPIC_BASE_URL:
+			env.ANTHROPIC_BASE_URL ??
+			(env.OPENROUTER_API_KEY ? "https://openrouter.ai/api" : ""),
+		ANTHROPIC_AUTH_TOKEN:
+			env.ANTHROPIC_AUTH_TOKEN ?? env.OPENROUTER_API_KEY ?? "",
+		OPENROUTER_API_KEY: env.OPENROUTER_API_KEY ?? "",
+		AGENT_PORT: String(AGENT_PORT)
+	}
+
+	// Start the agent server
+	console.log("[gateway] Starting agent server...")
+	const serverProc = await sandbox.startProcess(
+		"node /app/dist/server/index.js",
+		{
+			env: processEnv,
+			onOutput: (data) => {
+				console.log(`[gateway] server: ${data}`)
+			},
+			onExit: (code) => {
+				console.log(`[gateway] server exited with code ${code}`)
+			}
 		}
-	})
-	console.log(`[gateway] Process started with ID: ${proc.id}`)
+	)
+	console.log(`[gateway] Server started with ID: ${serverProc.id}`)
 
 	// Wait for the port to be ready
 	console.log(`[gateway] Waiting for port ${AGENT_PORT}...`)
-	await proc.waitForPort(AGENT_PORT, { mode: "tcp" })
+	await serverProc.waitForPort(AGENT_PORT, { mode: "tcp" })
 	console.log(`[gateway] Port ${AGENT_PORT} is ready`)
+
+	// Start the XMTP sidecar
+	console.log("[gateway] Starting XMTP sidecar...")
+	const sidecarProc = await sandbox.startProcess(
+		"node /app/dist/sidecar/index.js",
+		{
+			env: processEnv,
+			onOutput: (data) => {
+				console.log(`[gateway] sidecar: ${data}`)
+			},
+			onExit: (code) => {
+				console.log(`[gateway] sidecar exited with code ${code}`)
+			}
+		}
+	)
+	console.log(`[gateway] Sidecar started with ID: ${sidecarProc.id}`)
 
 	// Verify with health check
 	for (let i = 0; i < 10; i++) {

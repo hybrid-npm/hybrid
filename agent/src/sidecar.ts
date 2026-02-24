@@ -1,9 +1,7 @@
-import { dirname, join } from "node:path"
+import { dirname } from "node:path"
 import { fileURLToPath } from "node:url"
-import { config } from "dotenv"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-config({ path: join(__dirname, "..", ".dev.vars") })
 
 import { randomUUID } from "node:crypto"
 import { getDbPath } from "@hybrd/xmtp"
@@ -14,7 +12,7 @@ import {
 	createUser
 } from "@xmtp/agent-sdk"
 
-const GATEWAY_PORT = process.env.GATEWAY_PORT || "8787"
+const AGENT_PORT = process.env.AGENT_PORT || "4100"
 const XMTP_ENV = process.env.XMTP_ENV || "dev"
 
 async function startSidecar() {
@@ -37,7 +35,7 @@ async function startSidecar() {
 	}
 
 	console.log(`  XMTP Net   ${XMTP_ENV}`)
-	console.log(`  Gateway    http://localhost:${GATEWAY_PORT}`)
+	console.log(`  Agent      http://localhost:${AGENT_PORT}`)
 	console.log()
 
 	const user = createUser(AGENT_WALLET_KEY as `0x${string}`)
@@ -77,17 +75,14 @@ async function startSidecar() {
 
 			console.log(`  → Forwarding to container...`)
 
-			const response = await fetch(
-				`http://localhost:${GATEWAY_PORT}/api/chat`,
-				{
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({
-						messages,
-						chatId: conversation.id
-					})
-				}
-			)
+			const response = await fetch(`http://localhost:${AGENT_PORT}/api/chat`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					messages,
+					chatId: conversation.id
+				})
+			})
 
 			if (!response.ok) {
 				console.error(`  ❌ Container error: ${response.status}`)
@@ -175,17 +170,14 @@ async function startSidecar() {
 
 			console.log(`  → Forwarding to container...`)
 
-			const response = await fetch(
-				`http://localhost:${GATEWAY_PORT}/api/chat`,
-				{
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({
-						messages,
-						chatId: conversation.id
-					})
-				}
-			)
+			const response = await fetch(`http://localhost:${AGENT_PORT}/api/chat`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					messages,
+					chatId: conversation.id
+				})
+			})
 
 			if (!response.ok) {
 				console.error(`  ❌ Container error: ${response.status}`)
