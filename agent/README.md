@@ -213,12 +213,12 @@ The server maintains a sliding window of the last 20 messages:
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `ANTHROPIC_API_KEY` | Yes | Claude API key |
+| `OPENROUTER_API_KEY` | Yes | OpenRouter API key (or use ANTHROPIC_API_KEY) |
+| `ANTHROPIC_API_KEY` | No | Claude API key (alternative to OpenRouter) |
 | `ANTHROPIC_BASE_URL` | No | Claude API base URL |
 | `ANTHROPIC_AUTH_TOKEN` | No | Alternative auth token |
-| `OPENROUTER_API_KEY` | No | OpenRouter API key (fallback) |
-| `XMTP_WALLET_KEY` | Yes | XMTP wallet private key |
-| `XMTP_DB_ENCRYPTION_KEY` | Yes | Database encryption key |
+| `AGENT_WALLET_KEY` | Yes | Wallet private key (with 0x prefix) |
+| `AGENT_SECRET` | Yes | Secret for encryption/signing |
 | `XMTP_ENV` | No | XMTP environment (dev/production) |
 
 ## Development

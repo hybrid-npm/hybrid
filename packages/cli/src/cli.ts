@@ -8,10 +8,11 @@ if (!major || major < 20) {
 }
 
 async function main() {
-	const command = process.argv[2]
+	const args = process.argv.slice(2)
+	const command = args[0]
 
 	if (command === "dev") {
-		return dev()
+		return dev(args.includes("--docker"))
 	}
 
 	if (command === "deploy") {
@@ -21,8 +22,9 @@ async function main() {
 	console.log("Usage: hybrid <command>")
 	console.log("")
 	console.log("Commands:")
-	console.log("  dev      Start development server")
-	console.log("  deploy   Deploy agent to Cloudflare Workers")
+	console.log("  dev          Start development server")
+	console.log("  dev --docker Start development server with Docker")
+	console.log("  deploy       Deploy agent to Cloudflare Workers")
 	console.log("")
 	console.log("Environment Variables:")
 	console.log("  CLOUDFLARE_API_TOKEN    Required for deploy")
@@ -33,43 +35,64 @@ async function main() {
 	}
 }
 
-async function dev() {
-	const { spawn } = await import("child_process")
-	const { resolve, dirname } = await import("path")
-	const { fileURLToPath } = await import("url")
+async function dev(useDocker: boolean) {
+	const { spawn } = await import("node:child_process")
+	const { resolve, dirname } = await import("node:path")
+	const { fileURLToPath } = await import("node:url")
 
 	const __dirname = dirname(fileURLToPath(import.meta.url))
 	const agentDir = resolve(__dirname, "../../../agent")
 
 	await new Promise((resolve, reject) => {
-		const build = spawn("pnpm", ["build"], { cwd: agentDir, stdio: "inherit" })
+		const build = spawn("pnpm", ["run", "build"], {
+			cwd: agentDir,
+			stdio: "inherit"
+		})
 		build.on("close", (code) => {
 			if (code === 0) resolve(undefined)
 			else reject(new Error(`Build failed with code ${code}`))
 		})
 	})
 
-	await new Promise(() => {
-		spawn(
-			"concurrently",
-			[
-				"-n",
-				"gateway,xmtp",
-				"-c",
-				"blue,green",
-				"pnpm dev:gateway",
-				"pnpm dev:sidecar"
-			],
-			{ cwd: agentDir, stdio: "inherit", shell: true }
-		)
-	})
+	if (useDocker) {
+		console.log("\n🐳 Starting with Docker...\n")
+		await new Promise(() => {
+			spawn(
+				"concurrently",
+				[
+					"-n",
+					"container,xmtp",
+					"-c",
+					"blue,green",
+					"docker build -t hybrid-agent . && docker run -p 3000:3000 -p 4100:4100 hybrid-agent",
+					"pnpm run dev:sidecar"
+				],
+				{ cwd: agentDir, stdio: "inherit", shell: true }
+			)
+		})
+	} else {
+		await new Promise(() => {
+			spawn(
+				"concurrently",
+				[
+					"-n",
+					"gateway,xmtp",
+					"-c",
+					"blue,green",
+					"pnpm run dev:gateway",
+					"pnpm run dev:sidecar"
+				],
+				{ cwd: agentDir, stdio: "inherit", shell: true }
+			)
+		})
+	}
 }
 
 async function deploy() {
-	const { spawn } = await import("child_process")
-	const { resolve, dirname } = await import("path")
-	const { fileURLToPath } = await import("url")
-	const { existsSync } = await import("fs")
+	const { spawn } = await import("node:child_process")
+	const { resolve, dirname } = await import("node:path")
+	const { fileURLToPath } = await import("node:url")
+	const { existsSync } = await import("node:fs")
 
 	const apiToken = process.env.CLOUDFLARE_API_TOKEN
 	if (!apiToken) {
@@ -88,7 +111,10 @@ async function deploy() {
 
 	console.log("Building agent...")
 	await new Promise((resolve, reject) => {
-		const build = spawn("pnpm", ["build"], { cwd: agentDir, stdio: "inherit" })
+		const build = spawn("pnpm", ["run", "build"], {
+			cwd: agentDir,
+			stdio: "inherit"
+		})
 		build.on("close", (code) => {
 			if (code === 0) resolve(undefined)
 			else reject(new Error(`Build failed with code ${code}`))

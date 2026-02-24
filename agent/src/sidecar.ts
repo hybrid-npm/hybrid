@@ -25,15 +25,16 @@ async function startSidecar() {
 	console.log("  ╰──────────────────────────────────────────────────╯")
 	console.log()
 
-	const { XMTP_WALLET_KEY, XMTP_DB_ENCRYPTION_KEY } = process.env
+	const AGENT_WALLET_KEY = process.env.AGENT_WALLET_KEY
+	const AGENT_SECRET = process.env.AGENT_SECRET
 
-	if (!XMTP_WALLET_KEY) {
-		console.error("❌ XMTP_WALLET_KEY is required")
+	if (!AGENT_WALLET_KEY) {
+		console.error("❌ AGENT_WALLET_KEY is required")
 		process.exit(1)
 	}
 
-	if (!XMTP_DB_ENCRYPTION_KEY) {
-		console.error("❌ XMTP_DB_ENCRYPTION_KEY is required")
+	if (!AGENT_SECRET) {
+		console.error("❌ AGENT_SECRET is required")
 		process.exit(1)
 	}
 
@@ -41,7 +42,7 @@ async function startSidecar() {
 	console.log(`  Gateway    http://localhost:${GATEWAY_PORT}`)
 	console.log()
 
-	const user = createUser(XMTP_WALLET_KEY as `0x${string}`)
+	const user = createUser(AGENT_WALLET_KEY as `0x${string}`)
 	const signer = createSigner(user)
 	const address = user.account.address.toLowerCase()
 

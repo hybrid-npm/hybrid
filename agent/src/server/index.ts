@@ -26,14 +26,14 @@ function debug(...args: unknown[]) {
 }
 
 const XMTP_ENV = process.env.XMTP_ENV || "dev"
-const XMTP_WALLET_KEY = process.env.XMTP_WALLET_KEY
+const AGENT_WALLET_KEY = process.env.AGENT_WALLET_KEY
 
 function getWalletAddress(): string | null {
-	if (!XMTP_WALLET_KEY) return null
+	if (!AGENT_WALLET_KEY) return null
 	try {
-		const key = XMTP_WALLET_KEY.startsWith("0x")
-			? (XMTP_WALLET_KEY as `0x${string}`)
-			: (`0x${XMTP_WALLET_KEY}` as `0x${string}`)
+		const key = AGENT_WALLET_KEY.startsWith("0x")
+			? (AGENT_WALLET_KEY as `0x${string}`)
+			: (`0x${AGENT_WALLET_KEY}` as `0x${string}`)
 		const account = privateKeyToAccount(key)
 		return account.address
 	} catch {

@@ -2,7 +2,10 @@
 	"name": "hybrid-agent",
 	"main": "src/gateway/index.ts",
 	"compatibility_date": "2025-05-06",
-	"compatibility_flags": ["nodejs_compat"],
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"account_id": "d73c4254f79257d8a86878b81e32809b",
 	"containers": [
 		{
 			"class_name": "Sandbox",
@@ -12,9 +15,21 @@
 		}
 	],
 	"durable_objects": {
-		"bindings": [{ "class_name": "Sandbox", "name": "Sandbox" }]
+		"bindings": [
+			{
+				"class_name": "Sandbox",
+				"name": "Sandbox"
+			}
+		]
 	},
-	"migrations": [{ "tag": "v1", "new_sqlite_classes": ["Sandbox"] }],
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_sqlite_classes": [
+				"Sandbox"
+			]
+		}
+	],
 	"r2_buckets": [
 		{
 			"binding": "XMTP_STORAGE",
