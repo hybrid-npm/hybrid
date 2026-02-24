@@ -223,6 +223,9 @@ function runAgent(req: ContainerRequest): ReadableStream<Uint8Array> {
 		tools: [],
 		maxTurns: 25,
 		includePartialMessages: true,
+		stderr: (data: string) => {
+			console.error(`[claude-stderr] ${data}`)
+		},
 		env: {
 			...process.env,
 			ANTHROPIC_BASE_URL: baseUrl,
