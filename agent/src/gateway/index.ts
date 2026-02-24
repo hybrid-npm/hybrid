@@ -3,6 +3,8 @@ import type { UIMessage } from "ai"
 import { Hono } from "hono"
 import { cors } from "hono/cors"
 
+export { Sandbox }
+
 export interface GatewayEnv {
 	Sandbox: DurableObjectNamespace
 	XMTP_STORAGE: R2Bucket
