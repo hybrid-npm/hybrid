@@ -4,7 +4,7 @@
 	"type": "module",
 	"scripts": {
 		"build": "node build.mjs",
-		"dev": "concurrently -n gateway,xmtp -c blue,green \"pnpm dev:gateway\" \"pnpm dev:sidecar\"",
+		"dev": "pnpm build && concurrently -n gateway,xmtp -c blue,green \"pnpm dev:gateway\" \"pnpm dev:sidecar\"",
 		"dev:gateway": "wrangler dev --port 8787",
 		"dev:container": "tsx src/server/index.ts",
 		"dev:sidecar": "tsx src/sidecar.ts",
@@ -32,6 +32,7 @@
 		"@config/tsconfig": "workspace:*",
 		"@types/node": "catalog:stack",
 		"concurrently": "^9.2.1",
+		"esbuild": "^0.27.3",
 		"nodemon": "^3.1.14",
 		"tsx": "^4.19.3",
 		"typescript": "^5.9.2",

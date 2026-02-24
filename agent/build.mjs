@@ -11,7 +11,7 @@ await build({
 	target: "node22",
 	format: "esm",
 	outfile: "dist/server/index.js",
-	external: ["@anthropic-ai/*", "@xmtp/*"],
+	external: ["dotenv"],
 	minify: true
 })
 

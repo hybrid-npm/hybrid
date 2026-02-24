@@ -1,19 +1,12 @@
 import { readFileSync } from "node:fs"
-import { createRequire } from "node:module"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { type Options, query } from "@anthropic-ai/claude-agent-sdk"
 import { serve } from "@hono/node-server"
-import { config } from "dotenv"
 import { Hono } from "hono"
 import { privateKeyToAccount } from "viem/accounts"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const require = createRequire(import.meta.url)
-
-config({ path: join(__dirname, "..", "..", "..", ".env.local") })
-config({ path: join(__dirname, "..", "..", ".env.local") })
-config({ path: join(__dirname, ".env.local") })
 
 // Auto-configure OpenRouter if OPENROUTER_API_KEY is present
 // See: https://openrouter.ai/docs/guides/guides/claude-code-integration
@@ -57,12 +50,10 @@ function getProviderInfo(): { provider: string; model: string } {
 }
 
 function resolveClaudeCodeExecutable(): string {
-	if (process.env.CLAUDE_CODE_EXECUTABLE_PATH)
-		return process.env.CLAUDE_CODE_EXECUTABLE_PATH
-	const sdkDir = dirname(
-		require.resolve("@anthropic-ai/claude-agent-sdk/cli.js")
+	return (
+		process.env.CLAUDE_CODE_EXECUTABLE_PATH ||
+		"/usr/local/lib/node_modules/@anthropic-ai/claude-agent-sdk/cli.js"
 	)
-	return join(sdkDir, "cli.js")
 }
 
 function resolveProjectRoot(): string {
