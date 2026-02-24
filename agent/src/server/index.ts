@@ -493,6 +493,12 @@ function printStartup() {
 	const walletAddress = getWalletAddress()
 	const { provider, model } = getProviderInfo()
 
+	const baseUrl = process.env.ANTHROPIC_BASE_URL
+	const isUsingOpenRouter = baseUrl?.includes("openrouter.ai")
+	const authToken =
+		process.env.ANTHROPIC_AUTH_TOKEN ?? process.env.OPENROUTER_API_KEY
+	const apiKey = process.env.ANTHROPIC_API_KEY
+
 	console.log("\n  ╭──────────────────────────────────────────────────╮")
 	console.log("  │              Hybrid Agent Server                 │")
 	console.log("  ╰──────────────────────────────────────────────────╯")
@@ -506,26 +512,42 @@ function printStartup() {
 	console.log(`  Provider    ${provider}`)
 	console.log(`  Model       ${model}`)
 
-	const hasAnthropicKey = !!process.env.ANTHROPIC_API_KEY
-	const hasOpenRouterKey = !!process.env.OPENROUTER_API_KEY
-	const hasAuthToken = !!process.env.ANTHROPIC_AUTH_TOKEN
-	const hasBaseUrl = !!process.env.ANTHROPIC_BASE_URL
+	console.log()
+	console.log("  Environment Variables:")
+	console.log(
+		`    OPENROUTER_API_KEY    ${process.env.OPENROUTER_API_KEY ? "✓ set" : "✗ not set"}`
+	)
+	console.log(`    ANTHROPIC_API_KEY     ${apiKey ? "✓ set" : "✗ not set"}`)
+	console.log(`    ANTHROPIC_AUTH_TOKEN  ${authToken ? "✓ set" : "✗ not set"}`)
+	console.log(`    ANTHROPIC_BASE_URL    ${baseUrl || "(default Anthropic)"}`)
+	console.log(`    DEBUG                 ${DEBUG ? "✓ enabled" : "✗ disabled"}`)
 
 	console.log()
-	console.log("  API Keys:")
-	console.log(
-		`    ANTHROPIC_API_KEY     ${hasAnthropicKey ? "✓ set" : "✗ not set"}`
-	)
-	console.log(
-		`    OPENROUTER_API_KEY    ${hasOpenRouterKey ? "✓ set" : "✗ not set"}`
-	)
-	console.log(
-		`    ANTHROPIC_AUTH_TOKEN  ${hasAuthToken ? "✓ set" : "✗ not set"}`
-	)
-	console.log(
-		`    ANTHROPIC_BASE_URL    ${hasBaseUrl ? process.env.ANTHROPIC_BASE_URL : "(default)"}`
-	)
-	console.log(`    DEBUG                 ${DEBUG ? "✓ enabled" : "✗ disabled"}`)
+	console.log("  ─────────────────────────────────────────────────")
+	console.log()
+	console.log("  SDK Configuration (passed to Claude):")
+	if (isUsingOpenRouter) {
+		console.log("    Mode: OpenRouter")
+		console.log(`    ANTHROPIC_BASE_URL:   ${baseUrl}`)
+		console.log(
+			`    ANTHROPIC_AUTH_TOKEN: ${authToken ? "***" + authToken.slice(-4) : "✗ missing"}`
+		)
+		console.log(`    ANTHROPIC_API_KEY:    "" (empty for OpenRouter)`)
+		if (!authToken) {
+			console.log()
+			console.log("    ⚠️  ERROR: OPENROUTER_API_KEY must be set")
+		}
+	} else {
+		console.log("    Mode: Anthropic Direct")
+		console.log(`    ANTHROPIC_BASE_URL:   (default)`)
+		console.log(
+			`    ANTHROPIC_API_KEY:    ${apiKey ? "***" + apiKey.slice(-4) : "✗ missing"}`
+		)
+		if (!apiKey) {
+			console.log()
+			console.log("    ⚠️  ERROR: ANTHROPIC_API_KEY must be set")
+		}
+	}
 
 	console.log()
 	console.log("  ─────────────────────────────────────────────────")
