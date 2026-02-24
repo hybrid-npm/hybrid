@@ -3,6 +3,9 @@
 .dev.vars.local
 .wrangler/deploy/env.json
 
+# XMTP
+*.db3*
+
 # Build output
 dist/
 

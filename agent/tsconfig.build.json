@@ -1,0 +1,16 @@
+{
+	"compilerOptions": {
+		"target": "ES2022",
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"outDir": "./dist",
+		"rootDir": "./src",
+		"esModuleInterop": true,
+		"skipLibCheck": true,
+		"declaration": false,
+		"sourceMap": false,
+		"resolveJsonModule": true
+	},
+	"include": ["src/server/**/*", "src/sidecar.ts"],
+	"exclude": ["node_modules", "dist"]
+}

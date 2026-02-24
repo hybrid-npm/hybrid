@@ -2,15 +2,17 @@ FROM docker.io/cloudflare/sandbox:0.7.0
 
 WORKDIR /app
 
-RUN npm install -g @anthropic-ai/claude-agent-sdk && \
-    useradd -m -s /bin/bash agent && \
+RUN npm install \
+    @xmtp/agent-sdk@0.0.14 \
+    viem@2.46.2 \
+    @anthropic-ai/claude-agent-sdk \
+    hono \
+    @hono/node-server
+
+COPY dist/ ./dist/
+
+RUN useradd -m -s /bin/bash agent && \
     chown -R agent:agent /app
-
-COPY dist/server/ ./dist/server/
-COPY dist/sidecar/ ./dist/sidecar/
-COPY AGENTS.md SOUL.md ./
-
-RUN chown -R agent:agent /app
 
 USER agent
 
