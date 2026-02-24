@@ -191,7 +191,7 @@ function runAgent(req: ContainerRequest): ReadableStream<Uint8Array> {
 	// OpenRouter uses different model names than Anthropic directly
 	// See: https://openrouter.ai/models
 	const model = isUsingOpenRouter
-		? "anthropic/claude-sonnet-4.6"
+		? "anthropic/claude-3.5-sonnet" // More stable model for testing
 		: "claude-sonnet-4-20250514"
 
 	// Validate API configuration
