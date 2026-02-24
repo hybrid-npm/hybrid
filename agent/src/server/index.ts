@@ -15,6 +15,12 @@ config({ path: join(__dirname, "..", "..", "..", ".env.local") })
 config({ path: join(__dirname, "..", "..", ".env.local") })
 config({ path: join(__dirname, ".env.local") })
 
+// Auto-configure OpenRouter if OPENROUTER_API_KEY is present
+if (process.env.OPENROUTER_API_KEY && !process.env.ANTHROPIC_API_KEY) {
+	process.env.ANTHROPIC_BASE_URL = "https://openrouter.ai/api/v1"
+	process.env.ANTHROPIC_AUTH_TOKEN = process.env.OPENROUTER_API_KEY
+}
+
 const AGENT_PORT = Number.parseInt(process.env.AGENT_PORT || "4100")
 const AGENT_ENDPOINT = "/api/chat"
 const HEALTH_CHECK_PATH = "/health"
@@ -179,11 +185,31 @@ function runAgent(req: ContainerRequest): ReadableStream<Uint8Array> {
 	const isUsingOpenRouter = baseUrl?.includes("openrouter.ai")
 	const authToken =
 		process.env.ANTHROPIC_AUTH_TOKEN ?? process.env.OPENROUTER_API_KEY
+	const apiKey = process.env.ANTHROPIC_API_KEY
 	const model = isUsingOpenRouter
 		? "anthropic/claude-sonnet-4"
 		: "claude-sonnet-4-20250514"
 
-	debug("API config:", { baseUrl, model, hasAuthToken: !!authToken })
+	// Validate API configuration
+	if (!apiKey && !authToken) {
+		const error =
+			"No API key configured. Set ANTHROPIC_API_KEY or OPENROUTER_API_KEY"
+		console.error(`[agent] ${error}`)
+		return new ReadableStream<Uint8Array>({
+			start(controller) {
+				controller.enqueue(encodeSSEJson({ type: "error", content: error }))
+				controller.enqueue(encodeDone())
+				controller.close()
+			}
+		})
+	}
+
+	debug("API config:", {
+		baseUrl: baseUrl || "(default Anthropic)",
+		model,
+		hasAuthToken: !!authToken,
+		hasApiKey: !!apiKey
+	})
 
 	const options: Options = {
 		abortController,
@@ -200,7 +226,8 @@ function runAgent(req: ContainerRequest): ReadableStream<Uint8Array> {
 		env: {
 			...process.env,
 			ANTHROPIC_BASE_URL: baseUrl,
-			ANTHROPIC_AUTH_TOKEN: authToken
+			ANTHROPIC_AUTH_TOKEN: authToken,
+			ANTHROPIC_API_KEY: apiKey
 		}
 	}
 
@@ -210,7 +237,21 @@ function runAgent(req: ContainerRequest): ReadableStream<Uint8Array> {
 
 	console.log(`[agent] calling query() with model=${model}`)
 
-	const conversation = query({ prompt, options })
+	let conversation: AsyncGenerator<any, void, unknown>
+	try {
+		conversation = query({ prompt, options })
+	} catch (err) {
+		const errorMsg =
+			err instanceof Error ? err.message : "Failed to initialize agent"
+		console.error(`[agent] query() initialization failed:`, err)
+		return new ReadableStream<Uint8Array>({
+			start(controller) {
+				controller.enqueue(encodeSSEJson({ type: "error", content: errorMsg }))
+				controller.enqueue(encodeDone())
+				controller.close()
+			}
+		})
+	}
 
 	let messageCount = 0
 
@@ -318,11 +359,31 @@ function runAgent(req: ContainerRequest): ReadableStream<Uint8Array> {
 				}
 			} catch (err) {
 				const errorMessage = err instanceof Error ? err.message : "Agent error"
-				console.error(`[agent] error:`, err)
+				console.error(`[agent] error in stream:`, err)
 				console.error(
 					`[agent] error stack:`,
 					err instanceof Error ? err.stack : "no stack"
 				)
+
+				// Detect common API key errors
+				if (err instanceof Error) {
+					if (
+						errorMessage.includes("401") ||
+						errorMessage.includes("Unauthorized") ||
+						errorMessage.includes("invalid")
+					) {
+						console.error(
+							`[agent] API key error - check ANTHROPIC_API_KEY or OPENROUTER_API_KEY`
+						)
+					}
+					if (
+						errorMessage.includes("terminated") ||
+						errorMessage.includes("ECONNREFUSED")
+					) {
+						console.error(`[agent] Connection error - check ANTHROPIC_BASE_URL`)
+					}
+				}
+
 				debug("full error:", err)
 				try {
 					controller.enqueue(
