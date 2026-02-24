@@ -10,6 +10,7 @@
 		"watch:container": "nodemon --config nodemon.container.json",
 		"watch:sidecar": "nodemon --config nodemon.sidecar.json",
 		"test:agent": "tsx src/test-agent.ts",
+		"test:openrouter": "tsx src/test-openrouter.ts",
 		"deploy": "wrangler deploy",
 		"typecheck": "tsc --noEmit",
 		"register": "tsx ../packages/xmtp/scripts/register-wallet.ts"
