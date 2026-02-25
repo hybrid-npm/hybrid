@@ -2,7 +2,7 @@ FROM docker.io/cloudflare/sandbox:0.7.5
 
 WORKDIR /app
 
-RUN echo "Build v9"
+RUN echo "Build v10"
 
 RUN npm install \
     @anthropic-ai/claude-code@latest \

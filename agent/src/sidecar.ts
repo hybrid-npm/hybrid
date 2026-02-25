@@ -1,8 +1,12 @@
 process.stdout.write("[sidecar] Starting XMTP sidecar...\n")
 process.stdout.write(`[sidecar] Node version: ${process.version}\n`)
+process.stdout.write(
+	`[sidecar] Platform: ${process.platform} ${process.arch}\n`
+)
 
 process.on("uncaughtException", (err) => {
 	process.stderr.write(`[sidecar] FATAL: ${err.message}\n`)
+	process.stderr.write(`[sidecar] Stack: ${err.stack}\n`)
 	process.exit(1)
 })
 
@@ -11,9 +15,13 @@ process.on("unhandledRejection", (reason) => {
 	process.exit(1)
 })
 
+process.stdout.write("[sidecar] Loading crypto...\n")
 const { randomUUID } = require("node:crypto")
-const { Agent, createUser } = require("@xmtp/agent-sdk")
+process.stdout.write("[sidecar] Loading viem...\n")
 const { toBytes } = require("viem")
+process.stdout.write("[sidecar] Loading XMTP SDK...\n")
+const { Agent, createUser } = require("@xmtp/agent-sdk")
+process.stdout.write("[sidecar] All imports loaded\n")
 
 const log = (msg) => process.stdout.write(`${msg}\n`)
 
