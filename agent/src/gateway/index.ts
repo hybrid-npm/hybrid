@@ -153,7 +153,9 @@ async function ensureAgentServer(sandbox: SandboxStub, env: GatewayEnv) {
 		ANTHROPIC_AUTH_TOKEN:
 			env.ANTHROPIC_AUTH_TOKEN ?? env.OPENROUTER_API_KEY ?? "",
 		OPENROUTER_API_KEY: env.OPENROUTER_API_KEY ?? "",
-		AGENT_PORT: String(AGENT_PORT)
+		AGENT_PORT: String(AGENT_PORT),
+		CLAUDE_CODE_EXECUTABLE_PATH:
+			"/app/node_modules/@anthropic-ai/claude-code/cli.js"
 	}
 
 	// Start the agent server

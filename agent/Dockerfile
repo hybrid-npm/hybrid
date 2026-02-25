@@ -3,6 +3,7 @@ FROM docker.io/cloudflare/sandbox:0.7.0
 WORKDIR /app
 
 RUN npm install \
+    @anthropic-ai/claude-code@latest \
     @xmtp/agent-sdk@0.0.14 \
     viem@2.46.2 \
     @anthropic-ai/claude-agent-sdk \
