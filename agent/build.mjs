@@ -2,13 +2,13 @@ import { build } from "esbuild"
 
 await Promise.all([
 	build({
-		entryPoints: ["src/server/index.ts"],
+		entryPoints: ["src/server/simple.ts"],
 		outfile: "dist/server/index.cjs",
 		bundle: true,
 		platform: "node",
 		target: "node22",
 		format: "cjs",
-		external: ["@xmtp/*", "viem", "@anthropic-ai/*", "uint8arrays"]
+		external: ["@xmtp/*", "viem", "@anthropic-ai/*"]
 	}),
 	build({
 		entryPoints: ["src/sidecar.ts"],
@@ -17,7 +17,7 @@ await Promise.all([
 		platform: "node",
 		target: "node22",
 		format: "cjs",
-		external: ["@xmtp/*", "viem", "uint8arrays"]
+		external: ["@xmtp/*", "viem"]
 	})
 ])
 
