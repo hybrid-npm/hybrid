@@ -7,10 +7,7 @@ await Promise.all([
 		bundle: true,
 		platform: "node",
 		target: "node22",
-		format: "esm",
-		banner: {
-			js: "import { createRequire } from 'module'; const require = createRequire(import.meta.url);"
-		},
+		format: "cjs",
 		external: ["@xmtp/*", "viem", "@anthropic-ai/*", "uint8arrays"]
 	}),
 	build({
@@ -19,10 +16,7 @@ await Promise.all([
 		bundle: true,
 		platform: "node",
 		target: "node22",
-		format: "esm",
-		banner: {
-			js: "import { createRequire } from 'module'; const require = createRequire(import.meta.url);"
-		},
+		format: "cjs",
 		external: ["@xmtp/*", "viem", "uint8arrays"]
 	})
 ])

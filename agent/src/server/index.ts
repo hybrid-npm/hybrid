@@ -1,12 +1,12 @@
 import { readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
-import { fileURLToPath } from "node:url"
 import { type Options, query } from "@anthropic-ai/claude-agent-sdk"
 import { serve } from "@hono/node-server"
 import { Hono } from "hono"
 import { privateKeyToAccount } from "viem/accounts"
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
+// @ts-ignore
+const __dirname = typeof __dirname !== "undefined" ? __dirname : process.cwd()
 
 // Auto-configure OpenRouter if OPENROUTER_API_KEY is present
 // See: https://openrouter.ai/docs/guides/guides/claude-code-integration

@@ -1,6 +1,8 @@
-FROM docker.io/cloudflare/sandbox:0.7.0
+FROM docker.io/cloudflare/sandbox:0.7.5
 
 WORKDIR /app
+
+RUN echo "Build v7"
 
 RUN npm install \
     @anthropic-ai/claude-code@latest \
@@ -11,11 +13,7 @@ RUN npm install \
     @hono/node-server
 
 COPY dist/ ./dist/
-
-RUN useradd -m -s /bin/bash agent && \
-    chown -R agent:agent /app
-
-USER agent
+COPY AGENTS.md SOUL.md ./
 
 ENV AGENT_PORT=4100
 EXPOSE 3000 4100

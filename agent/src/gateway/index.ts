@@ -164,8 +164,8 @@ async function ensureAgentServer(sandbox: SandboxStub, env: GatewayEnv) {
 		"node /app/dist/server/index.js",
 		{
 			env: processEnv,
-			onOutput: (data) => {
-				console.log(`[gateway] server: ${data}`)
+			onOutput: (stream, data) => {
+				console.log(`[gateway] server[${stream}]: ${data}`)
 			},
 			onExit: (code) => {
 				console.log(`[gateway] server exited with code ${code}`)
@@ -185,8 +185,8 @@ async function ensureAgentServer(sandbox: SandboxStub, env: GatewayEnv) {
 		"node /app/dist/sidecar/index.js",
 		{
 			env: processEnv,
-			onOutput: (data) => {
-				console.log(`[gateway] sidecar: ${data}`)
+			onOutput: (stream, data) => {
+				console.log(`[gateway] sidecar[${stream}]: ${data}`)
 			},
 			onExit: (code) => {
 				console.log(`[gateway] sidecar exited with code ${code}`)
@@ -194,6 +194,14 @@ async function ensureAgentServer(sandbox: SandboxStub, env: GatewayEnv) {
 		}
 	)
 	console.log(`[gateway] Sidecar started with ID: ${sidecarProc.id}`)
+
+	// Wait for sidecar to confirm XMTP connection
+	try {
+		await sidecarProc.waitForLog("Connected to XMTP", 30000)
+		console.log("[gateway] Sidecar connected to XMTP")
+	} catch (err) {
+		console.log(`[gateway] Sidecar waitForLog timeout or error: ${err}`)
+	}
 
 	// Verify with health check
 	for (let i = 0; i < 10; i++) {
