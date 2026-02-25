@@ -5,8 +5,7 @@ import { serve } from "@hono/node-server"
 import { Hono } from "hono"
 import { privateKeyToAccount } from "viem/accounts"
 
-// @ts-ignore
-const __dirname = typeof __dirname !== "undefined" ? __dirname : process.cwd()
+const _dirname = typeof __dirname !== "undefined" ? __dirname : process.cwd()
 
 // Auto-configure OpenRouter if OPENROUTER_API_KEY is present
 // See: https://openrouter.ai/docs/guides/guides/claude-code-integration
@@ -58,7 +57,7 @@ function resolveClaudeCodeExecutable(): string {
 
 function resolveProjectRoot(): string {
 	if (process.env.AGENT_PROJECT_ROOT) return process.env.AGENT_PROJECT_ROOT
-	let dir = __dirname
+	let dir = _dirname
 	for (let i = 0; i < 5; i++) {
 		try {
 			readFileSync(join(dir, "AGENTS.md"), "utf-8")
@@ -67,7 +66,7 @@ function resolveProjectRoot(): string {
 			dir = dirname(dir)
 		}
 	}
-	return join(__dirname, "..", "..")
+	return join(_dirname, "..", "..")
 }
 
 const PROJECT_ROOT = resolveProjectRoot()

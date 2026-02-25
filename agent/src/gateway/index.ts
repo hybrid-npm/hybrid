@@ -158,14 +158,27 @@ async function ensureAgentServer(sandbox: SandboxStub, env: GatewayEnv) {
 			"/app/node_modules/@anthropic-ai/claude-code/cli.js"
 	}
 
+	console.log(
+		"[gateway] processEnv.OPENROUTER_API_KEY:",
+		processEnv.OPENROUTER_API_KEY ? "SET" : "NOT SET"
+	)
+	console.log(
+		"[gateway] processEnv.ANTHROPIC_BASE_URL:",
+		processEnv.ANTHROPIC_BASE_URL || "not set"
+	)
+	console.log(
+		"[gateway] processEnv.ANTHROPIC_AUTH_TOKEN:",
+		processEnv.ANTHROPIC_AUTH_TOKEN ? "SET" : "NOT SET"
+	)
+
 	// Start the agent server
 	console.log("[gateway] Starting agent server...")
 	const serverProc = await sandbox.startProcess(
-		"node /app/dist/server/index.js",
+		"node /app/dist/server/index.cjs",
 		{
-			env: processEnv,
+			env: { ...processEnv, FORCE_COLOR: "0", NODE_NO_WARNINGS: "1" },
 			onOutput: (stream, data) => {
-				console.log(`[gateway] server[${stream}]: ${data}`)
+				console.log(`[server][${stream}]: ${data.trim()}`)
 			},
 			onExit: (code) => {
 				console.log(`[gateway] server exited with code ${code}`)
@@ -182,7 +195,7 @@ async function ensureAgentServer(sandbox: SandboxStub, env: GatewayEnv) {
 	// Start the XMTP sidecar
 	console.log("[gateway] Starting XMTP sidecar...")
 	const sidecarProc = await sandbox.startProcess(
-		"node /app/dist/sidecar/index.js",
+		"node /app/dist/sidecar/index.cjs",
 		{
 			env: processEnv,
 			onOutput: (stream, data) => {
