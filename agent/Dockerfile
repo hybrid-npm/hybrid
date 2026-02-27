@@ -1,21 +1,16 @@
-FROM docker.io/cloudflare/sandbox:0.7.5
+FROM node:20
 
 WORKDIR /app
 
-RUN echo "Build v10"
-
-RUN npm install \
-    @anthropic-ai/claude-code@latest \
-    @xmtp/agent-sdk@0.0.14 \
-    viem@2.46.2 \
-    @anthropic-ai/claude-agent-sdk \
-    hono \
-    @hono/node-server
+COPY Dockerfile.package.json package.json
+RUN npm install
 
 COPY dist/ ./dist/
 COPY AGENTS.md SOUL.md ./
 
-ENV AGENT_PORT=4100
-EXPOSE 3000 4100
+RUN mkdir -p /app/data/xmtp
 
-CMD ["sleep", "infinity"]
+ENV AGENT_PORT=4100
+EXPOSE 4100
+
+CMD ["sh", "-c", "node dist/server/index.cjs & node dist/sidecar/index.cjs & wait"]
