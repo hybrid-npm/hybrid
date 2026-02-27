@@ -17,5 +17,5 @@ RUN mkdir -p /app/data/xmtp
 ENV AGENT_PORT=4100
 EXPOSE 4100
 
-# Run both server and XMTP sidecar
-CMD ["sh", "-c", "node dist/agent/server/index.cjs & node dist/agent/xmtp.cjs & wait"]
+# Run both server and XMTP sidecar (using simple server that doesn't need Claude Code)
+CMD ["sh", "-c", "node dist/agent/server/simple.cjs & node dist/agent/xmtp.cjs & wait"]

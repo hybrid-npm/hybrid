@@ -3,24 +3,19 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/server/simple.cjs",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "import": "./dist/server/simple.js",
+      "types": "./dist/server/simple.d.ts"
     },
     "./server": {
-      "import": "./dist/server/index.js",
-      "types": "./dist/server/index.d.ts"
-    },
-    "./xmtp": {
-      "import": "./dist/xmtp.js",
-      "types": "./dist/xmtp.d.ts"
+      "import": "./dist/server/simple.js",
+      "types": "./dist/server/simple.d.ts"
     }
   },
   "scripts": {
-    "build": "tsc && node build.mjs",
+    "build": "node build.mjs",
     "dev": "tsx src/server/simple.ts",
     "typecheck": "tsc --noEmit"
   },

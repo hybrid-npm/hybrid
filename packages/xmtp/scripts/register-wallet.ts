@@ -3,7 +3,18 @@ import { fileURLToPath } from "node:url"
 import { config } from "dotenv"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-config({ path: join(__dirname, "..", "..", "..", "agent", ".dev.vars") })
+// Try multiple possible locations for .env
+const envPaths = [
+	join(__dirname, "..", "..", "agents", "hybrid-agent", ".env"),
+	join(__dirname, "..", "..", "..", "agents", "hybrid-agent", ".env"),
+	join(__dirname, "..", "..", ".env")
+]
+for (const envPath of envPaths) {
+	try {
+		config({ path: envPath })
+		break
+	} catch {}
+}
 
 import {
 	createSigner,

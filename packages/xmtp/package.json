@@ -2,10 +2,7 @@
 	"name": "@hybrd/xmtp",
 	"version": "1.4.5",
 	"type": "module",
-	"files": [
-		"dist",
-		"src"
-	],
+	"files": ["dist", "src"],
 	"types": "dist/index.d.ts",
 	"main": "dist/index.cjs",
 	"module": "dist/index.js",
@@ -25,7 +22,8 @@
 		"typecheck": "tsc --noEmit",
 		"lint": "biome lint --unsafe",
 		"lint:fix": "biome lint --write --unsafe",
-		"format": "biome format --write"
+		"format": "biome format --write",
+		"register": "tsx scripts/register-wallet.ts"
 	},
 	"dependencies": {
 		"@hybrd/types": "workspace:*",
