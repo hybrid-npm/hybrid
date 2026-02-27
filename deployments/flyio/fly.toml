@@ -1,0 +1,34 @@
+# fly.toml app configuration file generated for hybrid-agent on 2026-02-26T21:30:09-06:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'hybrid-agent'
+primary_region = 'iad'
+
+[build]
+  dockerfile = 'Dockerfile'
+  context = '../..'
+
+[env]
+  AGENT_PORT = '4100'
+  XMTP_ENV = 'production'
+
+[[services]]
+  protocol = 'tcp'
+  internal_port = 4100
+  processes = ['app']
+
+  [[services.ports]]
+    port = 80
+    handlers = ['http']
+    force_https = true
+
+  [[services.ports]]
+    port = 443
+    handlers = ['tls', 'http']
+
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
