@@ -6,7 +6,7 @@ import { cors } from "hono/cors"
 export { Sandbox }
 
 export interface GatewayEnv {
-	Sandbox: DurableObjectNamespace
+	AgentContainer: DurableObjectNamespace
 	XMTP_STORAGE: R2Bucket
 	AGENT_WALLET_KEY: string
 	AGENT_SECRET: string
@@ -23,12 +23,52 @@ const app = new Hono<{ Bindings: GatewayEnv }>()
 
 app.use("*", cors())
 
-app.get("/health", (c) => {
-	return c.json({
-		status: "healthy",
-		service: "hybrid-agent",
-		timestamp: new Date().toISOString()
-	})
+app.get("/health", async (c) => {
+	const env = c.env
+	const teamId = "default"
+
+	try {
+		const sandbox = getSandboxInstance(env, teamId) as any
+
+		// Check processes
+		const processes = await sandbox.listProcesses()
+		const serverRunning = processes.some((p: any) =>
+			p.command?.includes("server/index.js")
+		)
+		const sidecarRunning = processes.some((p: any) =>
+			p.command?.includes("sidecar/index.js")
+		)
+
+		// Check server health
+		let serverHealthy = false
+		try {
+			const health = await sandbox.containerFetch(
+				"http://container/health",
+				{},
+				4100
+			)
+			serverHealthy = health.ok
+		} catch {}
+
+		const allHealthy = serverHealthy && serverRunning && sidecarRunning
+
+		return c.json({
+			status: allHealthy ? "healthy" : "unhealthy",
+			service: "hybrid-agent",
+			gateway: true,
+			container: serverRunning,
+			sidecar: sidecarRunning,
+			server: serverHealthy,
+			timestamp: new Date().toISOString()
+		})
+	} catch (err) {
+		return c.json({
+			status: "unknown",
+			service: "hybrid-agent",
+			message: err instanceof Error ? err.message : "Health check failed",
+			timestamp: new Date().toISOString()
+		})
+	}
 })
 
 function extractTextFromParts(parts: UIMessage["parts"] | undefined): string {
@@ -82,7 +122,7 @@ app.post("/api/chat", async (c) => {
 })
 
 function getSandboxInstance(env: GatewayEnv, teamId: string): SandboxStub {
-	return getSandbox(env.Sandbox, teamId)
+	return getSandbox(env.AgentContainer as any, teamId) as any
 }
 
 async function ensureAgentServer(sandbox: SandboxStub, env: GatewayEnv) {

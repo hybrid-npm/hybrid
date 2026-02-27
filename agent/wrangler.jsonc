@@ -16,7 +16,7 @@
 		"bindings": [
 			{
 				"class_name": "Sandbox",
-				"name": "Sandbox"
+				"name": "AgentContainer"
 			}
 		]
 	},
@@ -34,7 +34,10 @@
 	],
 	"vars": {
 		"AGENT_PORT": "4100",
-		"XMTP_ENV": "production"
+		"XMTP_ENV": "production",
+		"DEBUG": "true",
+		"R2_BUCKET_NAME": "hybrid-xmtp-databases",
+		"R2_ACCOUNT_ID": "d73c4254f79257d8a86878b81e32809b"
 	},
 	"observability": {
 		"enabled": true,
