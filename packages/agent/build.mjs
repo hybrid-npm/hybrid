@@ -20,17 +20,6 @@ async function build() {
     external: ["viem"],
   })
 
-  // Build server/index.ts
-  await esbuild.build({
-    entryPoints: [join(__dirname, "src/server/index.ts")],
-    bundle: true,
-    platform: "node",
-    target: "node20",
-    outfile: join(outdir, "server/index.cjs"),
-    format: "cjs",
-    external: ["viem", "@anthropic-ai/claude-code", "@anthropic-ai/claude-agent-sdk"],
-  })
-
   // Build xmtp.ts
   await esbuild.build({
     entryPoints: [join(__dirname, "src/xmtp.ts")],
