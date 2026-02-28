@@ -37,8 +37,13 @@ async function startSidecar() {
 	const secret = process.env.AGENT_SECRET
 
 	if (!key || !secret) {
-		process.stderr.write("ERROR: AGENT_WALLET_KEY and AGENT_SECRET required\n")
-		process.exit(1)
+		process.stderr.write(
+			"WARN: AGENT_WALLET_KEY and AGENT_SECRET not set, XMTP sidecar disabled\n"
+		)
+		process.stderr.write("Set these in .env to enable XMTP messaging\n")
+		// Don't exit - keep process alive but don't connect to XMTP
+		await new Promise(() => {}) // hang forever
+		return
 	}
 
 	log("  Creating wallet...")
