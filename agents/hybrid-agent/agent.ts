@@ -1,38 +1,25 @@
 /**
  * Hybrid Agent Configuration
  *
- * Configure your agent's behaviors and settings.
+ * This file configures your agent. The dev script runs:
+ * - Claude server (packages/agent/dist/server/index.cjs) - handles /api/chat
+ * - XMTP sidecar (packages/agent/dist/xmtp.cjs) - listens for XMTP messages
+ *
+ * Agent identity: SOUL.md
+ * Build/deploy: AGENTS.md
  */
 
-import { createOpenRouter } from "@openrouter/ai-sdk-provider"
-import { Agent, listen } from "hybrid"
-import { reactWith } from "hybrid/behaviors"
-import type { BehaviorObject } from "hybrid/behaviors"
-import { schedulerTools } from "hybrid/tools"
+export const config = {
+	name: process.env.AGENT_NAME || "Hybrid Agent",
 
-const openrouter = createOpenRouter({
-	apiKey: process.env.OPENROUTER_API_KEY
-})
-
-// Create agent with behaviors
-const agent = new Agent({
-	name: "My Agent",
-	model: openrouter("anthropic/claude-sonnet-4"),
-	instructions:
-		process.env.AGENT_INSTRUCTIONS ?? "You are a helpful AI assistant.",
-	tools: schedulerTools
-})
-
-// Listen with config
-listen({
-	agent,
-	port: process.env.AGENT_PORT ?? "8454",
-	scheduler: true,
+	// Behaviors applied to incoming XMTP messages
 	behaviors: [
-		// React with eyes to EVERY message immediately
-		reactWith("👀")
+		// React with 👀 to every message
+		{ type: "reactWith", emoji: "👀" }
+	],
 
-		// Add filter behavior if needed
-		// filterMessages(({ message }) => message.senderAddress !== myAddress)
-	] as BehaviorObject[]
-})
+	// Enable scheduled tasks
+	scheduler: true
+}
+
+export default config

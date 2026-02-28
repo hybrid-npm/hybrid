@@ -39,7 +39,14 @@ async function build() {
 		target: "node20",
 		outfile: join(outdir, "server/index.cjs"),
 		format: "cjs",
-		external: ["viem", "hono", "@hono/node-server"]
+		external: [
+			"viem",
+			"hono",
+			"@hono/node-server",
+			"@anthropic-ai/claude-agent-sdk",
+			"@xmtp/node-sdk",
+			"@xmtp/agent-sdk"
+		]
 	})
 
 	// Build xmtp.ts
@@ -50,7 +57,7 @@ async function build() {
 		target: "node20",
 		outfile: join(outdir, "xmtp.cjs"),
 		format: "cjs",
-		external: ["viem", "@xmtp/agent-sdk"]
+		external: ["viem", "@xmtp/agent-sdk", "@xmtp/node-sdk"]
 	})
 
 	console.log("Built agent to dist/")

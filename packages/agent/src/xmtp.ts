@@ -28,6 +28,9 @@ const log = (msg: string) => process.stdout.write(`${msg}\n`)
 const AGENT_PORT = process.env.AGENT_PORT || "8454"
 const XMTP_ENV = (process.env.XMTP_ENV || "dev") as "dev" | "production"
 
+const processedMessages = new Set<string>()
+const MAX_PROCESSED = 1000
+
 async function startSidecar() {
 	log(`\n  XMTP Sidecar`)
 	log(`  Port: ${AGENT_PORT}`)
@@ -41,8 +44,7 @@ async function startSidecar() {
 			"WARN: AGENT_WALLET_KEY and AGENT_SECRET not set, XMTP sidecar disabled\n"
 		)
 		process.stderr.write("Set these in .env to enable XMTP messaging\n")
-		// Don't exit - keep process alive but don't connect to XMTP
-		await new Promise(() => {}) // hang forever
+		await new Promise(() => {})
 		return
 	}
 
@@ -78,21 +80,44 @@ async function startSidecar() {
 	log("  Listening for messages...\n")
 
 	agent.on("text", async ({ conversation, message }) => {
+		log(`[sidecar] Handler called with message.id: ${message.id}`)
+
+		if (processedMessages.has(message.id)) {
+			log(`[sidecar] Skipping duplicate message: ${message.id}`)
+			return
+		}
+		processedMessages.add(message.id)
+
+		if (processedMessages.size > MAX_PROCESSED) {
+			const arr = Array.from(processedMessages)
+			arr
+				.slice(0, MAX_PROCESSED / 2)
+				.forEach((id) => processedMessages.delete(id))
+		}
+
 		log(
-			`Message from ${message.senderInboxId.slice(0, 8)}: ${message.content.slice(0, 50)}`
+			`Message from ${message.senderInboxId.slice(0, 8)}: ${message.content.slice(0, 50)} (id: ${message.id})`
 		)
 
+		const requestId = randomUUID()
+		log(`  Calling /api/chat with requestId: ${requestId}`)
 		try {
 			const res = await fetch(`http://localhost:${AGENT_PORT}/api/chat`, {
 				method: "POST",
-				headers: { "Content-Type": "application/json" },
+				headers: {
+					"Content-Type": "application/json",
+					"X-Request-ID": requestId
+				},
 				body: JSON.stringify({
 					messages: [
 						{ id: randomUUID(), role: "user", content: message.content }
 					],
-					chatId: conversation.id
+					chatId: conversation.id,
+					requestId
 				})
 			})
+
+			log(`  Response status: ${res.status}`)
 
 			if (!res.ok) {
 				log(`  Error from agent: ${res.status}`)
@@ -128,7 +153,8 @@ async function startSidecar() {
 		}
 	})
 
-	agent.start()
+	// NOTE: Not calling agent.start() as it may have its own handler
+	// that causes duplicate messages. Using .on() is sufficient.
 }
 
 startSidecar().catch((e) => {

@@ -55,12 +55,11 @@ async function dev(useDocker: boolean) {
 
 	const __dirname = dirname(fileURLToPath(import.meta.url))
 	const rootDir = resolve(__dirname, "../../..")
-	const agentDir = resolve(rootDir, "agents/hybrid-agent")
 
 	console.log("\n🔧 Building packages...")
 
 	try {
-		execSync("npx pnpm --filter hybrid run build", {
+		execSync("npx pnpm --filter hybrid/agent run build", {
 			cwd: rootDir,
 			stdio: "inherit"
 		})
@@ -75,8 +74,9 @@ async function dev(useDocker: boolean) {
 		return
 	}
 
-	console.log("\n🚀 Starting agent...\n")
+	console.log("\n🚀 Starting agent (server + sidecar)...\n")
 
+	const agentDir = resolve(rootDir, "agents/hybrid-agent")
 	try {
 		execSync("npx pnpm run dev", {
 			cwd: agentDir,
