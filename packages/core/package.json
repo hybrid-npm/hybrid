@@ -20,6 +20,11 @@
 			"import": "./dist/tools.js",
 			"require": "./dist/tools.cjs"
 		},
+		"./scheduler": {
+			"types": "./src/scheduler.ts",
+			"import": "./dist/scheduler.js",
+			"require": "./dist/scheduler.cjs"
+		},
 		"./types": {
 			"types": "./src/types.ts",
 			"import": "./dist/types.js",
@@ -41,6 +46,7 @@
 		"@coinbase/agentkit": "^0.6.2",
 		"@coinbase/coinbase-sdk": "^0.22.0",
 		"@hono/node-server": "^1.13.5",
+		"@hybrd/scheduler": "workspace:*",
 		"@hybrd/types": "workspace:*",
 		"@hybrd/utils": "workspace:*",
 		"@hybrd/xmtp": "workspace:*",

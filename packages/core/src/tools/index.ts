@@ -6,7 +6,7 @@
  *
  * @example
  * ```typescript
- * import { blockchainTools, xmtpTools } from "hybrid/tools"
+ * import { blockchainTools, xmtpTools, schedulerTools } from "hybrid/tools"
  * import { Agent } from "hybrid"
  *
  * const agent = new Agent({
@@ -14,7 +14,8 @@
  *   model: myModel,
  *   tools: {
  *     ...blockchainTools,
- *     ...xmtpTools
+ *     ...xmtpTools,
+ *     ...schedulerTools
  *   },
  *   instructions: "You are a crypto agent with blockchain and messaging capabilities.",
  *   createRuntime: (runtime) => ({
@@ -48,3 +49,14 @@ export {
 	sendReplyTool,
 	xmtpTools
 } from "./xmtp"
+
+// Export scheduler tools
+export {
+	cancelScheduledTaskTool,
+	listScheduledTasksTool,
+	pauseScheduledTaskTool,
+	resumeScheduledTaskTool,
+	scheduleTaskTool,
+	schedulerTools,
+	type SchedulerRuntimeExtension
+} from "./scheduler"

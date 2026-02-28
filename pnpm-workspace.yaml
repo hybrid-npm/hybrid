@@ -1,5 +1,6 @@
 packages:
   - agent
+  - agents/*
   - config/*
   - packages/*
   - sandbox/*

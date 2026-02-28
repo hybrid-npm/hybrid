@@ -4,17 +4,15 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "npx concurrently --raw \"pnpm run dev:server\" \"pnpm run dev:sidecar\"",
-		"dev:server": "pnpm --filter hybrid/agent run dev:server",
-		"dev:sidecar": "pnpm --filter hybrid/agent run dev:sidecar",
-		"build": "pnpm --filter hybrid/agent run build",
+		"dev": "tsx --env-file-if-exists=.env.local agent.ts",
 		"deploy": "fly deploy"
 	},
 	"dependencies": {
-		"hybrid/agent": "workspace:*"
+		"@openrouter/ai-sdk-provider": "catalog:ai",
+		"hybrid": "workspace:*"
 	},
 	"devDependencies": {
-		"concurrently": "^9.0.0",
+		"@types/node": "catalog:stack",
 		"tsx": "^4.19.3"
 	}
 }

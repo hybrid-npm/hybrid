@@ -1,7 +1,7 @@
-import * as esbuild from "esbuild"
-import { cpSync, mkdirSync, existsSync } from "node:fs"
-import { fileURLToPath } from "node:url"
+import { mkdirSync } from "node:fs"
 import { dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
+import * as esbuild from "esbuild"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const outdir = join(__dirname, "dist")
@@ -9,29 +9,51 @@ const outdir = join(__dirname, "dist")
 mkdirSync(outdir, { recursive: true })
 
 async function build() {
-  // Build server/simple.ts
-  await esbuild.build({
-    entryPoints: [join(__dirname, "src/server/simple.ts")],
-    bundle: true,
-    platform: "node",
-    target: "node20",
-    outfile: join(outdir, "server/simple.cjs"),
-    format: "cjs",
-    external: ["viem"],
-  })
+	// Build main index.ts (exports createServer)
+	await esbuild.build({
+		entryPoints: [join(__dirname, "src/index.ts")],
+		bundle: true,
+		platform: "node",
+		target: "node20",
+		outfile: join(outdir, "index.cjs"),
+		format: "cjs",
+		external: ["viem", "hono", "@hono/node-server"]
+	})
 
-  // Build xmtp.ts
-  await esbuild.build({
-    entryPoints: [join(__dirname, "src/xmtp.ts")],
-    bundle: true,
-    platform: "node",
-    target: "node20",
-    outfile: join(outdir, "xmtp.cjs"),
-    format: "cjs",
-    external: ["viem", "@xmtp/agent-sdk"],
-  })
+	// Build server/simple.ts (default server for backward compat)
+	await esbuild.build({
+		entryPoints: [join(__dirname, "src/server/simple.ts")],
+		bundle: true,
+		platform: "node",
+		target: "node20",
+		outfile: join(outdir, "server/simple.cjs"),
+		format: "cjs",
+		external: ["viem", "hono", "@hono/node-server"]
+	})
 
-  console.log("Built agent to dist/")
+	// Build server/index.ts
+	await esbuild.build({
+		entryPoints: [join(__dirname, "src/server/index.ts")],
+		bundle: true,
+		platform: "node",
+		target: "node20",
+		outfile: join(outdir, "server/index.cjs"),
+		format: "cjs",
+		external: ["viem", "hono", "@hono/node-server"]
+	})
+
+	// Build xmtp.ts
+	await esbuild.build({
+		entryPoints: [join(__dirname, "src/xmtp.ts")],
+		bundle: true,
+		platform: "node",
+		target: "node20",
+		outfile: join(outdir, "xmtp.cjs"),
+		format: "cjs",
+		external: ["viem", "@xmtp/agent-sdk"]
+	})
+
+	console.log("Built agent to dist/")
 }
 
 build()

@@ -3,15 +3,17 @@
 	"version": "0.1.0",
 	"private": true,
 	"type": "module",
-	"main": "./dist/server/simple.cjs",
+	"main": "./dist/index.cjs",
 	"exports": {
 		".": {
-			"import": "./dist/server/simple.js",
-			"types": "./dist/server/simple.d.ts"
+			"types": "./src/index.ts",
+			"import": "./src/index.ts",
+			"require": "./dist/index.cjs"
 		},
 		"./server": {
-			"import": "./dist/server/simple.js",
-			"types": "./dist/server/simple.d.ts"
+			"types": "./src/server/index.ts",
+			"import": "./src/server/index.ts",
+			"require": "./dist/server/index.cjs"
 		}
 	},
 	"scripts": {
@@ -28,6 +30,7 @@
 		"ai": "^6.0.0",
 		"dotenv": "^16.4.5",
 		"hono": "^4.10.8",
+		"hybrid": "workspace:*",
 		"viem": "^2.46.2"
 	},
 	"devDependencies": {

@@ -49,3 +49,15 @@ export type {
 	BehaviorObject,
 	BehaviorRegistry
 } from "./behavior"
+
+// Schedule types
+export type {
+	ScheduleType,
+	TaskStatus,
+	ScheduledTask,
+	ScheduledTaskRun,
+	ScheduleConfig,
+	TaskHandler,
+	SchedulerEvents,
+	CreateScheduledTaskInput
+} from "./schedule"

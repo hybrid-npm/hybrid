@@ -5,6 +5,10 @@ settings:
   excludeLinksFromLockfile: false
 
 catalogs:
+  ai:
+    '@openrouter/ai-sdk-provider':
+      specifier: ^2.0.0
+      version: 2.2.3
   stack:
     '@types/node':
       specifier: 22.8.6
@@ -33,6 +37,22 @@ importers:
         specifier: 5.9.2
         version: 5.9.2
 
+  agents/hybrid-agent:
+    dependencies:
+      '@openrouter/ai-sdk-provider':
+        specifier: catalog:ai
+        version: 2.2.3(ai@6.0.49(zod@4.3.6))(zod@4.3.6)
+      hybrid:
+        specifier: workspace:*
+        version: link:../../packages/core
+    devDependencies:
+      '@types/node':
+        specifier: catalog:stack
+        version: 22.8.6
+      tsx:
+        specifier: ^4.19.3
+        version: 4.20.5
+
   config/biome: {}
 
   config/typescript: {}
@@ -57,6 +77,9 @@ importers:
       hono:
         specifier: ^4.10.8
         version: 4.12.1
+      hybrid:
+        specifier: workspace:*
+        version: link:../core
       viem:
         specifier: ^2.46.2
         version: 2.46.2(bufferutil@4.0.9)(typescript@5.9.2)(utf-8-validate@5.0.10)(zod@4.3.6)
@@ -134,6 +157,9 @@ importers:
       '@hono/node-server':
         specifier: ^1.13.5
         version: 1.19.0(hono@4.9.2)
+      '@hybrd/scheduler':
+        specifier: workspace:*
+        version: link:../scheduler
       '@hybrd/types':
         specifier: workspace:*
         version: link:../types
@@ -230,6 +256,34 @@ importers:
       wrangler:
         specifier: ^4.0.0
         version: 4.67.0(@cloudflare/workers-types@4.20260228.0)(bufferutil@4.0.9)(utf-8-validate@5.0.10)
+
+  packages/scheduler:
+    dependencies:
+      '@hybrd/types':
+        specifier: workspace:*
+        version: link:../types
+      cron-parser:
+        specifier: ^4.9.0
+        version: 4.9.0
+      sql.js:
+        specifier: ^1.11.0
+        version: 1.14.0
+    devDependencies:
+      '@config/biome':
+        specifier: workspace:*
+        version: link:../../config/biome
+      '@config/tsconfig':
+        specifier: workspace:*
+        version: link:../../config/typescript
+      '@types/node':
+        specifier: catalog:stack
+        version: 22.8.6
+      tsup:
+        specifier: ^8.5.0
+        version: 8.5.0(jiti@2.6.0)(postcss@8.5.6)(tsx@4.20.5)(typescript@5.9.3)(yaml@2.8.1)
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.4(@types/debug@4.1.12)(@types/node@22.8.6)(jiti@2.6.0)(lightningcss@1.30.2)(tsx@4.20.5)(yaml@2.8.1)
 
   packages/types:
     dependencies:
@@ -1394,6 +1448,13 @@ packages:
   '@nodelib/fs.walk@1.2.8':
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
+
+  '@openrouter/ai-sdk-provider@2.2.3':
+    resolution: {integrity: sha512-NovC+BaCfEeJwhToDrs8JeDYXXlJdEyz7lcxkjtyePSE4eoAKik872SyDK0MzXKcz8MRkv7XlNhPI6zz4TQp0g==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      ai: ^6.0.0
+      zod: ^3.25.0 || ^4.0.0
 
   '@opensea/seaport-js@4.0.5':
     resolution: {integrity: sha512-hyJEHSCFmO7kv2G+ima0kCpt0kvLa6QOSHb1HJuLd8DS3bao0gOa/Q3AhM3xUqO6SZZ8aD9njhu1EDqjC/5pOw==}
@@ -2866,6 +2927,10 @@ packages:
   create-hash@1.2.0:
     resolution: {integrity: sha512-z00bCGNHDG8mHAkP7CtT1qVu+bFQUPjYq/4Iv3C3kWjTFV10zIjfSoeqXo9Asws8gwSHDGj/hl2u4OGIjapeCg==}
 
+  cron-parser@4.9.0:
+    resolution: {integrity: sha512-p0SaNjrHOnQeR8/VnfGbmg9te2kfyYSQ7Sc/j/6DtPL3JQvKxmjO9TSjNFpujqV3vEYYBvNNvXSxzyksBWAx1Q==}
+    engines: {node: '>=12.0.0'}
+
   cross-fetch@3.2.0:
     resolution: {integrity: sha512-Q+xVJLoGOeIMXZmbUK4HYk+69cQH6LudR0Vu/pRm2YlU/hDV9CiS0gKUMaWY5f2NeUH9C1nV3bsTlCo0FsTV1Q==}
 
@@ -3948,6 +4013,10 @@ packages:
     peerDependencies:
       react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
+  luxon@3.7.2:
+    resolution: {integrity: sha512-vtEhXh/gNjI9Yg1u4jX/0YVPMvxzHuGgCm6tC5kZyb08yjGWGnqAjGJvcXbqQR2P3MyMEFnRbpcdFS6PBcLqew==}
+    engines: {node: '>=12'}
+
   magic-string@0.30.18:
     resolution: {integrity: sha512-yi8swmWbO17qHhwIBNeeZxTceJMeBvWJaId6dyvTSOwTipqeHhMhOrz6513r1sOKnpvQ7zkhlG8tPrpilwTxHQ==}
 
@@ -4914,6 +4983,9 @@ packages:
   split2@4.2.0:
     resolution: {integrity: sha512-UcjcJOWknrNkF6PLX83qcHM6KHgVKNkV62Y8a5uYDVv9ydGQVwAHMKqHdJje1VTWpljG0WYpCDhrCdAOYH4TWg==}
     engines: {node: '>= 10.x'}
+
+  sql.js@1.14.0:
+    resolution: {integrity: sha512-NXYh+kFqLiYRCNAaHD0PcbjFgXyjuolEKLMk5vRt2DgPENtF1kkNzzMlg42dUk5wIsH8MhUzsRhaUxIisoSlZQ==}
 
   stackback@0.0.2:
     resolution: {integrity: sha512-1XMJE5fQo1jGH6Y/7ebnwPOBEkIEnT4QF32d5R1+VXdXveM0IBMJt8zfaxX1P3QhVwrYe+576+jkANtSS2mBbw==}
@@ -6708,6 +6780,11 @@ snapshots:
     dependencies:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.19.1
+
+  '@openrouter/ai-sdk-provider@2.2.3(ai@6.0.49(zod@4.3.6))(zod@4.3.6)':
+    dependencies:
+      ai: 6.0.49(zod@4.3.6)
+      zod: 4.3.6
 
   '@opensea/seaport-js@4.0.5(bufferutil@4.0.9)(utf-8-validate@5.0.10)':
     dependencies:
@@ -8999,6 +9076,10 @@ snapshots:
       ripemd160: 2.0.2
       sha.js: 2.4.12
 
+  cron-parser@4.9.0:
+    dependencies:
+      luxon: 3.7.2
+
   cross-fetch@3.2.0:
     dependencies:
       node-fetch: 2.7.0
@@ -10210,6 +10291,8 @@ snapshots:
   lucide-react@0.570.0(react@19.2.3):
     dependencies:
       react: 19.2.3
+
+  luxon@3.7.2: {}
 
   magic-string@0.30.18:
     dependencies:
@@ -11620,6 +11703,8 @@ snapshots:
   split-on-first@1.1.0: {}
 
   split2@4.2.0: {}
+
+  sql.js@1.14.0: {}
 
   stackback@0.0.2: {}
 

@@ -188,7 +188,7 @@ function wranglerJsonc(data: { name: string }) {
 			},
 			migrations: [{ tag: "v1", new_sqlite_classes: ["Sandbox"] }],
 			vars: {
-				AGENT_PORT: "4100"
+				AGENT_PORT: "8454"
 			}
 		},
 		null,
@@ -209,8 +209,8 @@ COPY SOUL.md INSTRUCTIONS.md ./
 COPY start.sh ./
 RUN chmod +x start.sh
 
-ENV AGENT_PORT=4100
-EXPOSE 4100
+ENV AGENT_PORT=8454
+EXPOSE 8454
 `
 }
 
@@ -284,7 +284,7 @@ app.post("/api/chat", async (c) => {
 				systemPrompt: body.systemPrompt
 			})
 		},
-		4100
+		8454
 	)
 
 	return new Response(response.body, {
@@ -302,7 +302,7 @@ function getSandbox(env: GatewayEnv, teamId: string): SandboxStub {
 }
 
 async function ensureAgentServer(sandbox: SandboxStub, env: GatewayEnv) {
-	const AGENT_PORT = 4100
+	const AGENT_PORT = 8454
 
 	try {
 		const health = await sandbox.containerFetch(
@@ -363,7 +363,7 @@ import { Hono } from "hono"
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const require = createRequire(import.meta.url)
 
-const AGENT_PORT = Number.parseInt(process.env.AGENT_PORT || "4100")
+const AGENT_PORT = Number.parseInt(process.env.AGENT_PORT || "8454")
 const AGENT_ENDPOINT = "/api/chat"
 const HEALTH_CHECK_PATH = "/health"
 
@@ -764,7 +764,7 @@ app.post("/api/chat", async (c) => {
 		content: extractTextFromParts(m.parts)
 	}))
 
-	const containerRes = await fetch("http://localhost:4100/api/chat", {
+	const containerRes = await fetch("http://localhost:8454/api/chat", {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({

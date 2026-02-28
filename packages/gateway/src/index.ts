@@ -45,7 +45,7 @@ app.get("/health", async (c) => {
 			const health = await sandbox.containerFetch(
 				"http://container/health",
 				{},
-				4100
+				8454
 			)
 			serverHealthy = health.ok
 		} catch {}
@@ -109,7 +109,7 @@ app.post("/api/chat", async (c) => {
 				systemPrompt: body.systemPrompt
 			})
 		},
-		4100
+		8454
 	)
 
 	return new Response(response.body, {
@@ -126,7 +126,7 @@ function getSandboxInstance(env: GatewayEnv, teamId: string): SandboxStub {
 }
 
 async function ensureAgentServer(sandbox: SandboxStub, env: GatewayEnv) {
-	const AGENT_PORT = 4100
+	const AGENT_PORT = 8454
 
 	// First, wait for the container to be ready
 	console.log("[gateway] Waiting for container to be ready...")

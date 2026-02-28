@@ -110,12 +110,14 @@ export async function createHonoApp<
  * @property filter - Optional message filter for XMTP messages
  * @property plugins - Optional array of plugins to apply to the server
  * @property behaviors - Optional array of behaviors to apply to message processing
+ * @property scheduler - Enable scheduled tasks (optional config)
  */
 export type ListenOptions = {
 	agent: Agent
 	port: string
 	plugins?: Plugin<PluginContext>[]
 	behaviors?: BehaviorObject[]
+	scheduler?: boolean | { dbPath?: string; pollIntervalMs?: number }
 }
 
 /**
@@ -151,7 +153,8 @@ export async function listen({
 	agent,
 	port,
 	plugins = [],
-	behaviors = []
+	behaviors = [],
+	scheduler
 }: ListenOptions) {
 	const app = new Hono<{ Variables: HonoVariables }>()
 	const context = {
@@ -190,6 +193,49 @@ export async function listen({
 	})
 
 	const httpPort = Number.parseInt(port || "8454")
+
+	// Initialize scheduler if enabled
+	let schedulerInstance: any = null
+	if (scheduler) {
+		const { createAgentScheduler, createSqliteStore } = await import(
+			"@hybrd/scheduler"
+		)
+
+		const dbPath =
+			typeof scheduler === "object" ? scheduler.dbPath : "./data/scheduler.db"
+		const pollIntervalMs =
+			typeof scheduler === "object" ? scheduler.pollIntervalMs : 60_000
+
+		const store = await createSqliteStore({ dbPath })
+		schedulerInstance = await createAgentScheduler({
+			store,
+			pollIntervalMs
+		})
+
+		schedulerInstance.setExecutor(async (task: any) => {
+			console.log(`[scheduler] Running: ${task.name}`)
+			try {
+				const response = await fetch(`http://localhost:${httpPort}/api/chat`, {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						messages: [{ id: "1", role: "user", content: task.payload.prompt }],
+						chatId: `scheduled-${task.id}`
+					})
+				})
+				if (response.ok) {
+					console.log(`[scheduler] Completed: ${task.id}`)
+				} else {
+					console.error(`[scheduler] Failed: ${response.status}`)
+				}
+			} catch (err) {
+				console.error(`[scheduler] Error:`, err)
+			}
+			return `Executed: ${task.name}`
+		})
+
+		schedulerInstance.start()
+	}
 
 	// Setup graceful shutdown
 	const shutdown = async () => {

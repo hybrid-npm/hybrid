@@ -1,0 +1,37 @@
+{
+	"name": "@hybrd/scheduler",
+	"version": "0.0.1",
+	"keywords": ["scheduler", "cron", "agent", "tasks", "hybrid"],
+	"type": "module",
+	"files": ["dist", "src"],
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
+			"require": "./dist/index.cjs"
+		}
+	},
+	"scripts": {
+		"build": "tsup",
+		"build:watch": "tsup --watch",
+		"clean": "rm -rf .turbo dist",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"typecheck": "tsc --noEmit",
+		"lint": "biome lint --unsafe",
+		"lint:fix": "biome lint --write --unsafe",
+		"format": "biome format --write"
+	},
+	"dependencies": {
+		"@hybrd/types": "workspace:*",
+		"cron-parser": "^4.9.0",
+		"sql.js": "^1.11.0"
+	},
+	"devDependencies": {
+		"@config/biome": "workspace:*",
+		"@config/tsconfig": "workspace:*",
+		"@types/node": "catalog:stack",
+		"tsup": "^8.5.0",
+		"vitest": "^3.2.4"
+	}
+}

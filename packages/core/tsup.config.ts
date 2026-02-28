@@ -5,6 +5,7 @@ export default defineConfig({
 		index: "src/index.ts",
 		behaviors: "src/behaviors/index.ts",
 		tools: "src/tools/index.ts",
+		scheduler: "src/scheduler.ts",
 		types: "src/types.ts"
 	},
 	format: ["cjs", "esm"],

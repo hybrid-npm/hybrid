@@ -57,10 +57,10 @@ async function dev(useDocker: boolean) {
 	const rootDir = resolve(__dirname, "../../..")
 	const agentDir = resolve(rootDir, "agents/hybrid-agent")
 
-	console.log("\n🔧 Building packages/agent...")
+	console.log("\n🔧 Building packages...")
 
 	try {
-		execSync("npx pnpm --filter hybrid/agent run build", {
+		execSync("npx pnpm --filter hybrid run build", {
 			cwd: rootDir,
 			stdio: "inherit"
 		})
@@ -75,7 +75,7 @@ async function dev(useDocker: boolean) {
 		return
 	}
 
-	console.log("\n🚀 Starting development server (server + sidecar)...\n")
+	console.log("\n🚀 Starting agent...\n")
 
 	try {
 		execSync("npx pnpm run dev", {

@@ -25,7 +25,7 @@ process.stdout.write("[sidecar] All imports loaded\n")
 
 const log = (msg: string) => process.stdout.write(`${msg}\n`)
 
-const AGENT_PORT = process.env.AGENT_PORT || "4100"
+const AGENT_PORT = process.env.AGENT_PORT || "8454"
 const XMTP_ENV = (process.env.XMTP_ENV || "dev") as "dev" | "production"
 
 async function startSidecar() {

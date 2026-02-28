@@ -3,9 +3,7 @@ import { serve } from "@hono/node-server"
 import { Hono } from "hono"
 import { privateKeyToAccount } from "viem/accounts"
 
-const _dirname = typeof __dirname !== "undefined" ? __dirname : process.cwd()
-
-const AGENT_PORT = Number.parseInt(process.env.AGENT_PORT || "4100")
+const AGENT_PORT = Number.parseInt(process.env.AGENT_PORT || "8454")
 const DEBUG = process.env.DEBUG === "true" || process.env.DEBUG === "1"
 
 function debug(...args: unknown[]) {
@@ -60,7 +58,6 @@ app.get("/sidecar-logs", (c) => {
 	}
 })
 
-// R2 database sync - download from R2
 app.get("/db/download", async (c) => {
 	const key = c.req.query("key")
 	if (!key) return c.text("Missing key", 400)
@@ -77,7 +74,6 @@ app.get("/db/download", async (c) => {
 			return c.text("R2 fetch failed", 500)
 		}
 		const data = await response.arrayBuffer()
-		// Use the filename portion of the key only
 		const filename = key.split("/").pop() || key
 		const localPath = `/app/data/xmtp/${filename}`
 		fs.mkdirSync("/app/data/xmtp", { recursive: true })
@@ -88,7 +84,6 @@ app.get("/db/download", async (c) => {
 	}
 })
 
-// R2 database sync - upload to R2
 app.put("/db/upload", async (c) => {
 	const key = c.req.query("key")
 	const localPath = c.req.query("path")
@@ -116,45 +111,10 @@ app.put("/db/upload", async (c) => {
 		return c.text(`Error: ${err}`, 500)
 	}
 })
-
-// R2 database sync - upload to R2
-app.put("/db/upload", async (c) => {
-	const key = c.req.query("key")
-	const localPath = c.req.query("path")
-	if (!key || !localPath) return c.text("Missing key or path", 400)
-
-	const GATEWAY_URL = process.env.GATEWAY_URL
-	if (!GATEWAY_URL) return c.text("GATEWAY_URL not set", 500)
-
-	try {
-		if (!fs.existsSync(localPath)) return c.text("File not found", 404)
-		const data = fs.readFileSync(localPath)
-		const response = await fetch(
-			`${GATEWAY_URL}/internal/r2/put?key=${encodeURIComponent(key)}`,
-			{
-				method: "PUT",
-				headers: { "Content-Type": "application/octet-stream" },
-				body: data
-			}
-		)
-		if (!response.ok) {
-			return c.text("R2 put failed", 500)
-		}
-		return c.json({ ok: true, bytes: data.byteLength })
-	} catch (err) {
-		return c.text(`Error: ${err}`, 500)
-	}
-})
-
-interface Message {
-	id: string
-	role: "user" | "assistant"
-	content: string
-}
 
 app.post("/api/chat", async (c) => {
 	const body = await c.req.json<{
-		messages: Message[]
+		messages: { id: string; role: "user" | "assistant"; content: string }[]
 		chatId: string
 		systemPrompt?: string
 	}>()
@@ -328,7 +288,6 @@ function streamError(message: string) {
 	)
 }
 
-// Startup banner
 console.log("")
 console.log("  ╭──────────────────────────────────────────────────╮")
 console.log("  │              Hybrid Agent Server                 │")
