@@ -1,9 +1,16 @@
 import type { AgentScheduler, ScheduleType } from "@hybrd/scheduler"
+import type { XmtpConversation } from "@hybrd/types"
 import { z } from "zod"
 import { createTool } from "../core/tool.js"
 
 export interface SchedulerRuntimeExtension {
 	scheduler: AgentScheduler
+	conversation?: XmtpConversation
+}
+
+interface TaskContext {
+	conversationId?: string
+	[key: string]: unknown
 }
 
 const scheduleTypeSchema = z.enum(["cron", "interval", "once"])
@@ -40,8 +47,8 @@ export const scheduleTaskTool = createTool({
 		error: z.string().optional()
 	}),
 	execute: async ({ input, runtime }) => {
-		const scheduler = (runtime as unknown as SchedulerRuntimeExtension)
-			.scheduler
+		const extRuntime = runtime as unknown as SchedulerRuntimeExtension
+		const scheduler = extRuntime.scheduler
 
 		try {
 			if (!scheduler) {
@@ -53,12 +60,20 @@ export const scheduleTaskTool = createTool({
 				}
 			}
 
+			// Capture conversation context for sending messages later
+			const taskContext: TaskContext = {
+				...input.context,
+				conversationId:
+					(extRuntime.conversation as any)?.id ||
+					(extRuntime.conversation as any)?.topic
+			}
+
 			const task = await scheduler.schedule({
 				name: input.name,
 				scheduleType: input.scheduleType as ScheduleType,
 				scheduleValue: input.scheduleValue,
 				prompt: input.prompt,
-				context: input.context
+				context: taskContext
 			})
 
 			return {

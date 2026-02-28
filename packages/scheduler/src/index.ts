@@ -1,4 +1,5 @@
-import { parseExpression } from "cron-parser"
+import cronParser from "cron-parser"
+const { parseExpression } = cronParser
 
 import type {
 	ScheduleType,
@@ -70,27 +71,47 @@ export class AgentScheduler {
 	private computeNextRun(
 		scheduleType: ScheduleType,
 		scheduleValue: string
-	): Date | null {
+	): { date: Date; error?: string } | null {
 		const now = new Date()
 
 		try {
 			switch (scheduleType) {
 				case "cron": {
 					const interval = parseExpression(scheduleValue, { tz: this.timezone })
-					return interval.next().toDate()
+					return { date: interval.next().toDate() }
 				}
 				case "interval": {
 					const ms = Number.parseInt(scheduleValue, 10)
-					if (Number.isNaN(ms) || ms <= 0) return null
-					return new Date(now.getTime() + ms)
+					if (Number.isNaN(ms) || ms <= 0) {
+						return {
+							date: now,
+							error: "Interval must be a positive number in milliseconds"
+						}
+					}
+					return { date: new Date(now.getTime() + ms) }
 				}
 				case "once": {
 					const scheduled = new Date(scheduleValue)
-					return scheduled > now ? scheduled : null
+					if (Number.isNaN(scheduled.getTime())) {
+						return {
+							date: now,
+							error: `Invalid date format: "${scheduleValue}". Use ISO format like "2026-03-01T10:00:00Z"`
+						}
+					}
+					if (scheduled <= now) {
+						return {
+							date: now,
+							error: `Date is in the past. Current time is ${now.toISOString()}. Use a future date.`
+						}
+					}
+					return { date: scheduled }
 				}
 			}
-		} catch {
-			return null
+		} catch (err) {
+			return {
+				date: now,
+				error: err instanceof Error ? err.message : "Unknown error"
+			}
 		}
 		return null
 	}
@@ -102,13 +123,16 @@ export class AgentScheduler {
 	> {
 		const id =
 			input.id ?? `task_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
-		const nextRun = this.computeNextRun(input.scheduleType, input.scheduleValue)
+		const result = this.computeNextRun(input.scheduleType, input.scheduleValue)
 
-		if (!nextRun) {
+		if (!result || result.error) {
 			throw new Error(
-				`Invalid schedule: ${input.scheduleType} "${input.scheduleValue}"`
+				result?.error ||
+					`Invalid schedule: ${input.scheduleType} "${input.scheduleValue}"`
 			)
 		}
+
+		const nextRun = result.date
 
 		const task: ScheduledTask<{
 			prompt: string
@@ -171,11 +195,11 @@ export class AgentScheduler {
 		const task = await this.getTask(id)
 		if (!task || task.status !== "paused") return
 
-		const nextRun = this.computeNextRun(task.scheduleType, task.scheduleValue)
-		if (!nextRun) return
+		const result = this.computeNextRun(task.scheduleType, task.scheduleValue)
+		if (!result || result.error) return
 
 		task.status = "active"
-		task.nextRun = nextRun
+		task.nextRun = result.date
 
 		if (this.store) {
 			await this.store.saveTask(task)
@@ -219,11 +243,11 @@ export class AgentScheduler {
 				task.status = "completed"
 				task.nextRun = null
 			} else {
-				const nextRun = this.computeNextRun(
+				const result = this.computeNextRun(
 					task.scheduleType,
 					task.scheduleValue
 				)
-				task.nextRun = nextRun
+				task.nextRun = result?.date ?? null
 			}
 
 			if (this.store) {
@@ -234,9 +258,9 @@ export class AgentScheduler {
 			run.error = error instanceof Error ? error.message : String(error)
 			task.lastError = run.error
 
-			const nextRun = this.computeNextRun(task.scheduleType, task.scheduleValue)
-			if (nextRun) {
-				task.nextRun = nextRun
+			const result = this.computeNextRun(task.scheduleType, task.scheduleValue)
+			if (result?.date) {
+				task.nextRun = result.date
 			} else {
 				task.status = "failed"
 				task.nextRun = null

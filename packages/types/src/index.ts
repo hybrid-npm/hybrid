@@ -59,5 +59,6 @@ export type {
 	ScheduleConfig,
 	TaskHandler,
 	SchedulerEvents,
-	CreateScheduledTaskInput
+	CreateScheduledTaskInput,
+	Scheduler
 } from "./schedule"

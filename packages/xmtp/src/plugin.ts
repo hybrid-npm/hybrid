@@ -106,12 +106,12 @@ export function XMTPPlugin(): Plugin<PluginContext> {
 			)
 			logger.debug(`📁 Using database path: ${agentDbPath}`)
 
-			const xmtp = await XmtpAgent.create(signer, {
+			const xmtp = (await XmtpAgent.create(signer, {
 				env: XMTP_ENV as XmtpEnv,
 				dbPath: agentDbPath
-			})
+			})) as any
 
-			xmtp.on("reaction", async ({ conversation, message }) => {
+			xmtp.on("reaction", async ({ conversation, message }: any) => {
 				try {
 					const text = message.content.content
 					const messages: AgentMessage[] = [
@@ -125,7 +125,8 @@ export function XMTPPlugin(): Plugin<PluginContext> {
 					const baseRuntime: AgentRuntime = {
 						conversation: conversation as unknown as XmtpConversation,
 						message: message as unknown as XmtpMessage,
-						xmtpClient
+						xmtpClient,
+						...(context.scheduler ? { scheduler: context.scheduler } : {})
 					}
 
 					const runtime = await agent.createRuntimeContext(baseRuntime)
@@ -184,7 +185,7 @@ export function XMTPPlugin(): Plugin<PluginContext> {
 				}
 			})
 
-			xmtp.on("reply", async ({ conversation, message }) => {
+			xmtp.on("reply", async ({ conversation, message }: any) => {
 				try {
 					// TODO - why isn't this typed better?
 					const text = message.content.content as string
@@ -199,7 +200,8 @@ export function XMTPPlugin(): Plugin<PluginContext> {
 					const baseRuntime: AgentRuntime = {
 						conversation: conversation as unknown as XmtpConversation,
 						message: message as unknown as XmtpMessage,
-						xmtpClient
+						xmtpClient,
+						...(context.scheduler ? { scheduler: context.scheduler } : {})
 					}
 
 					const runtime = await agent.createRuntimeContext(baseRuntime)
@@ -270,7 +272,7 @@ export function XMTPPlugin(): Plugin<PluginContext> {
 				}
 			})
 
-			xmtp.on("text", async ({ conversation, message }) => {
+			xmtp.on("text", async ({ conversation, message }: any) => {
 				try {
 					const text = message.content
 					const messages: AgentMessage[] = [
@@ -280,7 +282,8 @@ export function XMTPPlugin(): Plugin<PluginContext> {
 					const baseRuntime: AgentRuntime = {
 						conversation: conversation as unknown as XmtpConversation,
 						message: message as unknown as XmtpMessage,
-						xmtpClient
+						xmtpClient,
+						...(context.scheduler ? { scheduler: context.scheduler } : {})
 					}
 
 					const runtime = await agent.createRuntimeContext(baseRuntime)
@@ -349,14 +352,17 @@ export function XMTPPlugin(): Plugin<PluginContext> {
 				} catch (err) {
 					logger.error("❌ Error handling text:", err)
 				}
-			})
+			})(
+				// Store xmtpClient in context for scheduler and other components
+				context as any
+			).xmtpClient = xmtpClient
 
 			// Event handlers removed due to incompatibility with current XMTP agent SDK
 
 			void xmtp
 				.start()
 				.then(() => logger.debug("✅ XMTP agent listener started"))
-				.catch((err) =>
+				.catch((err: any) =>
 					console.error("❌ XMTP agent listener failed to start:", err)
 				)
 		}

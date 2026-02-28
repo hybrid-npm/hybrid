@@ -157,9 +157,32 @@ export async function listen({
 	scheduler
 }: ListenOptions) {
 	const app = new Hono<{ Variables: HonoVariables }>()
+
+	// Initialize scheduler if enabled (before plugins so it's in context)
+	let schedulerInstance: any = null
+	if (scheduler) {
+		const { createAgentScheduler, createSqliteStore } = await import(
+			"@hybrd/scheduler"
+		)
+
+		const dbPath =
+			typeof scheduler === "object" ? scheduler.dbPath : "./data/scheduler.db"
+		const pollIntervalMs =
+			typeof scheduler === "object" ? scheduler.pollIntervalMs : 60_000
+
+		const store = await createSqliteStore({ dbPath })
+		schedulerInstance = await createAgentScheduler({
+			store,
+			pollIntervalMs
+		})
+
+		schedulerInstance.start()
+	}
+
 	const context = {
 		agent,
-		behaviors: behaviors.length > 0 ? new BehaviorRegistryImpl() : undefined
+		behaviors: behaviors.length > 0 ? new BehaviorRegistryImpl() : undefined,
+		scheduler: schedulerInstance
 	} as PluginContext & { behaviors?: BehaviorRegistryImpl }
 
 	// Register behaviors if provided
@@ -188,33 +211,46 @@ export async function listen({
 		})
 	})
 
+	app.post("/api/chat", async (c) => {
+		try {
+			const body = await c.req.json<{
+				messages: { id: string; role: "user" | "assistant"; content: string }[]
+				chatId?: string
+			}>()
+
+			const messages = body.messages.map((m) => ({
+				id: m.id,
+				role: m.role,
+				parts: [{ type: "text" as const, text: m.content }]
+			}))
+
+			const runtime: any = {
+				scheduler: schedulerInstance
+			}
+
+			const { text } = await agent.generate(messages, { runtime })
+			return c.json({ text })
+		} catch (error) {
+			console.error("[api/chat] Error:", error)
+			return c.json({ error: "Failed to generate response" }, 500)
+		}
+	})
+
 	app.notFound((c) => {
 		return c.json({ error: "Not found" }, 404)
 	})
 
 	const httpPort = Number.parseInt(port || "8454")
 
-	// Initialize scheduler if enabled
-	let schedulerInstance: any = null
-	if (scheduler) {
-		const { createAgentScheduler, createSqliteStore } = await import(
-			"@hybrd/scheduler"
-		)
-
-		const dbPath =
-			typeof scheduler === "object" ? scheduler.dbPath : "./data/scheduler.db"
-		const pollIntervalMs =
-			typeof scheduler === "object" ? scheduler.pollIntervalMs : 60_000
-
-		const store = await createSqliteStore({ dbPath })
-		schedulerInstance = await createAgentScheduler({
-			store,
-			pollIntervalMs
-		})
-
+	// Set up executor for scheduled tasks
+	if (schedulerInstance) {
 		schedulerInstance.setExecutor(async (task: any) => {
 			console.log(`[scheduler] Running: ${task.name}`)
 			try {
+				const conversationId = task.context?.conversationId
+				const xmtpClient = context.xmtpClient as any
+
+				// Generate response
 				const response = await fetch(`http://localhost:${httpPort}/api/chat`, {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
@@ -223,7 +259,35 @@ export async function listen({
 						chatId: `scheduled-${task.id}`
 					})
 				})
+
 				if (response.ok) {
+					const data = (await response.json()) as { text?: string }
+					const text = data.text
+
+					// Try to send via XMTP if we have a conversation ID and client
+					if (conversationId && xmtpClient) {
+						try {
+							const conversations = await xmtpClient.conversations.list()
+							const conversation = conversations.find(
+								(c: any) =>
+									c.id === conversationId || c.topic === conversationId
+							)
+							if (conversation) {
+								await conversation.send(text)
+								console.log(
+									`[scheduler] Sent message to conversation ${conversationId}`
+								)
+							} else {
+								console.log(`[scheduler] Generated: ${text}`)
+							}
+						} catch (sendErr) {
+							console.error(`[scheduler] Failed to send via XMTP:`, sendErr)
+							console.log(`[scheduler] Generated: ${text}`)
+						}
+					} else {
+						console.log(`[scheduler] Generated: ${text}`)
+					}
+
 					console.log(`[scheduler] Completed: ${task.id}`)
 				} else {
 					console.error(`[scheduler] Failed: ${response.status}`)
@@ -233,8 +297,6 @@ export async function listen({
 			}
 			return `Executed: ${task.name}`
 		})
-
-		schedulerInstance.start()
 	}
 
 	// Setup graceful shutdown
