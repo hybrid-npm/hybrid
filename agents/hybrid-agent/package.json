@@ -4,7 +4,9 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "pnpm --filter hybrid/agent run dev",
+		"dev": "npx concurrently \"pnpm run dev:server\" \"pnpm run dev:sidecar\"",
+		"dev:server": "pnpm --filter hybrid/agent run dev:server",
+		"dev:sidecar": "pnpm --filter hybrid/agent run dev:sidecar",
 		"build": "pnpm --filter hybrid/agent run build",
 		"deploy": "fly deploy"
 	},
@@ -12,6 +14,7 @@
 		"hybrid/agent": "workspace:*"
 	},
 	"devDependencies": {
+		"concurrently": "^9.0.0",
 		"tsx": "^4.19.3"
 	}
 }

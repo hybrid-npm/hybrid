@@ -16,11 +16,11 @@ process.on("unhandledRejection", (reason) => {
 })
 
 process.stdout.write("[sidecar] Loading crypto...\n")
-const { randomUUID } = require("node:crypto")
+import { randomUUID } from "node:crypto"
 process.stdout.write("[sidecar] Loading viem...\n")
-const { toBytes } = require("viem")
+import { toBytes } from "viem"
 process.stdout.write("[sidecar] Loading XMTP SDK...\n")
-const { Agent, createUser } = require("@xmtp/agent-sdk")
+import { Agent, createUser } from "@xmtp/agent-sdk"
 process.stdout.write("[sidecar] All imports loaded\n")
 
 const log = (msg) => process.stdout.write(`${msg}\n`)

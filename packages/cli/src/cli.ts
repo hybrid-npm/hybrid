@@ -75,11 +75,17 @@ async function dev(useDocker: boolean) {
 		return
 	}
 
-	console.log("\n🚀 Starting development server...\n")
-	console.log("Run this in a new terminal:")
-	console.log(`  cd ${agentDir}`)
-	console.log("  pnpm dev")
-	console.log("")
+	console.log("\n🚀 Starting development server (server + sidecar)...\n")
+
+	try {
+		execSync("npx pnpm run dev", {
+			cwd: agentDir,
+			stdio: "inherit"
+		})
+	} catch {
+		console.error("\n❌ Failed to start dev server")
+		process.exit(1)
+	}
 }
 
 async function deploy(platform = "fly") {

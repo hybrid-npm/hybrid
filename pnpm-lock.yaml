@@ -45,6 +45,9 @@ importers:
       '@hono/node-server':
         specifier: ^1.13.5
         version: 1.19.0(hono@4.12.1)
+      '@xmtp/agent-sdk':
+        specifier: 0.0.14
+        version: 0.0.14(bufferutil@4.0.9)(typescript@5.9.2)(utf-8-validate@5.0.10)(zod@4.3.6)
       ai:
         specifier: ^6.0.0
         version: 6.0.49(zod@4.3.6)
@@ -61,6 +64,9 @@ importers:
       '@types/node':
         specifier: ^20.0.0
         version: 20.19.35
+      concurrently:
+        specifier: ^9.0.0
+        version: 9.2.1
       esbuild:
         specifier: ^0.27.3
         version: 0.27.3
@@ -8510,6 +8516,21 @@ snapshots:
     dependencies:
       '@walletconnect/window-getters': 1.0.1
       tslib: 1.14.1
+
+  '@xmtp/agent-sdk@0.0.14(bufferutil@4.0.9)(typescript@5.9.2)(utf-8-validate@5.0.10)(zod@4.3.6)':
+    dependencies:
+      '@xmtp/content-type-reaction': 2.0.2
+      '@xmtp/content-type-remote-attachment': 2.0.2
+      '@xmtp/content-type-reply': 2.0.2
+      '@xmtp/content-type-text': 2.0.2
+      '@xmtp/node-sdk': 4.1.2
+      uint8arrays: 5.1.0
+      viem: 2.46.2(bufferutil@4.0.9)(typescript@5.9.2)(utf-8-validate@5.0.10)(zod@4.3.6)
+    transitivePeerDependencies:
+      - bufferutil
+      - typescript
+      - utf-8-validate
+      - zod
 
   '@xmtp/agent-sdk@0.0.14(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)':
     dependencies:

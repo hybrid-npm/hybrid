@@ -1,36 +1,40 @@
 {
-  "name": "hybrid/agent",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
-  "main": "./dist/server/simple.cjs",
-  "exports": {
-    ".": {
-      "import": "./dist/server/simple.js",
-      "types": "./dist/server/simple.d.ts"
-    },
-    "./server": {
-      "import": "./dist/server/simple.js",
-      "types": "./dist/server/simple.d.ts"
-    }
-  },
-  "scripts": {
-    "build": "node build.mjs",
-    "dev": "tsx src/server/simple.ts",
-    "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.2.38",
-    "@hono/node-server": "^1.13.5",
-    "ai": "^6.0.0",
-    "dotenv": "^16.4.5",
-    "hono": "^4.10.8",
-    "viem": "^2.46.2"
-  },
-  "devDependencies": {
-    "@types/node": "^20.0.0",
-    "esbuild": "^0.27.3",
-    "tsx": "^4.19.3",
-    "typescript": "^5.9.2"
-  }
+	"name": "hybrid/agent",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"main": "./dist/server/simple.cjs",
+	"exports": {
+		".": {
+			"import": "./dist/server/simple.js",
+			"types": "./dist/server/simple.d.ts"
+		},
+		"./server": {
+			"import": "./dist/server/simple.js",
+			"types": "./dist/server/simple.d.ts"
+		}
+	},
+	"scripts": {
+		"build": "node build.mjs",
+		"dev": "concurrently \"pnpm run dev:server\" \"pnpm run dev:sidecar\"",
+		"dev:server": "tsx src/server/simple.ts",
+		"dev:sidecar": "tsx src/xmtp.ts",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@anthropic-ai/claude-agent-sdk": "^0.2.38",
+		"@hono/node-server": "^1.13.5",
+		"@xmtp/agent-sdk": "0.0.14",
+		"ai": "^6.0.0",
+		"dotenv": "^16.4.5",
+		"hono": "^4.10.8",
+		"viem": "^2.46.2"
+	},
+	"devDependencies": {
+		"@types/node": "^20.0.0",
+		"concurrently": "^9.0.0",
+		"esbuild": "^0.27.3",
+		"tsx": "^4.19.3",
+		"typescript": "^5.9.2"
+	}
 }
