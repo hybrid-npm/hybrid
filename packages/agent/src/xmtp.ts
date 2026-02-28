@@ -23,10 +23,10 @@ process.stdout.write("[sidecar] Loading XMTP SDK...\n")
 import { Agent, createUser } from "@xmtp/agent-sdk"
 process.stdout.write("[sidecar] All imports loaded\n")
 
-const log = (msg) => process.stdout.write(`${msg}\n`)
+const log = (msg: string) => process.stdout.write(`${msg}\n`)
 
 const AGENT_PORT = process.env.AGENT_PORT || "4100"
-const XMTP_ENV = process.env.XMTP_ENV || "dev"
+const XMTP_ENV = (process.env.XMTP_ENV || "dev") as "dev" | "production"
 
 async function startSidecar() {
 	log(`\n  XMTP Sidecar`)
@@ -47,7 +47,7 @@ async function startSidecar() {
 	}
 
 	log("  Creating wallet...")
-	const user = createUser(key)
+	const user = createUser(key as `0x${string}`)
 
 	const identifier = {
 		identifier: user.account.address.toLowerCase(),
@@ -55,9 +55,10 @@ async function startSidecar() {
 	}
 
 	const signer = {
-		type: "EOA",
+		type: "EOA" as const,
 		getIdentifier: () => identifier,
-		signMessage: async (message) => {
+		getChainId: async () => BigInt(1),
+		signMessage: async (message: string) => {
 			const sig = await user.account.signMessage({ message })
 			return toBytes(sig)
 		}
@@ -68,7 +69,7 @@ async function startSidecar() {
 
 	const dbEncryptionKey = new Uint8Array(Buffer.from(secret, "hex"))
 
-	const agent = await Agent.create(signer, {
+	const agent = await Agent.create(signer as any, {
 		env: XMTP_ENV,
 		dbEncryptionKey
 	})
@@ -123,7 +124,7 @@ async function startSidecar() {
 				log("  Replied")
 			}
 		} catch (err) {
-			log(`  Error: ${err.message}`)
+			log(`  Error: ${(err as Error).message}`)
 		}
 	})
 

@@ -13,7 +13,7 @@ function parseArgs() {
 
 	for (let i = 0; i < args.length; i++) {
 		const arg = args[i]
-		if (arg.startsWith("--")) {
+		if (arg?.startsWith("--")) {
 			const key = arg.slice(2)
 			const value = args[i + 1]
 			if (value && !value.startsWith("--")) {
@@ -22,7 +22,7 @@ function parseArgs() {
 			} else {
 				result[key] = "true"
 			}
-		} else if (!result.name) {
+		} else if (!result.name && arg) {
 			result.name = arg
 		}
 	}
