@@ -4,7 +4,7 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "npx concurrently \"pnpm run dev:server\" \"pnpm run dev:sidecar\"",
+		"dev": "npx concurrently --raw \"pnpm run dev:server\" \"pnpm run dev:sidecar\"",
 		"dev:server": "pnpm --filter hybrid/agent run dev:server",
 		"dev:sidecar": "pnpm --filter hybrid/agent run dev:sidecar",
 		"build": "pnpm --filter hybrid/agent run build",
