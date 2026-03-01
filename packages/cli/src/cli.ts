@@ -85,8 +85,9 @@ async function build(target?: string) {
 	} = await import("node:fs")
 
 	const __dirname = dirname(fileURLToPath(import.meta.url))
-	const rootDir = resolve(__dirname, "../../..")
-	const hybridDir = resolve(rootDir, ".hybrid")
+	const projectDir = process.cwd()
+	const monorepoDir = resolve(__dirname, "../../..")
+	const hybridDir = resolve(projectDir, ".hybrid")
 	const buildTarget = target || "fly"
 
 	console.log("\n🔧 Building agent...")
@@ -94,7 +95,7 @@ async function build(target?: string) {
 	// Build packages/agent
 	try {
 		execSync("npx pnpm --filter hybrid/agent run build", {
-			cwd: rootDir,
+			cwd: monorepoDir,
 			stdio: "inherit"
 		})
 	} catch {
@@ -110,13 +111,17 @@ async function build(target?: string) {
 
 	// Copy built agent
 	console.log("📦 Copying agent bundle...")
-	cpSync(resolve(rootDir, "packages/agent/dist"), resolve(hybridDir, "dist"), {
-		recursive: true
-	})
+	cpSync(
+		resolve(monorepoDir, "packages/agent/dist"),
+		resolve(hybridDir, "dist"),
+		{
+			recursive: true
+		}
+	)
 
-	// Copy agent config from agents/hybrid-agent/
-	const agentDir = resolve(rootDir, "agents/hybrid-agent")
-	if (existsSync(agentDir)) {
+	// Copy agent config from current directory (project)
+	const agentDir = projectDir
+	if (existsSync(resolve(agentDir, "SOUL.md"))) {
 		console.log("📋 Copying agent config...")
 		// Copy SOUL.md, AGENTS.md, README.md
 		for (const file of ["SOUL.md", "AGENTS.md", "README.md"]) {
@@ -135,7 +140,7 @@ async function build(target?: string) {
 	}
 
 	// Copy core skills from packages/agent/skills/
-	const coreSkillsDir = resolve(rootDir, "packages/agent/skills")
+	const coreSkillsDir = resolve(monorepoDir, "packages/agent/skills")
 	if (existsSync(coreSkillsDir)) {
 		console.log("📚 Copying core skills...")
 		const coreSkills = readdirSync(coreSkillsDir, { withFileTypes: true })
@@ -151,7 +156,7 @@ async function build(target?: string) {
 	}
 
 	// Copy user skills from ./skills/
-	const userSkillsDir = resolve(rootDir, "skills")
+	const userSkillsDir = resolve(projectDir, "skills")
 	if (existsSync(userSkillsDir)) {
 		console.log("🔌 Copying user skills...")
 		const userSkills = readdirSync(userSkillsDir, { withFileTypes: true })
@@ -186,7 +191,7 @@ async function build(target?: string) {
 
 	// Generate package.json for the build (use deployment package.json if available)
 	console.log("📦 Generating package.json...")
-	const deployPkgPath = resolve(rootDir, "deployments/flyio/package.json")
+	const deployPkgPath = resolve(monorepoDir, "deployments/flyio/package.json")
 	let pkg: Record<string, unknown> = {
 		name: "hybrid-agent",
 		version: "1.0.0",
