@@ -1,18 +1,19 @@
 import { createHash } from "node:crypto"
-import { homedir } from "node:os"
 import { join } from "node:path"
 
 export function getProjectHash(workspaceDir: string): string {
 	return createHash("sha256").update(workspaceDir).digest("hex").slice(0, 16)
 }
 
-export function getOpenClawMemoryPath(workspaceDir: string): string {
-	const projectHash = getProjectHash(workspaceDir)
-	return join(homedir(), ".claude", "projects", projectHash, "memory")
+export function getSharedMemoryPath(workspaceDir: string): string {
+	return join(workspaceDir, ".hybrid", "mem")
 }
 
-export function getUserMemoryPath(userId: string): string {
-	return join(homedir(), ".hybrid", "users", userId, "memory")
+export function getUserMemoryPath(
+	workspaceDir: string,
+	userId: string
+): string {
+	return join(workspaceDir, ".hybrid", "mem", userId)
 }
 
 export function getProjectMemoryPath(workspaceDir: string): string {
@@ -29,15 +30,15 @@ export function getMemoryPaths(
 	userId: string,
 	role: "owner" | "guest"
 ): MemoryPaths {
-	const openClawPath = getOpenClawMemoryPath(workspaceDir)
-	const userPath = getUserMemoryPath(userId)
+	const sharedPath = getSharedMemoryPath(workspaceDir)
+	const userPath = getUserMemoryPath(workspaceDir, userId)
 	const projectMemoryPath = getProjectMemoryPath(workspaceDir)
 	const projectMemoryFile = join(workspaceDir, "MEMORY.md")
 
 	if (role === "owner") {
 		return {
-			read: [openClawPath, projectMemoryFile, projectMemoryPath, userPath],
-			write: openClawPath
+			read: [sharedPath, projectMemoryFile, projectMemoryPath, userPath],
+			write: sharedPath
 		}
 	}
 

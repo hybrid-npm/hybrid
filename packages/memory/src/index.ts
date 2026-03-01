@@ -51,7 +51,7 @@ export {
 } from "./validate.js"
 export {
 	getProjectHash,
-	getOpenClawMemoryPath,
+	getSharedMemoryPath,
 	getUserMemoryPath,
 	getProjectMemoryPath,
 	getMemoryPaths,
