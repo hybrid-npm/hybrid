@@ -7,12 +7,19 @@ export interface Message {
 export interface ChatRequest {
 	messages: Message[]
 	chatId: string
+	userId?: string
 	teamId?: string
 	systemPrompt?: string
 }
 
 export interface ChatResponse {
-	type: "text" | "usage" | "error" | "tool-call-start" | "tool-call-delta" | "tool-call-end"
+	type:
+		| "text"
+		| "usage"
+		| "error"
+		| "tool-call-start"
+		| "tool-call-delta"
+		| "tool-call-end"
 	content?: string
 	inputTokens?: number
 	outputTokens?: number

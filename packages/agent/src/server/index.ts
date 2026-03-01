@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { type Options, query } from "@anthropic-ai/claude-agent-sdk"
 import { serve } from "@hono/node-server"
+import { MemoryIndexManager, resolveMemoryConfig } from "@hybrid/memory"
 import { Hono } from "hono"
 import { privateKeyToAccount } from "viem/accounts"
 
@@ -100,6 +101,71 @@ function loadMarkdownFile(relativePath: string): string {
 const AGENTS_MD = loadMarkdownFile("AGENTS.md")
 const SOUL_MD = loadMarkdownFile("SOUL.md")
 
+const AGENT_NAME = process.env.AGENT_NAME || "hybrid-agent"
+
+let memoryManager: Awaited<ReturnType<typeof MemoryIndexManager.get>> | null =
+	null
+
+async function initMemory() {
+	try {
+		const config = resolveMemoryConfig(
+			{
+				sources: ["memory", "sessions"],
+				provider: "openai",
+				fallback: "none"
+			},
+			AGENT_NAME
+		)
+		const manager = await MemoryIndexManager.get({
+			agentId: AGENT_NAME,
+			workspaceDir: PROJECT_ROOT,
+			config
+		})
+		if (!manager) {
+			console.log(`[memory] disabled (config.enabled=false)`)
+			return
+		}
+		memoryManager = manager
+		await manager.sync({ reason: "startup" })
+		console.log(`[memory] initialized (${manager.status().files} files)`)
+	} catch (err) {
+		console.log(`[memory] disabled: ${(err as Error).message}`)
+	}
+}
+
+async function searchMemory(
+	query: string,
+	userId?: string,
+	conversationId?: string
+) {
+	if (!memoryManager) return null
+	try {
+		let scope:
+			| { type: "global" }
+			| { type: "user"; userId: string }
+			| { type: "conversation"; userId: string; conversationId: string }
+			| undefined = undefined
+
+		if (userId && conversationId) {
+			scope = { type: "conversation", userId, conversationId }
+		} else if (userId) {
+			scope = { type: "user", userId }
+		}
+
+		const results = await memoryManager.search(query, {
+			maxResults: 5,
+			scope
+		})
+		if (results.length === 0) return null
+		return results
+			.map((r) => `${r.path}:${r.startLine}\n${r.snippet}`)
+			.join("\n\n---\n\n")
+	} catch (err) {
+		console.error(`[memory] search error: ${(err as Error).message}`)
+		return null
+	}
+}
+
 interface ContainerRequest {
 	messages: Array<{
 		id: string
@@ -107,6 +173,7 @@ interface ContainerRequest {
 		content: string
 	}>
 	chatId: string
+	userId?: string
 	teamId?: string
 	systemPrompt?: string
 }
@@ -183,10 +250,20 @@ function extractTextDelta(msg: any): string | null {
 	return null
 }
 
-function runAgent(req: ContainerRequest): ReadableStream<Uint8Array> {
-	const systemPrompt = [SOUL_MD, req.systemPrompt, AGENTS_MD]
-		.filter(Boolean)
-		.join("\n\n")
+async function runAgent(
+	req: ContainerRequest
+): Promise<ReadableStream<Uint8Array>> {
+	const lastMessage = req.messages.at(-1)?.content || ""
+
+	const memoryContext = lastMessage
+		? await searchMemory(lastMessage, req.userId, req.chatId)
+		: null
+
+	const systemPromptParts = [SOUL_MD, req.systemPrompt, AGENTS_MD]
+	if (memoryContext) {
+		systemPromptParts.push(`\n\n## Relevant Memory\n\n${memoryContext}`)
+	}
+	const systemPrompt = systemPromptParts.filter(Boolean).join("\n\n")
 	const prompt = buildPromptWithHistory(req.messages)
 
 	const abortController = new AbortController()
@@ -450,7 +527,7 @@ app.post(AGENT_ENDPOINT, async (c) => {
 	console.log(
 		`[agent] source=${source} id=${requestId} msgs=${req.messages.length} chatId=${req.chatId.slice(0, 8)}`
 	)
-	const stream = runAgent(req)
+	const stream = await runAgent(req)
 
 	return new Response(stream, {
 		headers: {
@@ -560,6 +637,8 @@ function printStartup() {
 }
 
 printStartup()
-serve({ port: AGENT_PORT, fetch: app.fetch })
+initMemory().then(() => {
+	serve({ port: AGENT_PORT, fetch: app.fetch })
+})
 
 export default app

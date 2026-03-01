@@ -149,6 +149,7 @@ async function startSidecar() {
 				body: JSON.stringify({
 					messages,
 					chatId: conversation.id,
+					userId: message.senderInboxId,
 					requestId
 				})
 			})

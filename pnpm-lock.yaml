@@ -41,6 +41,9 @@ importers:
       '@hybrid/memory':
         specifier: workspace:*
         version: link:../../packages/memory
+      better-sqlite3:
+        specifier: ^11.10.0
+        version: 11.10.0
     devDependencies:
       '@hybrd/cli':
         specifier: workspace:*
@@ -70,6 +73,9 @@ importers:
       '@hono/node-server':
         specifier: ^1.13.5
         version: 1.19.0(hono@4.12.1)
+      '@hybrid/memory':
+        specifier: workspace:*
+        version: link:../memory
       '@xmtp/agent-sdk':
         specifier: 0.0.14
         version: 0.0.14(bufferutil@4.0.9)(typescript@5.9.2)(utf-8-validate@5.0.10)
