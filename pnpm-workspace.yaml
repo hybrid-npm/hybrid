@@ -3,7 +3,6 @@ packages:
   - agents/*
   - config/*
   - packages/*
-  - sandbox/*
   - site
 
 catalog:

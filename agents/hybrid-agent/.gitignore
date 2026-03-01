@@ -1,5 +1,0 @@
-node_modules/
-dist/
-.env
-*.db3
-.DS_Store
