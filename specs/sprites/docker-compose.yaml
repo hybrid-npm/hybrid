@@ -14,15 +14,15 @@ services:
       dockerfile: Dockerfile.vault
     container_name: sprites-vault
     ports:
-      - "8080:8080"
+      - "2680:2680"
     environment:
-      - PORT=8080
+      - PORT=2680
       - NODE_ENV=production
       # Optional: INITIAL_KEY=64-hex-chars (for auto-init in dev)
     volumes:
       - vault-data:/app/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/status"]
+      test: ["CMD", "curl", "-f", "http://localhost:2680/status"]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -40,10 +40,10 @@ services:
       dockerfile: Dockerfile.agent
     container_name: sprites-agent
     ports:
-      - "3000:3000"
+      - "2681:2681"
     environment:
       - NODE_ENV=production
-      - VAULT_URL=http://vault:8080
+      - VAULT_URL=http://vault:2680
       - USER_ID=dev-user
       - AGENT_DATA_PATH=/home/sprite/agent/data
     volumes:
@@ -65,7 +65,7 @@ services:
       dockerfile: Dockerfile.vault
     container_name: sprites-cli
     environment:
-      - VAULT_URL=http://vault:8080
+      - VAULT_URL=http://vault:2680
     profiles:
       - cli
     command: ["sleep", "infinity"]

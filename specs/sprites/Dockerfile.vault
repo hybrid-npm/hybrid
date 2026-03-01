@@ -64,15 +64,15 @@ RUN chown -R sprite:sprite /app
 USER sprite
 
 # Expose port
-EXPOSE 8080
+EXPOSE 2680
 
 # Environment
 ENV NODE_ENV=production
-ENV PORT=8080
+ENV PORT=2680
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8080/status || exit 1
+    CMD curl -f http://localhost:2680/status || exit 1
 
 # Start
 CMD ["node", "dist/vault/vault-service.js"]
