@@ -24,8 +24,7 @@
 		{ "@hybrd/cli": "packages/cli" },
 		{ "@hybrd/types": "packages/types" },
 		{ "@hybrd/utils": "packages/utils" },
-		{ "@hybrd/xmtp": "packages/xmtp" },
-		{ "hybrid": "packages/core" }
+		{ "@hybrd/xmtp": "packages/xmtp" }
 	],
 	"exclude": ["node_modules", "build", "dist", ".next", ".expo", "*.old"]
 }

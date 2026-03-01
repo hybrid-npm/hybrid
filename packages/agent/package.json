@@ -30,7 +30,6 @@
 		"ai": "^6.0.0",
 		"dotenv": "^16.4.5",
 		"hono": "^4.10.8",
-		"hybrid": "workspace:*",
 		"viem": "^2.46.2"
 	},
 	"devDependencies": {
