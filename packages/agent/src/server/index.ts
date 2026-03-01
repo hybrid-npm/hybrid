@@ -5,6 +5,7 @@ import { serve } from "@hono/node-server"
 import { MemoryIndexManager, resolveMemoryConfig } from "@hybrid/memory"
 import { Hono } from "hono"
 import { privateKeyToAccount } from "viem/accounts"
+import { createMemoryMcpServer } from "../memory-tools"
 
 const _dirname = typeof __dirname !== "undefined" ? __dirname : process.cwd()
 
@@ -347,16 +348,19 @@ async function runAgent(
 		envVars.ANTHROPIC_API_KEY = apiKey
 	}
 
+	const memoryMcpServer = createMemoryMcpServer(PROJECT_ROOT)
+
 	const options: Options = {
 		abortController,
 		systemPrompt,
-		// Don't specify model - let SDK use default based on env
 		cwd: PROJECT_ROOT,
 		pathToClaudeCodeExecutable: resolveClaudeCodeExecutable(),
 		settingSources: [],
 		permissionMode: "bypassPermissions",
 		allowDangerouslySkipPermissions: true,
-		tools: [],
+		mcpServers: {
+			memory: memoryMcpServer
+		},
 		maxTurns: 25,
 		includePartialMessages: true,
 		stderr: (data: string) => {

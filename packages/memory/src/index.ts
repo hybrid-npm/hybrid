@@ -37,3 +37,10 @@ export {
 	getDefaultMemoryConfig,
 	type MemoryConfigInput
 } from "./config.js"
+export {
+	appendToMemory,
+	readMemorySection,
+	clearMemorySection,
+	type MemoryCategory,
+	type AutoMemoryEntry
+} from "./auto-memory.js"
