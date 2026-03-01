@@ -641,8 +641,8 @@ async function deploy(platform = "fly") {
 	if (platform === "fly" || !platform) {
 		const flyToken = process.env.FLY_API_TOKEN
 		if (!flyToken) {
-			console.error("Error: FLY_API_TOKEN is required")
-			console.error("Usage: FLY_API_TOKEN=xxx hybrid deploy fly")
+			console.error("Error: Please run 'fly auth login' first")
+			console.error("Or set FLY_API_TOKEN environment variable")
 			process.exit(1)
 		}
 
