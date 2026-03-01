@@ -5,7 +5,7 @@ import { serve } from "@hono/node-server"
 import { MemoryIndexManager, resolveMemoryConfig } from "@hybrid/memory"
 import { Hono } from "hono"
 import { privateKeyToAccount } from "viem/accounts"
-import { createMemoryMcpServer } from "../memory-tools"
+import { createMemoryMcpServer, resolveUserRole } from "../memory-tools"
 
 const _dirname = typeof __dirname !== "undefined" ? __dirname : process.cwd()
 
@@ -343,12 +343,18 @@ async function runAgent(
 	// For OpenRouter: API_KEY must be explicitly empty to prevent conflicts
 	// For Anthropic: API_KEY is required
 	if (isUsingOpenRouter) {
-		envVars.ANTHROPIC_API_KEY = "" // Must be explicitly empty
+		envVars.ANTHROPIC_API_KEY = ""
 	} else if (apiKey) {
 		envVars.ANTHROPIC_API_KEY = apiKey
 	}
 
-	const memoryMcpServer = createMemoryMcpServer(PROJECT_ROOT)
+	const { role, acl } = resolveUserRole(PROJECT_ROOT, req.userId)
+	const memoryMcpServer = createMemoryMcpServer(
+		PROJECT_ROOT,
+		req.userId || "anonymous",
+		role,
+		acl
+	)
 
 	const options: Options = {
 		abortController,
@@ -369,7 +375,14 @@ async function runAgent(
 		env: envVars
 	}
 
-	debug("Options:", JSON.stringify(options, null, 2).slice(0, 500))
+	debug(
+		"Options:",
+		JSON.stringify(
+			{ ...options, mcpServers: Object.keys(options.mcpServers || {}) },
+			null,
+			2
+		).slice(0, 500)
+	)
 	debug("System prompt:", systemPrompt.slice(0, 200))
 	debug("User prompt:", prompt.slice(0, 200))
 

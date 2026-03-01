@@ -1,8 +1,23 @@
 import { createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk"
-import { appendToMemory, readMemorySection } from "@hybrid/memory"
+import {
+	type ACL,
+	type Role,
+	addOwner,
+	appendToMemory,
+	getRole,
+	listOwners,
+	parseACL,
+	readMemorySection,
+	removeOwner
+} from "@hybrid/memory"
 import { z } from "zod"
 
-export function createMemoryMcpServer(workspaceDir: string) {
+export function createMemoryMcpServer(
+	workspaceDir: string,
+	userId: string,
+	role: Role,
+	acl: ACL | null
+) {
 	const memorySaveTool = tool(
 		"MemorySave",
 		`Save information to persistent memory. Use this when:
@@ -28,10 +43,15 @@ Categories:
 			content: z.string()
 		},
 		async (args) => {
-			const result = await appendToMemory(workspaceDir, {
-				category: args.category,
-				content: args.content
-			})
+			const result = await appendToMemory(
+				workspaceDir,
+				{
+					category: args.category,
+					content: args.content
+				},
+				userId,
+				role
+			)
 			return {
 				content: [{ type: "text", text: result.message }]
 			}
@@ -55,7 +75,12 @@ Categories:
 			])
 		},
 		async (args) => {
-			const entries = await readMemorySection(workspaceDir, args.category)
+			const entries = await readMemorySection(
+				workspaceDir,
+				args.category,
+				userId,
+				role
+			)
 			if (entries.length === 0) {
 				return {
 					content: [
@@ -71,9 +96,136 @@ Categories:
 		}
 	)
 
+	const aclAddOwnerTool = tool(
+		"ACLAddOwner",
+		`Add a wallet address as an owner. Owners have full access to all memory sources.
+Only current owners can use this tool.
+Wallet address must be a full Ethereum address (0x + 40 hex characters).`,
+		{
+			walletAddress: z.string().describe("Full Ethereum wallet address (0x...)")
+		},
+		async (args) => {
+			if (role !== "owner") {
+				return {
+					content: [
+						{
+							type: "text",
+							text: "Permission denied: Only owners can add new owners"
+						}
+					],
+					isError: true
+				}
+			}
+
+			try {
+				const result = await addOwner(workspaceDir, args.walletAddress)
+				return {
+					content: [{ type: "text", text: result.message }]
+				}
+			} catch (err) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Error: ${(err as Error).message}`
+						}
+					],
+					isError: true
+				}
+			}
+		}
+	)
+
+	const aclRemoveOwnerTool = tool(
+		"ACLRemoveOwner",
+		`Remove a wallet address from owners.
+Only current owners can use this tool.
+Wallet address must be a full Ethereum address (0x + 40 hex characters).`,
+		{
+			walletAddress: z.string().describe("Full Ethereum wallet address (0x...)")
+		},
+		async (args) => {
+			if (role !== "owner") {
+				return {
+					content: [
+						{
+							type: "text",
+							text: "Permission denied: Only owners can remove owners"
+						}
+					],
+					isError: true
+				}
+			}
+
+			try {
+				const result = await removeOwner(workspaceDir, args.walletAddress)
+				return {
+					content: [{ type: "text", text: result.message }]
+				}
+			} catch (err) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Error: ${(err as Error).message}`
+						}
+					],
+					isError: true
+				}
+			}
+		}
+	)
+
+	const aclListOwnersTool = tool(
+		"ACLListOwners",
+		"List all wallet addresses that have owner role.",
+		{},
+		async () => {
+			const owners = listOwners(acl)
+			if (owners.length === 0) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: "No owners configured. Everyone is a guest."
+						}
+					]
+				}
+			}
+			return {
+				content: [
+					{
+						type: "text",
+						text: `Owners:\n${owners.map((o) => `- ${o}`).join("\n")}`
+					}
+				]
+			}
+		}
+	)
+
 	return createSdkMcpServer({
 		name: "memory",
 		version: "1.0.0",
-		tools: [memorySaveTool, memoryReadTool]
+		tools: [
+			memorySaveTool,
+			memoryReadTool,
+			aclAddOwnerTool,
+			aclRemoveOwnerTool,
+			aclListOwnersTool
+		]
 	})
+}
+
+export function resolveUserRole(
+	workspaceDir: string,
+	userId: string | undefined
+): { role: Role; acl: ACL | null } {
+	const acl = parseACL(workspaceDir)
+
+	if (!userId) {
+		return { role: "guest", acl }
+	}
+
+	const role = getRole(acl, userId)
+	return { role, acl }
 }

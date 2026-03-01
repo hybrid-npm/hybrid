@@ -106,7 +106,7 @@ async function build(target?: string) {
 	console.log("\n📁 Creating .hybrid/ directory...")
 	rmSync(hybridDir, { recursive: true, force: true })
 	mkdirSync(resolve(hybridDir, "skills/core"), { recursive: true })
-	mkdirSync(resolve(hybridDir, "skills/extensions"), { recursive: true })
+	mkdirSync(resolve(hybridDir, "skills/ext"), { recursive: true })
 
 	// Copy built agent
 	console.log("📦 Copying agent bundle...")
@@ -160,7 +160,7 @@ async function build(target?: string) {
 
 		for (const skill of userSkills) {
 			const srcPath = resolve(userSkillsDir, skill)
-			const destPath = resolve(hybridDir, "skills/extensions", skill)
+			const destPath = resolve(hybridDir, "skills/ext", skill)
 			cpSync(srcPath, destPath, { recursive: true })
 			console.log(`   ✓ ${skill}`)
 		}
@@ -180,8 +180,8 @@ async function build(target?: string) {
 		: []
 
 	writeFileSync(
-		resolve(hybridDir, "skills/index.json"),
-		JSON.stringify({ core: coreSkills, extensions: userSkills }, null, 2)
+		resolve(hybridDir, "skills/skills_lock.json"),
+		JSON.stringify({ core: coreSkills, ext: userSkills }, null, 2)
 	)
 
 	// Generate package.json for the build (use deployment package.json if available)

@@ -44,3 +44,25 @@ export {
 	type MemoryCategory,
 	type AutoMemoryEntry
 } from "./auto-memory.js"
+export {
+	isValidWalletAddress,
+	normalizeWalletAddress,
+	validateWalletAddress
+} from "./validate.js"
+export {
+	getProjectHash,
+	getOpenClawMemoryPath,
+	getUserMemoryPath,
+	getProjectMemoryPath,
+	getMemoryPaths,
+	type MemoryPaths
+} from "./paths.js"
+export {
+	parseACL,
+	getRole,
+	addOwner,
+	removeOwner,
+	listOwners,
+	type Role,
+	type ACL
+} from "./acl.js"

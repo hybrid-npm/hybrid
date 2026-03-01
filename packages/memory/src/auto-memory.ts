@@ -1,6 +1,8 @@
-import { existsSync } from "node:fs"
+import { existsSync, mkdirSync } from "node:fs"
 import { readFile, writeFile } from "node:fs/promises"
 import { join } from "node:path"
+import type { Role } from "./acl.js"
+import { getMemoryPaths } from "./paths.js"
 
 export type MemoryCategory =
 	| "preferences"
@@ -38,11 +40,23 @@ This file stores persistent memory across conversations.
 ## Notes
 `
 
+function ensureDir(dir: string): void {
+	if (!existsSync(dir)) {
+		mkdirSync(dir, { recursive: true })
+	}
+}
+
 export async function appendToMemory(
 	workspaceDir: string,
-	entry: AutoMemoryEntry
+	entry: AutoMemoryEntry,
+	userId: string,
+	role: Role
 ): Promise<{ success: boolean; message: string }> {
-	const memoryPath = join(workspaceDir, "MEMORY.md")
+	const paths = getMemoryPaths(workspaceDir, userId, role)
+	const memoryDir = paths.write
+	const memoryPath = join(memoryDir, "MEMORY.md")
+
+	ensureDir(memoryDir)
 
 	if (!existsSync(memoryPath)) {
 		await writeFile(memoryPath, DEFAULT_TEMPLATE, "utf-8")
@@ -54,7 +68,7 @@ export async function appendToMemory(
 	const line = `- ${entry.content} (${timestamp})`
 
 	if (!content.includes(categoryHeader)) {
-		const updatedContent = content + `\n\n${categoryHeader}\n\n${line}\n`
+		const updatedContent = `${content}\n\n${categoryHeader}\n\n${line}\n`
 		await writeFile(memoryPath, updatedContent, "utf-8")
 		return { success: true, message: `Added to new section: ${entry.category}` }
 	}
@@ -93,11 +107,11 @@ export async function appendToMemory(
 		beforeInsertContent.endsWith("\n") &&
 		afterInsertContent.startsWith("-")
 	) {
-		newContent = beforeInsertContent + line + "\n" + afterInsertContent
+		newContent = `${beforeInsertContent}${line}\n${afterInsertContent}`
 	} else if (beforeInsertContent.endsWith("\n\n")) {
-		newContent = beforeInsertContent + line + "\n" + afterInsertContent
+		newContent = `${beforeInsertContent}${line}\n${afterInsertContent}`
 	} else {
-		newContent = beforeInsertContent + "\n" + line + "\n" + afterInsertContent
+		newContent = `${beforeInsertContent}\n${line}\n${afterInsertContent}`
 	}
 
 	await writeFile(memoryPath, newContent, "utf-8")
@@ -106,43 +120,58 @@ export async function appendToMemory(
 
 export async function readMemorySection(
 	workspaceDir: string,
-	category: MemoryCategory
+	category: MemoryCategory,
+	userId: string,
+	role: Role
 ): Promise<string[]> {
-	const memoryPath = join(workspaceDir, "MEMORY.md")
+	const paths = getMemoryPaths(workspaceDir, userId, role)
+	const allEntries: string[] = []
+	const seen = new Set<string>()
 
-	if (!existsSync(memoryPath)) {
-		return []
-	}
+	for (const memoryDir of paths.read) {
+		const memoryPath = join(memoryDir, "MEMORY.md")
 
-	const content = await readFile(memoryPath, "utf-8")
-	const categoryHeader = CATEGORY_HEADERS[category]
-	const lines = content.split("\n")
-	const entries: string[] = []
-	let inTargetSection = false
-
-	for (const line of lines) {
-		if (line.trim() === categoryHeader) {
-			inTargetSection = true
+		if (!existsSync(memoryPath)) {
 			continue
 		}
 
-		if (inTargetSection && line.startsWith("## ")) {
-			break
-		}
+		const content = await readFile(memoryPath, "utf-8")
+		const categoryHeader = CATEGORY_HEADERS[category]
+		const lines = content.split("\n")
+		let inTargetSection = false
 
-		if (inTargetSection && line.startsWith("- ")) {
-			entries.push(line.slice(2))
+		for (const line of lines) {
+			if (line.trim() === categoryHeader) {
+				inTargetSection = true
+				continue
+			}
+
+			if (inTargetSection && line.startsWith("## ")) {
+				break
+			}
+
+			if (inTargetSection && line.startsWith("- ")) {
+				const entry = line.slice(2)
+				if (!seen.has(entry)) {
+					seen.add(entry)
+					allEntries.push(entry)
+				}
+			}
 		}
 	}
 
-	return entries
+	return allEntries
 }
 
 export async function clearMemorySection(
 	workspaceDir: string,
-	category: MemoryCategory
+	category: MemoryCategory,
+	userId: string,
+	role: Role
 ): Promise<void> {
-	const memoryPath = join(workspaceDir, "MEMORY.md")
+	const paths = getMemoryPaths(workspaceDir, userId, role)
+	const memoryDir = paths.write
+	const memoryPath = join(memoryDir, "MEMORY.md")
 
 	if (!existsSync(memoryPath)) {
 		return
