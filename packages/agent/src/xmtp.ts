@@ -27,28 +27,25 @@ const log = (msg: string) => process.stdout.write(`${msg}\n`)
 
 const AGENT_PORT = process.env.AGENT_PORT || "8454"
 const XMTP_ENV = (process.env.XMTP_ENV || "dev") as "dev" | "production"
+const MAX_HISTORY_MESSAGES = 20
 
 const processedMessages = new Set<string>()
 const MAX_PROCESSED = 1000
 
 async function startSidecar() {
-	log(`\n  XMTP Sidecar`)
-	log(`  Port: ${AGENT_PORT}`)
-	log(`  Env: ${XMTP_ENV}\n`)
+	log(`[xmtp] starting (env: ${XMTP_ENV})`)
 
 	const key = process.env.AGENT_WALLET_KEY
 	const secret = process.env.AGENT_SECRET
 
 	if (!key || !secret) {
 		process.stderr.write(
-			"WARN: AGENT_WALLET_KEY and AGENT_SECRET not set, XMTP sidecar disabled\n"
+			"[xmtp] WARN: AGENT_WALLET_KEY and AGENT_SECRET not set\n"
 		)
-		process.stderr.write("Set these in .env to enable XMTP messaging\n")
 		await new Promise(() => {})
 		return
 	}
 
-	log("  Creating wallet...")
 	const user = createUser(key as `0x${string}`)
 
 	const identifier = {
@@ -66,8 +63,7 @@ async function startSidecar() {
 		}
 	}
 
-	log(`  Wallet: ${user.account.address}`)
-	log("  Connecting to XMTP...")
+	log(`[xmtp] wallet: ${user.account.address.slice(0, 10)}...`)
 
 	const dbEncryptionKey = new Uint8Array(Buffer.from(secret, "hex"))
 
@@ -76,14 +72,15 @@ async function startSidecar() {
 		dbEncryptionKey
 	})
 
-	log("  Connected to XMTP")
-	log("  Listening for messages...\n")
+	log(`[xmtp] connected`)
+
+	const botInboxId = agent.client.inboxId
 
 	agent.on("text", async ({ conversation, message }) => {
-		log(`[sidecar] Handler called with message.id: ${message.id}`)
+		log(`[xmtp] received message: ${message.id}`)
 
 		if (processedMessages.has(message.id)) {
-			log(`[sidecar] Skipping duplicate message: ${message.id}`)
+			log(`[xmtp] skipping duplicate: ${message.id}`)
 			return
 		}
 		processedMessages.add(message.id)
@@ -96,31 +93,68 @@ async function startSidecar() {
 		}
 
 		log(
-			`Message from ${message.senderInboxId.slice(0, 8)}: ${message.content.slice(0, 50)} (id: ${message.id})`
+			`[xmtp] ${message.senderInboxId.slice(0, 8)}: ${message.content.slice(0, 50)}`
 		)
 
 		const requestId = randomUUID()
-		log(`  Calling /api/chat with requestId: ${requestId}`)
 		try {
+			let historyMessages: Array<{
+				id: string
+				role: "user" | "assistant"
+				content: string
+			}> = []
+
+			try {
+				const history = await conversation.messages({
+					limit: MAX_HISTORY_MESSAGES + 1,
+					direction: 1
+				})
+
+				log(`[xmtp] raw history: ${history.length} messages from XMTP`)
+
+				const filtered = history
+					.filter((msg) => msg.id !== message.id)
+					.filter((msg) => msg.content && typeof msg.content === "string")
+					.slice(0, MAX_HISTORY_MESSAGES)
+					.reverse()
+
+				log(`[xmtp] after filter: ${filtered.length} messages`)
+
+				historyMessages = filtered.map((msg) => ({
+					id: msg.id,
+					role:
+						msg.senderInboxId === botInboxId
+							? ("assistant" as const)
+							: ("user" as const),
+					content: msg.content as string
+				}))
+			} catch (historyErr) {
+				log(`[xmtp] history error: ${(historyErr as Error).message}`)
+			}
+
+			const messages = [
+				...historyMessages,
+				{ id: randomUUID(), role: "user" as const, content: message.content }
+			]
+
+			log(`[xmtp] sending ${messages.length} total messages to agent`)
+
 			const res = await fetch(`http://localhost:${AGENT_PORT}/api/chat`, {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
-					"X-Request-ID": requestId
+					"X-Request-ID": requestId,
+					"X-Source": "xmtp-sidecar"
 				},
 				body: JSON.stringify({
-					messages: [
-						{ id: randomUUID(), role: "user", content: message.content }
-					],
+					messages,
 					chatId: conversation.id,
 					requestId
 				})
 			})
 
-			log(`  Response status: ${res.status}`)
-
 			if (!res.ok) {
-				log(`  Error from agent: ${res.status}`)
+				log(`[xmtp] error: ${res.status}`)
 				return
 			}
 
@@ -146,15 +180,15 @@ async function startSidecar() {
 
 			if (reply) {
 				await conversation.send(reply)
-				log("  Replied")
 			}
 		} catch (err) {
-			log(`  Error: ${(err as Error).message}`)
+			log(`[xmtp] error: ${(err as Error).message}`)
 		}
 	})
 
-	// NOTE: Not calling agent.start() as it may have its own handler
-	// that causes duplicate messages. Using .on() is sufficient.
+	log(`[xmtp] starting message stream...`)
+	await agent.start()
+	log(`[xmtp] listening for messages`)
 }
 
 startSidecar().catch((e) => {

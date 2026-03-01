@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs"
-import { dirname, join } from "node:path"
+import { join } from "node:path"
 import { type Options, query } from "@anthropic-ai/claude-agent-sdk"
 import { serve } from "@hono/node-server"
 import { Hono } from "hono"
@@ -87,21 +87,7 @@ function resolveClaudeCodeExecutable(): string {
 	)
 }
 
-function resolveProjectRoot(): string {
-	if (process.env.AGENT_PROJECT_ROOT) return process.env.AGENT_PROJECT_ROOT
-	let dir = _dirname
-	for (let i = 0; i < 5; i++) {
-		try {
-			readFileSync(join(dir, "AGENTS.md"), "utf-8")
-			return dir
-		} catch {
-			dir = dirname(dir)
-		}
-	}
-	return join(_dirname, "..", "..")
-}
-
-const PROJECT_ROOT = resolveProjectRoot()
+const PROJECT_ROOT = process.env.AGENT_PROJECT_ROOT || process.cwd()
 
 function loadMarkdownFile(relativePath: string): string {
 	try {
@@ -302,30 +288,13 @@ function runAgent(req: ContainerRequest): ReadableStream<Uint8Array> {
 		env: envVars
 	}
 
-	console.log(`[agent] options.env:`)
-	console.log(
-		`  ANTHROPIC_BASE_URL: ${envVars.ANTHROPIC_BASE_URL || "(not set)"}`
-	)
-	console.log(
-		`  ANTHROPIC_AUTH_TOKEN: ${envVars.ANTHROPIC_AUTH_TOKEN ? "***" : "(not set)"}`
-	)
-	console.log(
-		`  ANTHROPIC_API_KEY: "${envVars.ANTHROPIC_API_KEY ?? "(not set)"}"`
-	)
-
 	debug("Options:", JSON.stringify(options, null, 2).slice(0, 500))
 	debug("System prompt:", systemPrompt.slice(0, 200))
 	debug("User prompt:", prompt.slice(0, 200))
 
-	console.log(`[agent] calling query() with model=${model}`)
-	console.log(`[agent] ANTHROPIC_BASE_URL: ${baseUrl || "(default)"}`)
-	console.log(`[agent] ANTHROPIC_AUTH_TOKEN set: ${!!authToken}`)
-	console.log(`[agent] ANTHROPIC_API_KEY: "${apiKey}"`)
-
 	let conversation: AsyncGenerator<any, void, unknown>
 	try {
 		conversation = query({ prompt, options })
-		console.log("[agent] query() returned, starting stream...")
 	} catch (err) {
 		const errorMsg =
 			err instanceof Error ? err.message : "Failed to initialize agent"
@@ -350,12 +319,9 @@ function runAgent(req: ContainerRequest): ReadableStream<Uint8Array> {
 				try {
 					for await (const msg of conversation) {
 						messageCount++
-						console.log("[agent] received:", { type: msg?.type })
 
 						if (msg.type === "stream_event") {
 							const event = msg.event as { type: string }
-							console.log(`[agent] stream_event: ${event.type}`)
-
 							const text = extractTextDelta(msg)
 							if (text) {
 								hasStreamedText = true
@@ -479,10 +445,10 @@ app.get(HEALTH_CHECK_PATH, (c) => {
 
 app.post(AGENT_ENDPOINT, async (c) => {
 	const requestId = c.req.header("X-Request-ID") || "unknown"
-	console.log(`[agent] received request (requestId: ${requestId})`)
+	const source = c.req.header("X-Source") || "unknown"
 	const req = await c.req.json<ContainerRequest>()
 	console.log(
-		`[agent] messages: ${req.messages.length}, chatId: ${req.chatId}, requestId: ${(req as any).requestId || requestId}`
+		`[agent] source=${source} id=${requestId} msgs=${req.messages.length} chatId=${req.chatId.slice(0, 8)}`
 	)
 	const stream = runAgent(req)
 
@@ -537,6 +503,18 @@ function printStartup() {
 	console.log(`    ANTHROPIC_AUTH_TOKEN  ${authToken ? "✓ set" : "✗ not set"}`)
 	console.log(`    ANTHROPIC_BASE_URL    ${baseUrl || "(default Anthropic)"}`)
 	console.log(`    DEBUG                 ${DEBUG ? "✓ enabled" : "✗ disabled"}`)
+
+	console.log()
+	console.log("  ─────────────────────────────────────────────────")
+	console.log()
+	console.log("  Configuration Files:")
+	console.log(`    Project root          ${PROJECT_ROOT}`)
+	console.log(
+		`    AGENTS.md             ${AGENTS_MD ? "✓ loaded" : "✗ not found"}`
+	)
+	console.log(
+		`    SOUL.md               ${SOUL_MD ? "✓ loaded" : "✗ not found"}`
+	)
 
 	console.log()
 	console.log("  ─────────────────────────────────────────────────")

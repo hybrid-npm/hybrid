@@ -111,6 +111,9 @@ export function XMTPPlugin(): Plugin<PluginContext> {
 				dbPath: agentDbPath
 			})) as any
 
+			const botInboxId = xmtp.client?.inboxId
+			const MAX_HISTORY = 20
+
 			xmtp.on("reaction", async ({ conversation, message }: any) => {
 				try {
 					const text = message.content.content
@@ -275,9 +278,47 @@ export function XMTPPlugin(): Plugin<PluginContext> {
 			xmtp.on("text", async ({ conversation, message }: any) => {
 				try {
 					const text = message.content
+
+					let historyMessages: AgentMessage[] = []
+					try {
+						console.log("[xmtp] fetching conversation history...")
+						const history = await conversation.messages({
+							limit: MAX_HISTORY + 1,
+							direction: 1
+						})
+
+						console.log(
+							`[xmtp] got ${history.length} messages from conversation.messages()`
+						)
+
+						const filtered = history
+							.filter((msg: any) => msg.id !== message.id)
+							.filter(
+								(msg: any) => msg.content && typeof msg.content === "string"
+							)
+							.slice(0, MAX_HISTORY)
+							.reverse()
+
+						console.log(`[xmtp] after filter: ${filtered.length} messages`)
+
+						historyMessages = filtered.map((msg: any) => ({
+							id: msg.id,
+							role:
+								msg.senderInboxId === botInboxId
+									? ("assistant" as const)
+									: ("user" as const),
+							parts: [{ type: "text" as const, text: msg.content as string }]
+						}))
+					} catch (historyErr) {
+						console.error(`[xmtp] history error:`, historyErr)
+					}
+
 					const messages: AgentMessage[] = [
+						...historyMessages,
 						{ id: randomUUID(), role: "user", parts: [{ type: "text", text }] }
 					]
+
+					console.log(`[xmtp] sending ${messages.length} messages to agent`)
 
 					const baseRuntime: AgentRuntime = {
 						conversation: conversation as unknown as XmtpConversation,
