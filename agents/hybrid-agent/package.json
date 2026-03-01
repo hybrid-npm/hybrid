@@ -4,15 +4,17 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
+		"build": "hybrid build",
+		"deploy": "hybrid deploy",
 		"dev": "concurrently --raw \"pnpm run dev:server\" \"pnpm run dev:sidecar\"",
 		"dev:server": "node --env-file=.env.local ../../packages/agent/dist/server/index.cjs",
-		"dev:sidecar": "node --env-file=.env.local ../../packages/agent/dist/xmtp.cjs",
-		"deploy": "fly deploy"
+		"dev:sidecar": "node --env-file=.env.local ../../packages/agent/dist/xmtp.cjs"
 	},
 	"dependencies": {
 		"@anthropic-ai/claude-agent-sdk": "^0.2.38"
 	},
 	"devDependencies": {
+		"@hybrd/cli": "workspace:*",
 		"@types/node": "catalog:stack",
 		"concurrently": "^9.0.0",
 		"tsx": "^4.19.3"

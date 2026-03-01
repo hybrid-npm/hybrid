@@ -3,6 +3,7 @@
 # build
 dist
 gen
+.hybrid/
 
 # dependencies
 node_modules
@@ -53,6 +54,10 @@ xmtp-development-*
 *.db3-shm
 *.db3-wal
 *.db3.sqlcipher_salt
+
+# skill installation temp
+.temp-skill-install/
+.temp-npm-install/
 
 sandbox/
 scratchpad.md

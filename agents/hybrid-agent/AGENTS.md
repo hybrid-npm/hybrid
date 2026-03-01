@@ -27,7 +27,7 @@ fly deploy
 ├── .env.example         # Environment variables template
 ├── AGENTS.md           # Build/deploy commands (this file)
 ├── SOUL.md             # Agent identity and personality
-└── VISION.md           # Agent vision and roadmap
+└── README.md           # Hybrid README and roadmap
 ```
 
 ## Commands
