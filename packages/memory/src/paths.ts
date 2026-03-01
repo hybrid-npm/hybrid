@@ -6,14 +6,14 @@ export function getProjectHash(workspaceDir: string): string {
 }
 
 export function getSharedMemoryPath(workspaceDir: string): string {
-	return join(workspaceDir, ".hybrid", "mem")
+	return join(workspaceDir, ".hybrid", "memory")
 }
 
 export function getUserMemoryPath(
 	workspaceDir: string,
 	userId: string
 ): string {
-	return join(workspaceDir, ".hybrid", "mem", userId)
+	return join(workspaceDir, ".hybrid", "memory", userId)
 }
 
 export function getProjectMemoryPath(workspaceDir: string): string {
