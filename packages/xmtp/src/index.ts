@@ -29,6 +29,9 @@ export {
 } from "./client"
 export type { XMTPConnectionConfig } from "./client"
 
+// Re-export revocation function for agent use
+export { revokeOldInstallations } from "../scripts/revoke-installations"
+
 // ===================================================================
 // XMTP Plugin for Agent Integration
 // ===================================================================

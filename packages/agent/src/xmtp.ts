@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto"
 import fs from "node:fs"
 import http from "node:http"
 import path from "node:path"
+import { revokeOldInstallations } from "@hybrd/xmtp"
 import { Agent, createUser } from "@xmtp/agent-sdk"
 import { Client } from "@xmtp/node-sdk"
 import pc from "picocolors"
@@ -113,11 +114,53 @@ async function startSidecar() {
 		`xmtp-${XMTP_ENV}-${user.account.address.toLowerCase().slice(0, 8)}.db3`
 	)
 
-	const agent = await Agent.create(signer as any, {
-		env: XMTP_ENV,
-		dbEncryptionKey,
-		dbPath
-	})
+	let agent
+	try {
+		agent = await Agent.create(signer as any, {
+			env: XMTP_ENV,
+			dbEncryptionKey,
+			dbPath
+		})
+	} catch (error) {
+		const errorMessage = error instanceof Error ? error.message : String(error)
+
+		// Handle installation limit error
+		if (
+			errorMessage.includes("installations") ||
+			/\d+\/\d+\s+installations/.test(errorMessage)
+		) {
+			log.warn(
+				"Installation limit reached, attempting to revoke old installations..."
+			)
+
+			// Extract inbox ID from error message
+			const inboxIdMatch = errorMessage.match(/InboxID ([a-f0-9]{64})/i)
+			const inboxId = inboxIdMatch ? inboxIdMatch[1] : undefined
+
+			if (inboxId) {
+				log.info(`Found InboxID: ${inboxId.slice(0, 16)}...`)
+				const success = await revokeOldInstallations(signer, inboxId)
+
+				if (success) {
+					log.success("Revoked old installations, retrying...")
+					// Retry agent creation
+					agent = await Agent.create(signer as any, {
+						env: XMTP_ENV,
+						dbEncryptionKey,
+						dbPath
+					})
+				} else {
+					log.error("Failed to revoke installations")
+					throw error
+				}
+			} else {
+				log.error("Could not extract InboxID from error")
+				throw error
+			}
+		} else {
+			throw error
+		}
+	}
 
 	log.success("connected to XMTP network")
 
