@@ -41,7 +41,6 @@ const app = new Hono()
 app.get("/health", (c) => {
 	return c.json({
 		status: "healthy",
-		service: "hybrid-agent",
 		timestamp: new Date().toISOString()
 	})
 })

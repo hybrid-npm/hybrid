@@ -744,7 +744,7 @@ When scheduling reminders, include delivery info to send the message back to thi
 const app = new Hono()
 
 app.get(HEALTH_CHECK_PATH, (c) => {
-	return c.json({ ok: true, service: "hybrid-agent" })
+	return c.json({ status: "healthy" })
 })
 
 app.post(AGENT_ENDPOINT, async (c) => {
