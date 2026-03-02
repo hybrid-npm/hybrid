@@ -217,7 +217,8 @@ export async function createXMTPClient(
 
 			if (
 				error instanceof Error &&
-				error.message.includes("5/5 installations")
+				(error.message.includes("installations") ||
+					error.message.match(/\d+\/\d+\s+installations/))
 			) {
 				console.log(
 					`💥 Installation limit reached (attempt ${attempt}/${maxRetries})`
