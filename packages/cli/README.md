@@ -1,58 +1,243 @@
 # @hybrd/cli
 
-This package is part of the Hybrid monorepo.
+The `hybrid` / `hy` command-line tool for building, developing, deploying, and managing Hybrid AI agents.
 
-Hybrid makes it easy for developers to create intelligent agents that can understand natural language, process messages, and respond through XMTP's decentralized messaging protocol.
-
-See [hybrid.dev](https://hybrid.dev) for more information.
-
-## 📦 Quickstart
-
-Getting started with Hybrid is simple:
-
-### 1. Initialize your project
+## Installation
 
 ```bash
-npm create hybrid my-agent
+npm install -g @hybrd/cli
+# or use directly via npx
+npx hybrid <command>
+```
+
+## Commands
+
+### `hybrid init <name>`
+
+Initialize a new agent project by cloning the `hybrid-agent` template:
+
+```bash
+hybrid init my-agent
 cd my-agent
 ```
 
-This creates all the necessary files and configuration for your agent.
+### `hybrid build [--target]`
 
-### 2. Get your OpenRouter API key
-   
-Visit [OpenRouter](https://openrouter.ai/keys), create an account and generate an API key
-
-Add it to your `.env` file:
-
-```env
-OPENROUTER_API_KEY=your_openrouter_api_key_here
-```
-
-### 3. Generate XMTP keys
+Build the agent bundle into `.hybrid/`:
 
 ```bash
-hybrid keys
+hybrid build                  # Default build
+hybrid build --target fly     # Fly.io target (default)
+hybrid build --target railway # Railway target
+hybrid build --target cf      # Cloudflare Workers target
 ```
 
-or automatically add it to your `.env` file:  
+The build:
+1. Compiles `packages/agent` via `pnpm --filter hybrid/agent build`
+2. Creates `.hybrid/` directory structure
+3. Copies compiled `dist/` from the agent package
+4. Copies `SOUL.md`, `AGENTS.md`, and `agent.ts` from your project root
+5. Copies core skills from `packages/agent/skills/` → `.hybrid/skills/core/`
+6. Copies user skills from `./skills/` → `.hybrid/skills/ext/`
+7. Writes `skills/skills_lock.json` listing all installed skills
+8. Generates deployment files: `package.json`, `Dockerfile`, `fly.toml`, `start.sh`
 
-```bash
-hybrid keys --write
+**Build output structure:**
+```
+.hybrid/
+├── dist/                    # Compiled agent code
+│   ├── server/index.cjs     # Full Claude Code SDK server
+│   ├── server/simple.cjs    # Lightweight server
+│   └── xmtp.cjs             # XMTP sidecar
+├── skills/
+│   ├── core/                # Built-in skills (memory, xmtp)
+│   ├── ext/                 # User-installed skills
+│   └── skills_lock.json
+├── package.json
+├── Dockerfile
+├── fly.toml                 # (Fly.io targets only)
+└── start.sh                 # Starts server + sidecar concurrently
 ```
 
-### 4. Register your wallet with XMTP
+### `hybrid dev`
 
-```bash
-hybrid register
-```
-
-This generates secure wallet and encryption keys for your XMTP agent.
-
-  ### 5. Start developing
+Start the development server. Builds the agent then runs `pnpm dev` in the agent directory:
 
 ```bash
 hybrid dev
 ```
 
-Your agent will start listening for XMTP messages and you're ready to build!
+### `hybrid deploy [platform]`
+
+Build then deploy to a platform:
+
+```bash
+hybrid deploy          # Deploys to Fly.io (default)
+hybrid deploy fly      # Fly.io: runs `fly deploy` from .hybrid/
+hybrid deploy cf       # Cloudflare: builds packages/gateway, runs `wrangler deploy`
+hybrid deploy railway  # Railway (builds only, manual deploy)
+```
+
+### `hybrid register`
+
+Register the agent wallet on the XMTP network:
+
+```bash
+hybrid register
+```
+
+Delegates to `@hybrd/xmtp`'s register script via `pnpm --filter @hybrd/xmtp register`.
+
+### `hybrid revoke <inboxId>`
+
+Revoke XMTP installations for a specific inbox ID:
+
+```bash
+hybrid revoke 0xabc123...
+```
+
+### `hybrid revoke-all`
+
+Auto-detect the inbox ID from the installation limit error and revoke all installations:
+
+```bash
+hybrid revoke-all
+```
+
+### `hybrid install <source>`
+
+Install a skill into your agent project:
+
+```bash
+# From GitHub
+hybrid install github:username/repo
+hybrid install github:username/repo/path/to/skill
+
+# From npm
+hybrid install @scope/skill-package
+
+# From local path
+hybrid install ./path/to/skill
+```
+
+Skills are directories containing a `SKILL.md` file with YAML frontmatter (`name`, `description`). Installed skills are copied to `./skills/` and tracked in `skills-lock.json`.
+
+### `hybrid uninstall <name>`
+
+Remove an installed skill:
+
+```bash
+hybrid uninstall my-skill-name
+```
+
+### `hybrid skills`
+
+List all available skills:
+
+```bash
+hybrid skills
+```
+
+Shows core skills (from `packages/agent/skills/`) and installed extension skills (from `./skills/`), with name and description from each `SKILL.md`.
+
+## Generated Files
+
+### `Dockerfile` (Fly.io / Railway)
+
+```dockerfile
+FROM node:20
+WORKDIR /app
+COPY dist/ ./dist/
+COPY skills/ ./skills/
+COPY package.json .
+COPY start.sh .
+COPY SOUL.md .
+COPY AGENTS.md .
+RUN npm install
+CMD ["sh", "start.sh"]
+```
+
+### `start.sh`
+
+Runs the agent server and XMTP sidecar concurrently:
+
+```bash
+node dist/server/simple.cjs &
+node dist/xmtp.cjs
+```
+
+### `fly.toml`
+
+Generated for Fly.io targets with appropriate service configuration.
+
+## Skills System
+
+Skills are markdown-based tool definitions. Each skill is a directory with:
+
+```
+my-skill/
+└── SKILL.md      # Required: YAML frontmatter + markdown content
+```
+
+**`SKILL.md` frontmatter:**
+```yaml
+---
+name: my-skill
+description: What this skill does
+---
+```
+
+Skills are injected into the agent's system prompt, describing tools and capabilities the LLM can use.
+
+**Skill sources:**
+
+| Source | Format | Example |
+|--------|--------|---------|
+| GitHub | `github:user/repo[/path]` | `github:acme/skills/web-search` |
+| npm | `@scope/pkg` or `pkg-name` | `@acme/weather-skill` |
+| Local | `./relative/path` | `./skills/my-tool` |
+
+## Build Pipeline
+
+```
+hybrid build
+    │
+    ├── pnpm --filter hybrid/agent build
+    │
+    ├── Create .hybrid/
+    │
+    ├── Copy dist/ → .hybrid/dist/
+    │
+    ├── Copy SOUL.md, AGENTS.md, agent.ts
+    │
+    ├── Copy core skills → .hybrid/skills/core/
+    │
+    ├── Copy ./skills/ → .hybrid/skills/ext/
+    │
+    ├── Write skills_lock.json
+    │
+    └── Generate: package.json, Dockerfile, fly.toml, start.sh
+
+hybrid deploy fly
+    │
+    ├── hybrid build --target fly
+    │
+    └── fly deploy (from .hybrid/)
+
+hybrid deploy cf
+    │
+    ├── pnpm --filter hybrid/gateway build
+    │
+    └── wrangler deploy (from packages/gateway/)
+```
+
+## Relation to Other Packages
+
+- Builds `packages/agent` via `pnpm --filter`
+- Deploys `packages/gateway` for Cloudflare Workers target
+- Delegates `register`/`revoke` commands to `@hybrd/xmtp` scripts
+- The output `.hybrid/` directory is what `packages/gateway` runs inside its Docker container
+
+## License
+
+MIT
