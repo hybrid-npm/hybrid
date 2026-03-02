@@ -123,8 +123,8 @@ async function build(target?: string) {
 	const agentDir = projectDir
 	if (existsSync(resolve(agentDir, "SOUL.md"))) {
 		console.log("📋 Copying agent config...")
-		// Copy SOUL.md, AGENTS.md, README.md
-		for (const file of ["SOUL.md", "AGENTS.md", "README.md"]) {
+		// Copy SOUL.md, AGENTS.md (not README.md)
+		for (const file of ["SOUL.md", "AGENTS.md"]) {
 			const src = resolve(agentDir, file)
 			if (existsSync(src)) {
 				cpSync(src, resolve(hybridDir, file))
