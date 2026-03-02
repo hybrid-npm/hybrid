@@ -63,8 +63,7 @@ async function build() {
 			"viem",
 			"@xmtp/agent-sdk",
 			"@xmtp/node-sdk",
-			"@xmtp/node-bindings",
-			"@hybrd/xmtp"
+			"@xmtp/node-bindings"
 		]
 	})
 

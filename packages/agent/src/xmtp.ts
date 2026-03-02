@@ -2,9 +2,8 @@ import { randomUUID } from "node:crypto"
 import fs from "node:fs"
 import http from "node:http"
 import path from "node:path"
-import { revokeOldInstallations } from "@hybrd/xmtp"
 import { Agent, createUser } from "@xmtp/agent-sdk"
-import { Client } from "@xmtp/node-sdk"
+import { Client, type Signer } from "@xmtp/node-sdk"
 import pc from "picocolors"
 import { toBytes } from "viem"
 
@@ -13,6 +12,39 @@ const log = {
 	error: (msg: string) => console.error(`${pc.red("[xmtp]")} ${msg}`),
 	warn: (msg: string) => console.log(`${pc.yellow("[xmtp]")} ${msg}`),
 	success: (msg: string) => console.log(`${pc.green("[xmtp]")} ${msg}`)
+}
+
+async function revokeOldInstallations(
+	signer: Signer,
+	inboxId: string
+): Promise<boolean> {
+	try {
+		log.info("Revoking old installations...")
+
+		const inboxStates = await Client.inboxStateFromInboxIds([inboxId], XMTP_ENV)
+
+		if (!inboxStates[0]) {
+			log.error("No inbox state found")
+			return false
+		}
+
+		const toRevokeInstallationBytes = inboxStates[0].installations.map(
+			(i: { bytes: Uint8Array }) => i.bytes
+		)
+
+		await Client.revokeInstallations(
+			signer,
+			inboxId,
+			toRevokeInstallationBytes,
+			XMTP_ENV
+		)
+
+		log.success(`Revoked ${toRevokeInstallationBytes.length} installations`)
+		return true
+	} catch (error) {
+		log.error(`Revocation failed: ${(error as Error).message}`)
+		return false
+	}
 }
 
 const AGENT_PORT = process.env.AGENT_PORT || "8454"
@@ -114,7 +146,7 @@ async function startSidecar() {
 		`xmtp-${XMTP_ENV}-${user.account.address.toLowerCase().slice(0, 8)}.db3`
 	)
 
-	let agent
+	let agent: Agent | undefined
 	try {
 		agent = await Agent.create(signer as any, {
 			env: XMTP_ENV,
