@@ -75,10 +75,12 @@ async function main() {
 	console.log("  -g, --global                 Use ~/.hybrid/skills/")
 	console.log("")
 	console.log("Sources:")
-	console.log("  github:owner/repo            GitHub repository")
-	console.log("  github:owner/repo/skill     Specific skill in repo")
-	console.log("  @scope/package              npm package")
-	console.log("  ./local-path                Local directory")
+	console.log("  owner/repo                 GitHub shorthand")
+	console.log("  owner/repo/skill          GitHub skill path")
+	console.log("  github:owner/repo         GitHub (explicit)")
+	console.log("  @scope/package            npm scoped package")
+	console.log("  package-name              npm package (bare name)")
+	console.log("  ./local-path              Local directory")
 	console.log("")
 
 	if (command) {
@@ -394,11 +396,11 @@ async function install(source: string, isGlobal = false) {
 
 	// Parse source type
 	if (source.startsWith("github:")) {
-		// GitHub source: github:user/repo/skill or github:user/repo
+		// GitHub explicit: github:owner/repo or github:owner/repo/skill
 		const parts = source.slice(7).split("/")
 		if (parts.length < 2) {
 			console.error(
-				"Invalid GitHub source. Use: github:user/repo or github:user/repo/skill"
+				"Invalid GitHub source. Use: github:owner/repo or github:owner/repo/skill"
 			)
 			process.exit(1)
 		}
@@ -408,7 +410,6 @@ async function install(source: string, isGlobal = false) {
 
 		console.log(`📥 Installing from GitHub: ${repo}...`)
 
-		// Clone to temp directory
 		const tempDir = resolve(tempBase, "skill-install")
 		try {
 			execSync(
@@ -423,7 +424,6 @@ async function install(source: string, isGlobal = false) {
 			process.exit(1)
 		}
 
-		// Find SKILL.md
 		const skillDir = parts[2] ? resolve(tempDir, ...parts.slice(2)) : tempDir
 
 		if (!existsSync(resolve(skillDir, "SKILL.md"))) {
@@ -434,10 +434,21 @@ async function install(source: string, isGlobal = false) {
 		skillPath = resolve(skillsDir, skillName)
 		cpSync(skillDir, skillPath, { recursive: true })
 
-		// Cleanup temp
 		execSync(`rm -rf ${tempDir}`)
-	} else if (source.startsWith("@") || source.includes("/")) {
-		// npm package
+	} else if (source.startsWith("./") || source.startsWith("../")) {
+		// Local path
+		const localPath = resolve(process.cwd(), source)
+
+		if (!existsSync(resolve(localPath, "SKILL.md"))) {
+			console.error(`No SKILL.md found at ${localPath}`)
+			process.exit(1)
+		}
+
+		skillName = source.split("/").pop() || source
+		skillPath = resolve(skillsDir, skillName)
+		cpSync(localPath, skillPath, { recursive: true })
+	} else if (source.startsWith("@")) {
+		// npm scoped package: @scope/package
 		skillName = source.split("/").pop() || source
 
 		console.log(`📥 Installing from npm: ${source}...`)
@@ -462,31 +473,72 @@ async function install(source: string, isGlobal = false) {
 		skillPath = resolve(skillsDir, skillName)
 		cpSync(installedDir, skillPath, { recursive: true })
 
-		// Cleanup temp
 		execSync(`rm -rf ${tempNpmDir}`)
-	} else if (
-		source.startsWith("./") ||
-		source.startsWith("../") ||
-		!source.includes("/")
-	) {
-		// Local path
-		const localPath =
-			source.startsWith("./") || source.startsWith("../")
-				? resolve(process.cwd(), source)
-				: resolve(process.cwd(), source)
-
-		if (!existsSync(resolve(localPath, "SKILL.md"))) {
-			console.error(`No SKILL.md found at ${localPath}`)
+	} else if (source.includes("/")) {
+		// GitHub shorthand: owner/repo or owner/repo/skill
+		const parts = source.split("/")
+		if (parts.length < 2) {
+			console.error("Invalid source. Use: owner/repo or owner/repo/skill")
 			process.exit(1)
 		}
 
-		skillName = source.split("/").pop() || source
+		const repo = parts.slice(0, 2).join("/")
+		skillName = parts[2] || parts[1]
+
+		console.log(`📥 Installing from GitHub: ${repo}...`)
+
+		const tempDir = resolve(tempBase, "skill-install")
+		try {
+			execSync(
+				`git clone --depth 1 https://github.com/${repo}.git ${tempDir}`,
+				{
+					stdio: "inherit",
+					env: { ...process.env, DISABLE_TELEMETRY: "1", DO_NOT_TRACK: "1" }
+				}
+			)
+		} catch {
+			console.error("Failed to clone repository")
+			process.exit(1)
+		}
+
+		const skillDir = parts[2] ? resolve(tempDir, ...parts.slice(2)) : tempDir
+
+		if (!existsSync(resolve(skillDir, "SKILL.md"))) {
+			console.error("No SKILL.md found in repository")
+			process.exit(1)
+		}
+
 		skillPath = resolve(skillsDir, skillName)
-		cpSync(localPath, skillPath, { recursive: true })
+		cpSync(skillDir, skillPath, { recursive: true })
+
+		execSync(`rm -rf ${tempDir}`)
 	} else {
-		console.error("Unknown source format")
-		console.error("Use: github:user/repo, @scope/package, or ./local-path")
-		process.exit(1)
+		// Bare name - treat as npm package
+		skillName = source
+
+		console.log(`📥 Installing from npm: ${source}...`)
+
+		const tempNpmDir = resolve(tempBase, "npm-install")
+		try {
+			execSync(`npm install ${source} --prefix ${tempNpmDir}`, {
+				stdio: "inherit",
+				env: { ...process.env, DISABLE_TELEMETRY: "1", DO_NOT_TRACK: "1" }
+			})
+		} catch {
+			console.error("Failed to install npm package")
+			process.exit(1)
+		}
+
+		const installedDir = resolve(tempNpmDir, "node_modules", source)
+		if (!existsSync(resolve(installedDir, "SKILL.md"))) {
+			console.error("No SKILL.md found in npm package")
+			process.exit(1)
+		}
+
+		skillPath = resolve(skillsDir, skillName)
+		cpSync(installedDir, skillPath, { recursive: true })
+
+		execSync(`rm -rf ${tempNpmDir}`)
 	}
 
 	// Update lockfile
