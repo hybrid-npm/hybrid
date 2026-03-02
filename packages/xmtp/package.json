@@ -23,7 +23,9 @@
 		"lint": "biome lint --unsafe",
 		"lint:fix": "biome lint --write --unsafe",
 		"format": "biome format --write",
-		"register": "tsx scripts/register-wallet.ts"
+		"register": "tsx scripts/register-wallet.ts",
+		"revoke": "tsx scripts/revoke-installations.ts",
+		"revoke-all": "tsx scripts/revoke-all-installations.ts"
 	},
 	"dependencies": {
 		"@hybrd/types": "workspace:*",

@@ -1,7 +1,17 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-import { type Options, query } from "@anthropic-ai/claude-agent-sdk"
+import {
+	type Options,
+	createSdkMcpServer,
+	query
+} from "@anthropic-ai/claude-agent-sdk"
 import { serve } from "@hono/node-server"
+import {
+	type SchedulerExecutor,
+	SchedulerService,
+	createSchedulerTools,
+	createSqliteStore
+} from "@hybrd/scheduler"
 import { MemoryIndexManager, resolveMemoryConfig } from "@hybrid/memory"
 import { Hono } from "hono"
 import pc from "picocolors"
@@ -29,6 +39,14 @@ function debug(...args: unknown[]) {
 
 const XMTP_ENV = process.env.XMTP_ENV || "dev"
 const AGENT_WALLET_KEY = process.env.AGENT_WALLET_KEY
+
+const SCHEDULER_ENABLED = process.env.SCHEDULER_ENABLED !== "false"
+const SCHEDULER_POLL_MS = Number.parseInt(
+	process.env.SCHEDULER_POLL_MS || "60000",
+	10
+)
+
+let scheduler: SchedulerService | null = null
 
 function getWalletAddress(): string | null {
 	if (!AGENT_WALLET_KEY) return null
@@ -81,9 +99,7 @@ function resolveClaudeCodeExecutable(): string {
 		try {
 			readFileSync(p, "utf-8")
 			return p
-		} catch {
-			continue
-		}
+		} catch {}
 	}
 	throw new Error(
 		"Claude Code executable not found. Install @anthropic-ai/claude-agent-sdk or set CLAUDE_CODE_EXECUTABLE_PATH"
@@ -91,6 +107,8 @@ function resolveClaudeCodeExecutable(): string {
 }
 
 const PROJECT_ROOT = process.env.AGENT_PROJECT_ROOT || process.cwd()
+const SCHEDULER_DB_PATH =
+	process.env.SCHEDULER_DB_PATH || join(PROJECT_ROOT, "data", "scheduler.db")
 
 function loadMarkdownFile(relativePath: string): string {
 	try {
@@ -135,6 +153,142 @@ async function initMemory() {
 	}
 }
 
+async function initScheduler() {
+	if (!SCHEDULER_ENABLED) {
+		console.log(`[scheduler] disabled`)
+		return
+	}
+
+	try {
+		const { mkdirSync, existsSync } = await import("node:fs")
+		const { dirname } = await import("node:path")
+
+		// Ensure data directory exists
+		const dbDir = dirname(SCHEDULER_DB_PATH)
+		if (!existsSync(dbDir)) {
+			mkdirSync(dbDir, { recursive: true })
+		}
+
+		console.log(`[scheduler] initializing store at ${SCHEDULER_DB_PATH}...`)
+		const store = await createSqliteStore({ dbPath: SCHEDULER_DB_PATH })
+		console.log(`[scheduler] store initialized`)
+
+		const executor: SchedulerExecutor = {
+			runAgentTurn: async (job) => {
+				console.log(`[scheduler] Running agent turn: ${job.name}`)
+
+				const message =
+					job.payload.kind === "agentTurn" ? job.payload.message : ""
+				const response = await fetch(
+					`http://localhost:${AGENT_PORT}/api/chat`,
+					{
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({
+							messages: [
+								{
+									id: crypto.randomUUID(),
+									role: "user" as const,
+									content: message
+								}
+							],
+							chatId: job.sessionKey || `scheduled-${job.id}`
+						})
+					}
+				)
+
+				if (!response.ok) {
+					return {
+						status: "error" as const,
+						error: `Agent returned ${response.status}`
+					}
+				}
+
+				const reader = response.body?.getReader()
+				const decoder = new TextDecoder()
+				let result = ""
+
+				while (reader) {
+					const { done, value } = await reader.read()
+					if (done) break
+
+					for (const line of decoder.decode(value).split("\n")) {
+						if (line.startsWith("data: ") && line !== "data: [DONE]") {
+							try {
+								const p = JSON.parse(line.slice(6))
+								if (p.type === "text" && p.content) result += p.content
+							} catch {}
+						}
+					}
+				}
+
+				return { status: "ok" as const, summary: result.slice(0, 500) }
+			},
+
+			runSystemEvent: async (job) => {
+				console.log(`[scheduler] Running system event: ${job.name}`)
+				return { status: "ok" as const }
+			}
+		}
+
+		const XMTP_SIDECAR_PORT = process.env.XMTP_SIDECAR_PORT || "8455"
+
+		const dispatcher = {
+			dispatch: async (params: {
+				channel: string
+				to: string
+				message: string
+			}) => {
+				if (params.channel === "xmtp") {
+					try {
+						const res = await fetch(
+							`http://127.0.0.1:${XMTP_SIDECAR_PORT}/api/send`,
+							{
+								method: "POST",
+								headers: { "Content-Type": "application/json" },
+								body: JSON.stringify({
+									conversationId: params.to,
+									message: params.message
+								})
+							}
+						)
+
+						if (res.ok) {
+							return { delivered: true }
+						}
+						return {
+							delivered: false,
+							error: `XMTP sidecar returned ${res.status}`
+						}
+					} catch (err) {
+						return {
+							delivered: false,
+							error: (err as Error).message
+						}
+					}
+				}
+
+				return {
+					delivered: false,
+					error: `Unknown channel: ${params.channel}`
+				}
+			}
+		}
+
+		scheduler = new SchedulerService({
+			store,
+			dispatcher,
+			executor,
+			enabled: true
+		})
+		await scheduler.start()
+		console.log(`[scheduler] initialized`)
+	} catch (err) {
+		console.log(`[scheduler] disabled: ${(err as Error).message}`)
+		console.error(`[scheduler] error stack:`, (err as Error).stack)
+	}
+}
+
 async function searchMemory(
 	query: string,
 	userId?: string,
@@ -146,7 +300,7 @@ async function searchMemory(
 			| { type: "global" }
 			| { type: "user"; userId: string }
 			| { type: "conversation"; userId: string; conversationId: string }
-			| undefined = undefined
+			| undefined
 
 		if (userId && conversationId) {
 			scope = { type: "conversation", userId, conversationId }
@@ -178,6 +332,7 @@ interface ContainerRequest {
 	userId?: string
 	teamId?: string
 	systemPrompt?: string
+	conversationId?: string
 }
 
 function encodeSSE(data: string): Uint8Array {
@@ -261,7 +416,40 @@ async function runAgent(
 		? await searchMemory(lastMessage, req.userId, req.chatId)
 		: null
 
-	const systemPromptParts = [SOUL_MD, req.systemPrompt, AGENTS_MD]
+	const now = new Date()
+	const currentTime = `## Current Time
+
+The current date and time is: ${now.toISOString()}
+- ISO format: ${now.toISOString()}
+- Local: ${now.toLocaleString()}
+- Unix timestamp (ms): ${now.getTime()}
+
+When scheduling tasks, calculate the target time relative to the current time above.`
+
+	const conversationContext = req.conversationId
+		? `## Conversation Context
+
+- Conversation ID: ${req.conversationId}
+- Channel: xmtp
+
+When scheduling reminders, include delivery info to send the message back to this conversation:
+\`\`\`json
+{
+  "name": "Reminder name",
+  "schedule": { "kind": "at", "at": "<ISO timestamp>" },
+  "payload": { "kind": "agentTurn", "message": "Your reminder message" },
+  "delivery": { "mode": "announce", "channel": "xmtp", "to": "${req.conversationId}" }
+}
+\`\`\``
+		: ""
+
+	const systemPromptParts = [
+		SOUL_MD,
+		req.systemPrompt,
+		AGENTS_MD,
+		currentTime,
+		conversationContext
+	]
 	if (memoryContext) {
 		systemPromptParts.push(`\n\n## Relevant Memory\n\n${memoryContext}`)
 	}
@@ -357,6 +545,19 @@ async function runAgent(
 		acl
 	)
 
+	const mcpServers: Options["mcpServers"] = {
+		memory: memoryMcpServer
+	}
+
+	if (scheduler) {
+		const schedulerTools = createSchedulerTools(scheduler)
+		const schedulerMcpServer = createSdkMcpServer({
+			name: "scheduler",
+			tools: schedulerTools
+		})
+		mcpServers.scheduler = schedulerMcpServer
+	}
+
 	const options: Options = {
 		abortController,
 		systemPrompt,
@@ -365,9 +566,7 @@ async function runAgent(
 		settingSources: [],
 		permissionMode: "bypassPermissions",
 		allowDangerouslySkipPermissions: true,
-		mcpServers: {
-			memory: memoryMcpServer
-		},
+		mcpServers,
 		maxTurns: 25,
 		includePartialMessages: true,
 		stderr: (data: string) => {
@@ -660,12 +859,19 @@ function printStartup() {
 	console.log()
 	console.log("  ─────────────────────────────────────────────────")
 	console.log()
+	console.log(`  Scheduler   ${SCHEDULER_ENABLED ? "✓ enabled" : "✗ disabled"}`)
+	if (SCHEDULER_ENABLED) {
+		console.log(`  Sched DB    ${SCHEDULER_DB_PATH}`)
+	}
+	console.log()
+	console.log("  ─────────────────────────────────────────────────")
+	console.log()
 	console.log("  Ready. Waiting for requests...")
 	console.log()
 }
 
 printStartup()
-initMemory().then(() => {
+Promise.all([initMemory(), initScheduler()]).then(() => {
 	serve({ port: AGENT_PORT, fetch: app.fetch })
 })
 

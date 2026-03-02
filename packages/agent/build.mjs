@@ -7,6 +7,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const outdir = join(__dirname, "dist")
 
 mkdirSync(outdir, { recursive: true })
+mkdirSync(join(outdir, "server"), { recursive: true })
 
 async function build() {
 	// Build main index.ts (exports createServer)
@@ -45,7 +46,8 @@ async function build() {
 			"@hono/node-server",
 			"@anthropic-ai/claude-agent-sdk",
 			"@xmtp/node-sdk",
-			"@xmtp/agent-sdk"
+			"@xmtp/agent-sdk",
+			"sql.js"
 		]
 	})
 

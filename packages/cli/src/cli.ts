@@ -31,6 +31,14 @@ async function main() {
 		return register()
 	}
 
+	if (command === "revoke") {
+		return revoke(args[1])
+	}
+
+	if (command === "revoke-all") {
+		return revokeAll()
+	}
+
 	if (command === "install") {
 		return install(args[1])
 	}
@@ -51,6 +59,10 @@ async function main() {
 	console.log("  dev                Start development server")
 	console.log("  dev --docker       Start development server with Docker")
 	console.log("  register           Register wallet on XMTP network")
+	console.log("  revoke <inboxId>   Revoke installations for an inbox ID")
+	console.log(
+		"  revoke-all         Revoke all XMTP installations (auto-detect)"
+	)
 	console.log("  deploy [platform]  Deploy (fly, railway, cf)")
 	console.log("")
 	console.log("Skills:")
@@ -632,6 +644,26 @@ async function dev(useDocker: boolean) {
 	}
 }
 
+async function getFlyToken(): Promise<string | null> {
+	if (process.env.FLY_API_TOKEN) {
+		return process.env.FLY_API_TOKEN
+	}
+
+	const { existsSync, readFileSync } = await import("node:fs")
+	const { homedir } = await import("node:os")
+	const flyConfigPath = `${homedir()}/.fly/config.yml`
+
+	if (existsSync(flyConfigPath)) {
+		const config = readFileSync(flyConfigPath, "utf-8")
+		const match = config.match(/^access_token:\s*(.+)$/m)
+		if (match) {
+			return match[1].trim()
+		}
+	}
+
+	return null
+}
+
 async function deploy(platform = "fly") {
 	const { spawn, execSync } = await import("node:child_process")
 	const { resolve, dirname } = await import("node:path")
@@ -644,7 +676,7 @@ async function deploy(platform = "fly") {
 	await build(platform)
 
 	if (platform === "fly" || !platform) {
-		const flyToken = process.env.FLY_API_TOKEN
+		const flyToken = await getFlyToken()
 		if (!flyToken) {
 			console.error("Error: Please run 'fly auth login' first")
 			console.error("Or set FLY_API_TOKEN environment variable")
@@ -663,9 +695,13 @@ async function deploy(platform = "fly") {
 				{
 					cwd: hybridDir,
 					stdio: "inherit",
-					env: { ...process.env, FLY_API_TOKEN: flyToken }
+					env: { ...process.env, FLY_API_TOKEN: flyToken },
+					shell: true
 				}
 			)
+			deploy.on("error", (err) => {
+				reject(new Error(`Failed to run fly CLI: ${err.message}`))
+			})
 			deploy.on("close", (code) => {
 				if (code === 0) resolve()
 				else reject(new Error(`Deploy failed with code ${code}`))
@@ -786,6 +822,58 @@ async function register() {
 		console.log(
 			"\n❌ Registration failed. Make sure AGENT_WALLET_KEY and AGENT_SECRET are set"
 		)
+		process.exit(1)
+	}
+}
+
+async function revoke(inboxId?: string) {
+	const { execSync } = await import("node:child_process")
+	const { resolve, dirname } = await import("node:path")
+	const { fileURLToPath } = await import("node:url")
+
+	const __dirname = dirname(fileURLToPath(import.meta.url))
+	const rootDir = resolve(__dirname, "../../..")
+
+	if (!inboxId) {
+		console.log("\nUsage: hybrid revoke <inboxId>")
+		console.log("\nExample:")
+		console.log(
+			"  hybrid revoke 02bd1166fa37db6aeda14c49ff9c3cba1bdf89513fbb3ee27a2cfc47af153e6e"
+		)
+		console.log("\nOr use 'hybrid revoke-all' to auto-detect your inbox ID.")
+		process.exit(1)
+	}
+
+	console.log("\n🔄 Revoking XMTP installations...\n")
+
+	try {
+		execSync(`npx pnpm --filter @hybrd/xmtp revoke ${inboxId}`, {
+			cwd: rootDir,
+			stdio: "inherit"
+		})
+	} catch {
+		console.log("\n❌ Revoke failed. Make sure AGENT_WALLET_KEY is set")
+		process.exit(1)
+	}
+}
+
+async function revokeAll() {
+	const { execSync } = await import("node:child_process")
+	const { resolve, dirname } = await import("node:path")
+	const { fileURLToPath } = await import("node:url")
+
+	const __dirname = dirname(fileURLToPath(import.meta.url))
+	const rootDir = resolve(__dirname, "../../..")
+
+	console.log("\n🔄 Revoking all XMTP installations...\n")
+
+	try {
+		execSync("npx pnpm --filter @hybrd/xmtp revoke-all", {
+			cwd: rootDir,
+			stdio: "inherit"
+		})
+	} catch {
+		console.log("\n❌ Revoke failed. Make sure AGENT_WALLET_KEY is set")
 		process.exit(1)
 	}
 }

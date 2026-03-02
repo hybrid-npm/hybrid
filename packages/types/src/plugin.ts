@@ -1,7 +1,6 @@
 import type { Hono } from "hono"
 import { Agent } from "./agent"
 import type { BehaviorRegistry } from "./behavior"
-import type { Scheduler } from "./schedule"
 import type { HonoVariables } from "./xmtp"
 
 /**
@@ -56,6 +55,6 @@ export interface PluginRegistry<TContext = unknown> {
 export interface PluginContext {
 	agent: Agent
 	behaviors?: BehaviorRegistry
-	scheduler?: Scheduler
+	scheduler?: unknown
 	xmtpClient?: unknown
 }
