@@ -369,10 +369,27 @@ async function install(source: string, isGlobal = false) {
 
 	const { resolve, dirname } = await import("node:path")
 	const { fileURLToPath } = await import("node:url")
-	const { existsSync, mkdirSync, cpSync, readFileSync, writeFileSync } =
+	const { existsSync, mkdirSync, cpSync, readFileSync, writeFileSync, rmSync } =
 		await import("node:fs")
 	const { execSync } = await import("node:child_process")
 	const { homedir } = await import("node:os")
+
+	// Helper to find SKILL.md in common locations
+	function findSkillDir(baseDir: string, skillName: string): string | null {
+		const searchPaths = [
+			baseDir,
+			resolve(baseDir, "skills", skillName),
+			resolve(baseDir, skillName),
+			resolve(baseDir, ".agents", "skills", skillName),
+			resolve(baseDir, ".claude", "skills", skillName)
+		]
+		for (const path of searchPaths) {
+			if (existsSync(resolve(path, "SKILL.md"))) {
+				return path
+			}
+		}
+		return null
+	}
 
 	const projectDir = process.cwd()
 	const globalSkillsDir = resolve(homedir(), ".hybrid", "skills")
@@ -411,6 +428,7 @@ async function install(source: string, isGlobal = false) {
 		console.log(`📥 Installing from GitHub: ${repo}...`)
 
 		const tempDir = resolve(tempBase, "skill-install")
+		rmSync(tempDir, { recursive: true, force: true })
 		try {
 			execSync(
 				`git clone --depth 1 https://github.com/${repo}.git ${tempDir}`,
@@ -424,10 +442,24 @@ async function install(source: string, isGlobal = false) {
 			process.exit(1)
 		}
 
-		const skillDir = parts[2] ? resolve(tempDir, ...parts.slice(2)) : tempDir
+		// If specific skill path provided, use it; otherwise search for SKILL.md
+		let skillDir: string
+		if (parts[2]) {
+			skillDir = resolve(tempDir, ...parts.slice(2))
+		} else {
+			const found = findSkillDir(tempDir, skillName)
+			if (!found) {
+				console.error("No SKILL.md found in repository")
+				console.error(
+					`Searched: root, skills/${skillName}/, .agents/skills/${skillName}/`
+				)
+				process.exit(1)
+			}
+			skillDir = found
+		}
 
 		if (!existsSync(resolve(skillDir, "SKILL.md"))) {
-			console.error("No SKILL.md found in repository")
+			console.error(`No SKILL.md found at ${skillDir}`)
 			process.exit(1)
 		}
 
@@ -488,6 +520,7 @@ async function install(source: string, isGlobal = false) {
 		console.log(`📥 Installing from GitHub: ${repo}...`)
 
 		const tempDir = resolve(tempBase, "skill-install")
+		rmSync(tempDir, { recursive: true, force: true })
 		try {
 			execSync(
 				`git clone --depth 1 https://github.com/${repo}.git ${tempDir}`,
@@ -501,10 +534,24 @@ async function install(source: string, isGlobal = false) {
 			process.exit(1)
 		}
 
-		const skillDir = parts[2] ? resolve(tempDir, ...parts.slice(2)) : tempDir
+		// If specific skill path provided, use it; otherwise search for SKILL.md
+		let skillDir: string
+		if (parts[2]) {
+			skillDir = resolve(tempDir, ...parts.slice(2))
+		} else {
+			const found = findSkillDir(tempDir, skillName)
+			if (!found) {
+				console.error("No SKILL.md found in repository")
+				console.error(
+					`Searched: root, skills/${skillName}/, .agents/skills/${skillName}/`
+				)
+				process.exit(1)
+			}
+			skillDir = found
+		}
 
 		if (!existsSync(resolve(skillDir, "SKILL.md"))) {
-			console.error("No SKILL.md found in repository")
+			console.error(`No SKILL.md found at ${skillDir}`)
 			process.exit(1)
 		}
 
