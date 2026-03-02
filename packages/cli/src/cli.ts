@@ -595,7 +595,11 @@ async function install(source: string, isGlobal = false) {
 	}
 	if (existsSync(lockfilePath)) {
 		try {
-			lockfile = JSON.parse(readFileSync(lockfilePath, "utf-8"))
+			const parsed = JSON.parse(readFileSync(lockfilePath, "utf-8"))
+			lockfile = {
+				version: parsed.version || 2,
+				extensions: parsed.extensions || {}
+			}
 		} catch {
 			// Use defaults
 		}
