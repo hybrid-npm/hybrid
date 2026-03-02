@@ -32,11 +32,21 @@ async function main() {
 	}
 
 	if (command === "install") {
-		return install(args[1])
+		const globalIndex = args.indexOf("-g")
+		const globalIndex2 = args.indexOf("--global")
+		const isGlobal = globalIndex !== -1 || globalIndex2 !== -1
+		const sourceArg =
+			args[1] === "-g" || args[1] === "--global" ? args[2] : args[1]
+		return install(sourceArg, isGlobal)
 	}
 
 	if (command === "uninstall") {
-		return uninstall(args[1])
+		const globalIndex = args.indexOf("-g")
+		const globalIndex2 = args.indexOf("--global")
+		const isGlobal = globalIndex !== -1 || globalIndex2 !== -1
+		const nameArg =
+			args[1] === "-g" || args[1] === "--global" ? args[2] : args[1]
+		return uninstall(nameArg, isGlobal)
 	}
 
 	if (command === "skills") {
@@ -55,10 +65,12 @@ async function main() {
 	console.log("")
 	console.log("Skills:")
 	console.log(
-		"  install <source>   Install a skill (github:user/repo, npm, local)"
+		"  install <source> [-g]   Install a skill (github:user/repo, npm, local)"
 	)
-	console.log("  uninstall <name>   Remove an installed skill")
-	console.log("  skills list        List installed skills")
+	console.log("  uninstall <name> [-g]   Remove an installed skill")
+	console.log("  skills list             List installed skills")
+	console.log("")
+	console.log("  -g, --global            Install/remove to ~/.hybrid/skills/")
 	console.log("")
 	console.log("Environment Variables:")
 	console.log("  CLOUDFLARE_API_TOKEN    Required for Cloudflare deploy")
@@ -335,12 +347,17 @@ primary_region = "iad"
 `
 }
 
-async function install(source: string) {
+async function install(source: string, isGlobal = false) {
 	if (!source) {
 		console.error("Error: Skill source required")
-		console.error("Usage: hybrid install github:user/repo/skill")
-		console.error("       hybrid install @scope/skill-name")
-		console.error("       hybrid install ./local-skill")
+		console.error("Usage: hybrid install <source>")
+		console.error("       hybrid install <source> -g  # Global install")
+		console.error("")
+		console.error("Sources:")
+		console.error("  github:user/repo/skill")
+		console.error("  github:user/repo")
+		console.error("  @scope/skill-name")
+		console.error("  ./local-skill")
 		process.exit(1)
 	}
 
@@ -349,11 +366,13 @@ async function install(source: string) {
 	const { existsSync, mkdirSync, cpSync, readFileSync, writeFileSync } =
 		await import("node:fs")
 	const { execSync } = await import("node:child_process")
+	const { homedir } = await import("node:os")
 
-	const __dirname = dirname(fileURLToPath(import.meta.url))
-	const rootDir = resolve(__dirname, "../../..")
-	const skillsDir = resolve(rootDir, "skills")
-	const lockfilePath = resolve(rootDir, "skills-lock.json")
+	const projectDir = process.cwd()
+	const globalSkillsDir = resolve(homedir(), ".hybrid", "skills")
+	const projectSkillsDir = resolve(projectDir, "skills")
+	const skillsDir = isGlobal ? globalSkillsDir : projectSkillsDir
+	const lockfilePath = resolve(skillsDir, "..", "skills-lock.json")
 
 	// Ensure skills directory exists
 	if (!existsSync(skillsDir)) {
@@ -362,6 +381,12 @@ async function install(source: string) {
 
 	let skillName: string
 	let skillPath: string
+
+	// Create temp directory for downloads
+	const tempBase = resolve(skillsDir, ".temp")
+	if (!existsSync(tempBase)) {
+		mkdirSync(tempBase, { recursive: true })
+	}
 
 	// Parse source type
 	if (source.startsWith("github:")) {
@@ -380,12 +405,13 @@ async function install(source: string) {
 		console.log(`📥 Installing from GitHub: ${repo}...`)
 
 		// Clone to temp directory
-		const tempDir = resolve(rootDir, ".temp-skill-install")
+		const tempDir = resolve(tempBase, "skill-install")
 		try {
 			execSync(
 				`git clone --depth 1 https://github.com/${repo}.git ${tempDir}`,
 				{
-					stdio: "inherit"
+					stdio: "inherit",
+					env: { ...process.env, DISABLE_TELEMETRY: "1", DO_NOT_TRACK: "1" }
 				}
 			)
 		} catch {
@@ -412,23 +438,18 @@ async function install(source: string) {
 
 		console.log(`📥 Installing from npm: ${source}...`)
 
+		const tempNpmDir = resolve(tempBase, "npm-install")
 		try {
-			execSync(
-				`npm install ${source} --prefix ${resolve(rootDir, ".temp-npm-install")}`,
-				{
-					stdio: "inherit"
-				}
-			)
+			execSync(`npm install ${source} --prefix ${tempNpmDir}`, {
+				stdio: "inherit",
+				env: { ...process.env, DISABLE_TELEMETRY: "1", DO_NOT_TRACK: "1" }
+			})
 		} catch {
 			console.error("Failed to install npm package")
 			process.exit(1)
 		}
 
-		const installedDir = resolve(
-			rootDir,
-			".temp-npm-install/node_modules",
-			source
-		)
+		const installedDir = resolve(tempNpmDir, "node_modules", source)
 		if (!existsSync(resolve(installedDir, "SKILL.md"))) {
 			console.error("No SKILL.md found in npm package")
 			process.exit(1)
@@ -438,7 +459,7 @@ async function install(source: string) {
 		cpSync(installedDir, skillPath, { recursive: true })
 
 		// Cleanup temp
-		execSync(`rm -rf ${resolve(rootDir, ".temp-npm-install")}`)
+		execSync(`rm -rf ${tempNpmDir}`)
 	} else if (
 		source.startsWith("./") ||
 		source.startsWith("../") ||
@@ -488,26 +509,33 @@ async function install(source: string) {
 	console.log(`   Location: skills/${skillName}/`)
 }
 
-async function uninstall(name: string) {
+async function uninstall(name: string, isGlobal = false) {
 	if (!name) {
 		console.error("Error: Skill name required")
 		console.error("Usage: hybrid uninstall <skill-name>")
+		console.error(
+			"       hybrid uninstall <skill-name> -g  # Remove global skill"
+		)
 		process.exit(1)
 	}
 
-	const { resolve, dirname } = await import("node:path")
-	const { fileURLToPath } = await import("node:url")
+	const { resolve } = await import("node:path")
+	const { homedir } = await import("node:os")
 	const { existsSync, rmSync, readFileSync, writeFileSync } = await import(
 		"node:fs"
 	)
 
-	const __dirname = dirname(fileURLToPath(import.meta.url))
-	const rootDir = resolve(__dirname, "../../..")
-	const skillPath = resolve(rootDir, "skills", name)
-	const lockfilePath = resolve(rootDir, "skills-lock.json")
+	const projectDir = process.cwd()
+	const globalSkillsDir = resolve(homedir(), ".hybrid", "skills")
+	const projectSkillsDir = resolve(projectDir, "skills")
+	const skillsDir = isGlobal ? globalSkillsDir : projectSkillsDir
+	const skillPath = resolve(skillsDir, name)
+	const lockfilePath = resolve(skillsDir, "..", "skills-lock.json")
 
 	if (!existsSync(skillPath)) {
-		console.error(`Skill '${name}' not found in skills/`)
+		console.error(
+			`Skill '${name}' not found in ${isGlobal ? "~/.hybrid/skills/" : "./skills/"}`
+		)
 		process.exit(1)
 	}
 
@@ -524,26 +552,26 @@ async function uninstall(name: string) {
 }
 
 async function skillsList() {
-	const { resolve, dirname } = await import("node:path")
-	const { fileURLToPath } = await import("node:url")
+	const { resolve } = await import("node:path")
+	const { homedir } = await import("node:os")
 	const { existsSync, readdirSync, readFileSync } = await import("node:fs")
 
-	const __dirname = dirname(fileURLToPath(import.meta.url))
-	const rootDir = resolve(__dirname, "../../..")
+	const projectDir = process.cwd()
+	const globalSkillsDir = resolve(homedir(), ".hybrid", "skills")
+	const projectSkillsDir = resolve(projectDir, "skills")
 
-	// Core skills
-	const coreSkillsDir = resolve(rootDir, "packages/agent/skills")
-	console.log("\n📚 Core Skills:")
-	if (existsSync(coreSkillsDir)) {
-		const coreSkills = readdirSync(coreSkillsDir, { withFileTypes: true })
+	// Project skills
+	console.log("\n🔌 Project Skills (./skills/):")
+	if (existsSync(projectSkillsDir)) {
+		const projectSkills = readdirSync(projectSkillsDir, { withFileTypes: true })
 			.filter((dirent) => dirent.isDirectory())
 			.map((dirent) => dirent.name)
 
-		if (coreSkills.length === 0) {
+		if (projectSkills.length === 0) {
 			console.log("   (none)")
 		} else {
-			for (const skill of coreSkills) {
-				const skillMdPath = resolve(coreSkillsDir, skill, "SKILL.md")
+			for (const skill of projectSkills) {
+				const skillMdPath = resolve(projectSkillsDir, skill, "SKILL.md")
 				let description = ""
 				if (existsSync(skillMdPath)) {
 					const content = readFileSync(skillMdPath, "utf-8")
@@ -553,21 +581,22 @@ async function skillsList() {
 				console.log(`   ${skill}${description ? ` - ${description}` : ""}`)
 			}
 		}
+	} else {
+		console.log("   (none)")
 	}
 
-	// User skills
-	const userSkillsDir = resolve(rootDir, "skills")
-	console.log("\n🔌 Installed Extensions:")
-	if (existsSync(userSkillsDir)) {
-		const userSkills = readdirSync(userSkillsDir, { withFileTypes: true })
+	// Global skills
+	console.log("\n🌐 Global Skills (~/.hybrid/skills/):")
+	if (existsSync(globalSkillsDir)) {
+		const globalSkills = readdirSync(globalSkillsDir, { withFileTypes: true })
 			.filter((dirent) => dirent.isDirectory())
 			.map((dirent) => dirent.name)
 
-		if (userSkills.length === 0) {
+		if (globalSkills.length === 0) {
 			console.log("   (none)")
 		} else {
-			for (const skill of userSkills) {
-				const skillMdPath = resolve(userSkillsDir, skill, "SKILL.md")
+			for (const skill of globalSkills) {
+				const skillMdPath = resolve(globalSkillsDir, skill, "SKILL.md")
 				let description = ""
 				if (existsSync(skillMdPath)) {
 					const content = readFileSync(skillMdPath, "utf-8")
@@ -577,16 +606,8 @@ async function skillsList() {
 				console.log(`   ${skill}${description ? ` - ${description}` : ""}`)
 			}
 		}
-	}
-
-	// Lockfile info
-	const lockfilePath = resolve(rootDir, "skills-lock.json")
-	if (existsSync(lockfilePath)) {
-		const lockfile = JSON.parse(readFileSync(lockfilePath, "utf-8"))
-		console.log(
-			"\n📋 Lockfile entries:",
-			Object.keys(lockfile.extensions || {}).length
-		)
+	} else {
+		console.log("   (none)")
 	}
 
 	console.log("")
