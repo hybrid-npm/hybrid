@@ -31,26 +31,30 @@ async function main() {
 		return register()
 	}
 
-	if (command === "install") {
-		const globalIndex = args.indexOf("-g")
-		const globalIndex2 = args.indexOf("--global")
-		const isGlobal = globalIndex !== -1 || globalIndex2 !== -1
-		const sourceArg =
-			args[1] === "-g" || args[1] === "--global" ? args[2] : args[1]
-		return install(sourceArg, isGlobal)
-	}
-
-	if (command === "uninstall") {
-		const globalIndex = args.indexOf("-g")
-		const globalIndex2 = args.indexOf("--global")
-		const isGlobal = globalIndex !== -1 || globalIndex2 !== -1
-		const nameArg =
-			args[1] === "-g" || args[1] === "--global" ? args[2] : args[1]
-		return uninstall(nameArg, isGlobal)
-	}
-
 	if (command === "skills") {
-		return skillsList()
+		const subcommand = args[1]
+		if (subcommand === "add") {
+			const globalIndex = args.indexOf("-g")
+			const globalIndex2 = args.indexOf("--global")
+			const isGlobal = globalIndex !== -1 || globalIndex2 !== -1
+			const sourceArg =
+				args[2] === "-g" || args[2] === "--global" ? args[3] : args[2]
+			return install(sourceArg, isGlobal)
+		}
+		if (subcommand === "remove" || subcommand === "rm") {
+			const globalIndex = args.indexOf("-g")
+			const globalIndex2 = args.indexOf("--global")
+			const isGlobal = globalIndex !== -1 || globalIndex2 !== -1
+			const nameArg =
+				args[2] === "-g" || args[2] === "--global" ? args[3] : args[2]
+			return uninstall(nameArg, isGlobal)
+		}
+		if (subcommand === "list" || subcommand === "ls" || !subcommand) {
+			return skillsList()
+		}
+		console.error(`Unknown skills subcommand: ${subcommand}`)
+		console.error("Usage: hybrid skills add|remove|list")
+		process.exit(1)
 	}
 
 	console.log("Usage: hybrid <command>")
@@ -64,13 +68,17 @@ async function main() {
 	console.log("  deploy [platform]  Deploy (fly, railway, cf)")
 	console.log("")
 	console.log("Skills:")
-	console.log(
-		"  install <source> [-g]   Install a skill (github:user/repo, npm, local)"
-	)
-	console.log("  uninstall <name> [-g]   Remove an installed skill")
-	console.log("  skills list             List installed skills")
+	console.log("  skills add <source> [-g]    Install a skill")
+	console.log("  skills remove <name> [-g]    Remove a skill")
+	console.log("  skills list                  List installed skills")
 	console.log("")
-	console.log("  -g, --global            Install/remove to ~/.hybrid/skills/")
+	console.log("  -g, --global                 Use ~/.hybrid/skills/")
+	console.log("")
+	console.log("Sources:")
+	console.log("  github:owner/repo            GitHub repository")
+	console.log("  github:owner/repo/skill     Specific skill in repo")
+	console.log("  @scope/package              npm package")
+	console.log("  ./local-path                Local directory")
 	console.log("")
 	console.log("Environment Variables:")
 	console.log("  CLOUDFLARE_API_TOKEN    Required for Cloudflare deploy")
@@ -350,14 +358,14 @@ primary_region = "iad"
 async function install(source: string, isGlobal = false) {
 	if (!source) {
 		console.error("Error: Skill source required")
-		console.error("Usage: hybrid install <source>")
-		console.error("       hybrid install <source> -g  # Global install")
+		console.error("Usage: hybrid skills add <source>")
+		console.error("       hybrid skills add <source> -g  # Global install")
 		console.error("")
 		console.error("Sources:")
-		console.error("  github:user/repo/skill")
-		console.error("  github:user/repo")
-		console.error("  @scope/skill-name")
-		console.error("  ./local-skill")
+		console.error("  github:owner/repo")
+		console.error("  github:owner/repo/skill")
+		console.error("  @scope/package")
+		console.error("  ./local-path")
 		process.exit(1)
 	}
 
@@ -512,9 +520,9 @@ async function install(source: string, isGlobal = false) {
 async function uninstall(name: string, isGlobal = false) {
 	if (!name) {
 		console.error("Error: Skill name required")
-		console.error("Usage: hybrid uninstall <skill-name>")
+		console.error("Usage: hybrid skills remove <skill-name>")
 		console.error(
-			"       hybrid uninstall <skill-name> -g  # Remove global skill"
+			"       hybrid skills remove <skill-name> -g  # Remove global skill"
 		)
 		process.exit(1)
 	}
