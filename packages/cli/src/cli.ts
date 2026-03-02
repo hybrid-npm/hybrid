@@ -766,22 +766,16 @@ async function deploy(platform = "fly") {
 	const { fileURLToPath } = await import("node:url")
 
 	const __dirname = dirname(fileURLToPath(import.meta.url))
-	const rootDir = resolve(__dirname, "../../..")
+	const projectDir = process.cwd()
+	const monorepoDir = resolve(__dirname, "../../..")
 
 	// Build first
 	await build(platform)
 
 	if (platform === "fly" || !platform) {
-		const flyToken = process.env.FLY_API_TOKEN
-		if (!flyToken) {
-			console.error("Error: Please run 'fly auth login' first")
-			console.error("Or set FLY_API_TOKEN environment variable")
-			process.exit(1)
-		}
-
 		console.log("\n🚀 Deploying to Fly.io...")
 
-		const hybridDir = resolve(rootDir, ".hybrid")
+		const hybridDir = resolve(projectDir, ".hybrid")
 
 		// Deploy from .hybrid directory with the generated fly.toml
 		await new Promise<void>((resolve, reject) => {
@@ -790,8 +784,7 @@ async function deploy(platform = "fly") {
 				["deploy", "--config", "fly.toml", "--dockerfile", "Dockerfile"],
 				{
 					cwd: hybridDir,
-					stdio: "inherit",
-					env: { ...process.env, FLY_API_TOKEN: flyToken }
+					stdio: "inherit"
 				}
 			)
 			deploy.on("close", (code) => {
@@ -821,7 +814,7 @@ async function deploy(platform = "fly") {
 
 		try {
 			execSync("npx pnpm --filter hybrid/gateway run build", {
-				cwd: rootDir,
+				cwd: monorepoDir,
 				stdio: "inherit"
 			})
 		} catch {
@@ -833,7 +826,7 @@ async function deploy(platform = "fly") {
 
 		try {
 			execSync("npx wrangler deploy", {
-				cwd: resolve(rootDir, "packages/gateway"),
+				cwd: resolve(monorepoDir, "packages/gateway"),
 				stdio: "inherit"
 			})
 		} catch {
