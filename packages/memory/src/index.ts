@@ -51,9 +51,17 @@ export {
 } from "./validate.js"
 export {
 	getProjectHash,
+	getMemoryRoot,
 	getSharedMemoryPath,
 	getUserMemoryPath,
 	getProjectMemoryPath,
+	getParaRoot,
+	getProjectsPath,
+	getAreasPath,
+	getResourcesPath,
+	getArchivesPath,
+	getLogsPath,
+	getDailyLogPath,
 	getMemoryPaths,
 	type MemoryPaths
 } from "./paths.js"
@@ -66,3 +74,32 @@ export {
 	type Role,
 	type ACL
 } from "./acl.js"
+export {
+	createEntity,
+	addFact,
+	supersedeFact,
+	accessFact,
+	computeDecayTier,
+	generateSummary,
+	rewriteSummaries,
+	searchFacts,
+	type ParaBucket,
+	type EntityCategory,
+	type FactCategory,
+	type FactStatus,
+	type DecayTier,
+	type AtomicFact,
+	type Entity,
+	type ItemsFile
+} from "./para.js"
+export {
+	appendToLog,
+	logEvent,
+	logFact,
+	logDecision,
+	logAction,
+	readLog,
+	extractFactsFromLog,
+	extractDecisionsFromLog,
+	type LogEntry
+} from "./daily-log.js"

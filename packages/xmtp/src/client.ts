@@ -86,6 +86,12 @@ async function clearXMTPDatabase(address: string, env: string) {
 				: path.resolve(process.cwd(), customStoragePath)
 		}
 
+		// Check for .hybrid/.xmtp in current working directory first
+		const hybridXmtpPath = path.join(process.cwd(), ".hybrid", ".xmtp")
+		if (fs.existsSync(hybridXmtpPath)) {
+			return hybridXmtpPath
+		}
+
 		// Use existing logic as fallback
 		const projectRoot =
 			process.env.PROJECT_ROOT || path.resolve(__dirname, "../../..")
@@ -100,6 +106,8 @@ async function clearXMTPDatabase(address: string, env: string) {
 	// Primary storage directory
 	const possiblePaths = [
 		storageDir,
+		// .hybrid/.xmtp path
+		path.join(process.cwd(), ".hybrid", ".xmtp"),
 		// Legacy fallback paths for backward compatibility
 		path.join(process.cwd(), ".data", "xmtp"),
 		path.join(process.cwd(), "..", ".data", "xmtp"),
@@ -370,12 +378,18 @@ export const getDbPath = async (description = "xmtp", storagePath?: string) => {
 			? storagePath
 			: path.resolve(process.cwd(), storagePath)
 	} else {
-		// Use existing logic as fallback
-		const projectRoot =
-			process.env.PROJECT_ROOT || path.resolve(__dirname, "../../..")
+		// Check for .hybrid/.xmtp in current working directory first
+		const hybridXmtpPath = path.join(process.cwd(), ".hybrid", ".xmtp")
+		if (fs.existsSync(hybridXmtpPath)) {
+			volumePath = hybridXmtpPath
+		} else {
+			// Use existing logic as fallback
+			const projectRoot =
+				process.env.PROJECT_ROOT || path.resolve(__dirname, "../../..")
 
-		// Default storage path for local development
-		volumePath = path.join(projectRoot, ".data/xmtp")
+			// Default storage path for local development
+			volumePath = path.join(projectRoot, ".data/xmtp")
+		}
 	}
 
 	const dbPath = `${volumePath}/${description}.db3`
