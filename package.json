@@ -11,7 +11,7 @@
 	"packageManager": "pnpm@9.15.5",
 	"scripts": {
 		"build": "turbo run build --ui stream",
-		"build:watch": "turbo run build:watch --ui stream",
+		"build:watch": "turbo run build:watch --ui stream --filter=./packages/**",
 		"build:packages": "turbo run build --ui stream --filter=./packages/**",
 		"clean": "pnpm -r clean",
 		"nuke": "find . -name 'node_modules' -type d -exec rm -rf {} +",

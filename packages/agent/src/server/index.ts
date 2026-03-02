@@ -4,6 +4,7 @@ import { type Options, query } from "@anthropic-ai/claude-agent-sdk"
 import { serve } from "@hono/node-server"
 import { MemoryIndexManager, resolveMemoryConfig } from "@hybrid/memory"
 import { Hono } from "hono"
+import pc from "picocolors"
 import { privateKeyToAccount } from "viem/accounts"
 import { createMemoryMcpServer, resolveUserRole } from "../memory-tools"
 
@@ -427,6 +428,9 @@ async function runAgent(
 							if (event.type === "content_block_start") {
 								const block = (event as any).content_block
 								if (block?.type === "tool_use") {
+									console.log(
+										`${pc.cyan("[agent]")} 🔧 tool: ${pc.yellow(block.name)}`
+									)
 									controller.enqueue(
 										encodeSSEJson({
 											type: "tool-call-start",
@@ -468,6 +472,10 @@ async function runAgent(
 							}
 						} else if (msg.type === "result") {
 							const usage = msg.usage
+							console.log()
+							console.log(
+								`${pc.green("[agent]")} ${pc.bold("✓")} done ${pc.gray(`${messageCount} msgs`)} ${pc.gray(`| ${usage?.input_tokens ?? 0} in / ${usage?.output_tokens ?? 0} out`)}`
+							)
 							controller.enqueue(
 								encodeSSEJson({
 									type: "usage",
@@ -480,9 +488,6 @@ async function runAgent(
 						}
 					}
 
-					console.log(
-						`[agent] conversation done after ${messageCount} messages`
-					)
 					controller.enqueue(encodeDone())
 					controller.close()
 				} catch (err) {
@@ -541,9 +546,15 @@ app.post(AGENT_ENDPOINT, async (c) => {
 	const requestId = c.req.header("X-Request-ID") || "unknown"
 	const source = c.req.header("X-Source") || "unknown"
 	const req = await c.req.json<ContainerRequest>()
+	const preview = req.messages.at(-1)?.content?.slice(0, 50) || ""
+	console.log()
 	console.log(
-		`[agent] source=${source} id=${requestId} msgs=${req.messages.length} chatId=${req.chatId.slice(0, 8)}`
+		`${pc.cyan("[agent]")} ${pc.bold("←")} ${source} ${pc.gray(`(${req.messages.length} msgs)`)}`
 	)
+	if (preview)
+		console.log(
+			`${pc.gray("  └")} "${preview}${preview.length >= 50 ? "..." : ""}"`
+		)
 	const stream = await runAgent(req)
 
 	return new Response(stream, {

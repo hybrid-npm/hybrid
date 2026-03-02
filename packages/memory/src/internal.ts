@@ -92,6 +92,7 @@ export async function listMemoryFiles(
 	const memoryFile = path.join(workspaceDir, "MEMORY.md")
 	const altMemoryFile = path.join(workspaceDir, "memory.md")
 	const memoryDir = path.join(workspaceDir, "memory")
+	const hybridMemoryDir = path.join(workspaceDir, ".hybrid", "memory")
 
 	const addMarkdownFile = async (absPath: string) => {
 		try {
@@ -112,6 +113,14 @@ export async function listMemoryFiles(
 		const dirStat = await fs.lstat(memoryDir)
 		if (!dirStat.isSymbolicLink() && dirStat.isDirectory()) {
 			await walkDir(memoryDir, result)
+		}
+	} catch {}
+
+	// Include .hybrid/memory/ directory
+	try {
+		const hybridStat = await fs.lstat(hybridMemoryDir)
+		if (!hybridStat.isSymbolicLink() && hybridStat.isDirectory()) {
+			await walkDir(hybridMemoryDir, result)
 		}
 	} catch {}
 
@@ -159,6 +168,26 @@ export function hashText(value: string): string {
 	return crypto.createHash("sha256").update(value).digest("hex")
 }
 
+function extractUserIdFromPath(
+	absPath: string,
+	workspaceDir: string
+): string | null {
+	const memoryUsersDir = path.join(workspaceDir, ".hybrid", "memory", "users")
+	const normalizedPath = absPath.replace(/\\/g, "/")
+	const normalizedUsersDir = memoryUsersDir.replace(/\\/g, "/")
+
+	if (!normalizedPath.startsWith(normalizedUsersDir + "/")) {
+		return null
+	}
+
+	const relativePath = normalizedPath.slice(normalizedUsersDir.length + 1)
+	const parts = relativePath.split("/")
+	if (parts.length >= 1) {
+		return parts[0] || null
+	}
+	return null
+}
+
 export async function buildFileEntry(
 	absPath: string,
 	workspaceDir: string,
@@ -184,13 +213,18 @@ export async function buildFileEntry(
 		throw err
 	}
 	const hash = hashText(content)
+
+	// Extract userId from path if in .hybrid/memory/users/{userId}/
+	const pathUserId = extractUserIdFromPath(absPath, workspaceDir)
+	const effectiveUserId = pathUserId || userId
+
 	return {
 		path: path.relative(workspaceDir, absPath).replace(/\\/g, "/"),
 		absPath,
 		mtimeMs: stat.mtimeMs,
 		size: stat.size,
 		hash,
-		userId,
+		userId: effectiveUserId,
 		conversationId
 	}
 }

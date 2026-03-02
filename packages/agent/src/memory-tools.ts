@@ -27,11 +27,15 @@ export function createMemoryMcpServer(
 ) {
 	const memorySaveTool = tool(
 		"MemorySave",
-		`Save information to persistent memory. Use this when:
-- User shares a preference (e.g., "I prefer TypeScript")
-- You learn something important about the project
-- A decision is made that should be remembered
-- Context that would be useful in future sessions
+		`Save information to THIS USER's persistent memory. Use this when the user asks you to remember something.
+
+This writes to .hybrid/memory/users/{userId}/MEMORY.md - each user has their own private memory.
+
+Use for:
+- User preferences ("I prefer dark mode")
+- Personal facts ("My birthday is June 15")
+- Anything user says to "remember this" or "remember that"
+- Notes specific to this user
 
 Categories:
 - preferences: User preferences and settings
@@ -413,28 +417,30 @@ Decay Tiers:
 
 	const logFactTool = tool(
 		"LogFact",
-		"Log a fact learned during this session to the daily log.",
+		"Log a fact to the GLOBAL session log (not user-specific). This is a daily log file visible to all users. For user-specific memories, use MemorySave instead.",
 		{
 			content: z.string().describe("The fact learned")
 		},
 		async (args) => {
 			await logFact(workspaceDir, args.content)
 			return {
-				content: [{ type: "text", text: "Fact logged" }]
+				content: [{ type: "text", text: "Fact logged to global session log" }]
 			}
 		}
 	)
 
 	const logDecisionTool = tool(
 		"LogDecision",
-		"Log a decision made during this session to the daily log.",
+		"Log a decision to the GLOBAL session log (not user-specific). This is a daily log file visible to all users. For user-specific memories, use MemorySave instead.",
 		{
 			content: z.string().describe("The decision made")
 		},
 		async (args) => {
 			await logDecision(workspaceDir, args.content)
 			return {
-				content: [{ type: "text", text: "Decision logged" }]
+				content: [
+					{ type: "text", text: "Decision logged to global session log" }
+				]
 			}
 		}
 	)

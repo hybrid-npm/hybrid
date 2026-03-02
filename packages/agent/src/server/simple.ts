@@ -1,13 +1,14 @@
 import fs from "node:fs"
 import { serve } from "@hono/node-server"
 import { Hono } from "hono"
+import pc from "picocolors"
 import { privateKeyToAccount } from "viem/accounts"
 
 const AGENT_PORT = Number.parseInt(process.env.AGENT_PORT || "8454")
 const DEBUG = process.env.DEBUG === "true" || process.env.DEBUG === "1"
 
 function debug(...args: unknown[]) {
-	if (DEBUG) console.log("[server:debug]", ...args)
+	if (DEBUG) console.log(pc.gray("[server:debug]"), ...args)
 }
 
 debug("DEBUG mode enabled")
@@ -123,9 +124,8 @@ app.post("/api/chat", async (c) => {
 		chatId: body.chatId,
 		msgCount: body.messages.length
 	})
-	console.log(`[agent] received request`)
 	console.log(
-		`[agent] messages: ${body.messages.length}, chatId: ${body.chatId}`
+		`${pc.cyan("[server]")} request chatId=${body.chatId.slice(0, 8)} msgs=${body.messages.length}`
 	)
 
 	const { baseUrl, authToken, apiKey } = getProviderConfig()
@@ -153,7 +153,9 @@ app.post("/api/chat", async (c) => {
 
 			try {
 				debug("Fetching from API", { url: `${baseUrl}/v1/chat/completions` })
-				console.log(`[agent] calling ${baseUrl}/v1/chat/completions`)
+				console.log(
+					`${pc.cyan("[server]")} → ${baseUrl.includes("openrouter") ? "OpenRouter" : "Anthropic"}`
+				)
 
 				const response = await fetch(`${baseUrl}/v1/chat/completions`, {
 					method: "POST",
@@ -176,7 +178,8 @@ app.post("/api/chat", async (c) => {
 
 				if (!response.ok) {
 					const errorText = await response.text()
-					console.error(`[agent] API error: ${response.status} ${errorText}`)
+					console.error(`${pc.red("[server]")} API error: ${response.status}`)
+					debug("API error details", errorText)
 					controller.enqueue(
 						encodeSSE({
 							type: "error",
@@ -243,7 +246,10 @@ app.post("/api/chat", async (c) => {
 				controller.enqueue(encoder.encode("data: [DONE]\n\n"))
 				controller.close()
 			} catch (err) {
-				console.error(`[agent] error:`, err)
+				console.error(
+					`${pc.red("[server]")} error:`,
+					err instanceof Error ? err.message : err
+				)
 				controller.enqueue(
 					encodeSSE({
 						type: "error",
@@ -288,31 +294,64 @@ function streamError(message: string) {
 	)
 }
 
-console.log("")
-console.log("  ╭──────────────────────────────────────────────────╮")
-console.log("  │              Hybrid Agent Server                 │")
-console.log("  ╰──────────────────────────────────────────────────╯")
-console.log("")
-console.log(`  Server      http://localhost:${AGENT_PORT}`)
-console.log(`  Health      http://localhost:${AGENT_PORT}/health`)
-console.log(`  Chat        http://localhost:${AGENT_PORT}/api/chat`)
-console.log("")
-console.log("  ─────────────────────────────────────────────────")
-console.log("")
+function printBanner() {
+	const { baseUrl, authToken, apiKey } = getProviderConfig()
+	const walletAddress = getWalletAddress()
+	const isHotReload = process.env.TSX_WATCH === "true"
 
-const { baseUrl, authToken, apiKey } = getProviderConfig()
-const walletAddress = getWalletAddress()
+	console.log("")
+	console.log(
+		pc.cyan("  ╭───────────────────────────────────────────────────╮")
+	)
+	console.log(
+		pc.cyan("  │") +
+			pc.bold(pc.white("      Hybrid Agent Server")) +
+			pc.cyan("                        │")
+	)
+	console.log(
+		pc.cyan("  ╰───────────────────────────────────────────────────╯")
+	)
+	console.log("")
+	console.log(
+		`  ${pc.green("➜")}  ${pc.bold("Server")}   http://localhost:${AGENT_PORT}`
+	)
+	console.log(
+		`  ${pc.blue("➜")}  ${pc.bold("Health")}   http://localhost:${AGENT_PORT}/health`
+	)
+	console.log(
+		`  ${pc.yellow("➜")}  ${pc.bold("Chat")}     http://localhost:${AGENT_PORT}/api/chat`
+	)
+	console.log("")
+	console.log(
+		pc.gray("  ─────────────────────────────────────────────────────")
+	)
+	console.log("")
+	console.log(
+		`  ${pc.bold("Provider")}   ${baseUrl.includes("openrouter") ? pc.magenta("OpenRouter") : pc.blue("Anthropic")}`
+	)
+	console.log(
+		`  ${pc.bold("API Key")}    ${authToken || apiKey ? pc.green("✓ set") : pc.red("✗ not set")}`
+	)
+	console.log(
+		`  ${pc.bold("Wallet")}     ${walletAddress ? pc.cyan(walletAddress) : pc.gray("(not configured)")}`
+	)
+	console.log("")
+	console.log(
+		pc.gray("  ─────────────────────────────────────────────────────")
+	)
+	console.log("")
 
-console.log(
-	`  Provider    ${baseUrl.includes("openrouter") ? "OpenRouter" : "Anthropic"}`
-)
-console.log(`  API Key     ${authToken || apiKey ? "✓ set" : "✗ not set"}`)
-console.log(`  Wallet      ${walletAddress || "(not configured)"}`)
-console.log("")
-console.log("  ─────────────────────────────────────────────────")
-console.log("")
-console.log("  Ready. Waiting for requests...")
-console.log("")
+	if (isHotReload) {
+		console.log(
+			`  ${pc.yellow("⚡")} Hot reload enabled - watching for changes...`
+		)
+	} else {
+		console.log(`  ${pc.green("✓")} Ready. Waiting for requests...`)
+	}
+	console.log("")
+}
+
+printBanner()
 
 serve({
 	fetch: app.fetch,

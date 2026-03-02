@@ -79,6 +79,12 @@ importers:
       '@xmtp/agent-sdk':
         specifier: 0.0.14
         version: 0.0.14(bufferutil@4.0.9)(typescript@5.9.2)(utf-8-validate@5.0.10)(zod@4.3.6)
+      '@xmtp/node-bindings':
+        specifier: ^1.9.1
+        version: 1.9.1
+      '@xmtp/node-sdk':
+        specifier: ^4.1.0
+        version: 4.1.2
       ai:
         specifier: ^6.0.0
         version: 6.0.49(zod@4.3.6)
@@ -97,6 +103,9 @@ importers:
       openai:
         specifier: ^4.0.0
         version: 4.104.0(ws@8.18.3(bufferutil@4.0.9)(utf-8-validate@5.0.10))(zod@4.3.6)
+      picocolors:
+        specifier: ^1.1.1
+        version: 1.1.1
       viem:
         specifier: ^2.46.2
         version: 2.46.2(bufferutil@4.0.9)(typescript@5.9.2)(utf-8-validate@5.0.10)(zod@4.3.6)
@@ -111,6 +120,9 @@ importers:
         specifier: ^0.1.0
         version: 0.1.6
     devDependencies:
+      '@types/better-sqlite3':
+        specifier: ^7.6.13
+        version: 7.6.13
       '@types/node':
         specifier: ^20.0.0
         version: 20.19.35
@@ -2121,6 +2133,10 @@ packages:
   '@xmtp/node-bindings@1.4.0':
     resolution: {integrity: sha512-NfpbDc0gdhDY+5x1gxlv3I/5EtGLuwfkQszy08HXQHCchFrdpyA3NcnM9C2OQK7992H7f+bGEUlzaRze6Iqrbw==}
     engines: {node: '>=18'}
+
+  '@xmtp/node-bindings@1.9.1':
+    resolution: {integrity: sha512-0cnAq7j8dPvxDZ5d7JpdbWTgSIKDiN421dxZj4sy1qw7QLOH4yTUKuuMY7CxoChoGa7/QPZGm+0sIIx/Gs2bAg==}
+    engines: {node: '>=22'}
 
   '@xmtp/node-sdk@4.1.0':
     resolution: {integrity: sha512-tDXrwVnxUzyrjlmFE9FuBpR2j8OtE4hrDMLdBpEvoTjMHvWiPyzaxHoE8FZLOaSoW/zwncGHLH0VE59j7PQx+g==}
@@ -6280,6 +6296,8 @@ snapshots:
       '@xmtp/content-type-primitives': 2.0.2
 
   '@xmtp/node-bindings@1.4.0': {}
+
+  '@xmtp/node-bindings@1.9.1': {}
 
   '@xmtp/node-sdk@4.1.0':
     dependencies:
