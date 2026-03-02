@@ -80,10 +80,6 @@ async function main() {
 	console.log("  @scope/package              npm package")
 	console.log("  ./local-path                Local directory")
 	console.log("")
-	console.log("Environment Variables:")
-	console.log("  CLOUDFLARE_API_TOKEN    Required for Cloudflare deploy")
-	console.log("  FLY_API_TOKEN           Required for Fly.io deploy")
-	console.log("")
 
 	if (command) {
 		process.exit(1)
