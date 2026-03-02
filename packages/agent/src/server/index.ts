@@ -1,22 +1,16 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-import {
-	type Options,
-	createSdkMcpServer,
-	query
-} from "@anthropic-ai/claude-agent-sdk"
+import { query } from "@anthropic-ai/claude-agent-sdk"
 import { serve } from "@hono/node-server"
 import {
 	type SchedulerExecutor,
 	SchedulerService,
-	createSchedulerTools,
 	createSqliteStore
 } from "@hybrd/scheduler"
 import { MemoryIndexManager, resolveMemoryConfig } from "@hybrid/memory"
 import { Hono } from "hono"
 import pc from "picocolors"
 import { privateKeyToAccount } from "viem/accounts"
-import { createMemoryMcpServer, resolveUserRole } from "../memory-tools"
 
 const _dirname = typeof __dirname !== "undefined" ? __dirname : process.cwd()
 
@@ -442,11 +436,13 @@ When scheduling reminders, include delivery info to send the message back to thi
 }
 \`\`\`
 
-**Important**: When confirming a scheduled reminder to the user:
-- Use natural language like "in 1 minute" or "at 4:18 PM" 
-- Do NOT show ISO timestamps or technical details
-- Keep the confirmation brief and friendly
-- Example: "Got it! I'll remind you in 1 minute 👍"`
+**CRITICAL**: When responding to the user about a scheduled reminder:
+- NEVER mention ISO timestamps, Unix time, or technical formats
+- NEVER say things like "Current time is 2026-03-02T..."
+- ONLY use natural relative language: "in 1 minute", "in 5 minutes", "at 4:30 PM"
+- Keep it SHORT - just confirm you'll remind them
+- Example good response: "Got it! I'll remind you in 1 minute 👍"
+- Example bad response: "Current time is 2026-03-02T16:29:05.120Z, so 1 minute from now is..."
 		: ""
 
 	const systemPromptParts = [
@@ -457,288 +453,283 @@ When scheduling reminders, include delivery info to send the message back to thi
 		conversationContext
 	]
 	if (memoryContext) {
-		systemPromptParts.push(`\n\n## Relevant Memory\n\n${memoryContext}`)
-	}
-	const systemPrompt = systemPromptParts.filter(Boolean).join("\n\n")
-	const prompt = buildPromptWithHistory(req.messages)
+		systemPromptParts.push(`\
+	n
+	\n## Relevant Memory\n\n$memoryContext`)
+}
+const systemPrompt = systemPromptParts.filter(Boolean).join("\n\n")
+const prompt = buildPromptWithHistory(req.messages)
 
-	const abortController = new AbortController()
+const abortController = new AbortController()
 
-	const baseUrl = process.env.ANTHROPIC_BASE_URL
-	const isUsingOpenRouter = baseUrl?.includes("openrouter.ai")
-	const authToken =
-		process.env.ANTHROPIC_AUTH_TOKEN ?? process.env.OPENROUTER_API_KEY
-	const apiKey = process.env.ANTHROPIC_API_KEY
-	// OpenRouter uses different model names than Anthropic directly
-	// See: https://openrouter.ai/models
-	const model = isUsingOpenRouter
-		? "anthropic/claude-3.5-sonnet" // More stable model for testing
-		: "claude-sonnet-4-20250514"
+const baseUrl = process.env.ANTHROPIC_BASE_URL
+const isUsingOpenRouter = baseUrl?.includes("openrouter.ai")
+const authToken =
+	process.env.ANTHROPIC_AUTH_TOKEN ?? process.env.OPENROUTER_API_KEY
+const apiKey = process.env.ANTHROPIC_API_KEY
+// OpenRouter uses different model names than Anthropic directly
+// See: https://openrouter.ai/models
+const model = isUsingOpenRouter
+	? "anthropic/claude-3.5-sonnet" // More stable model for testing
+	: "claude-sonnet-4-20250514"
 
-	// Validate API configuration
-	if (!apiKey && !authToken) {
-		const error =
-			"No API key configured. Set ANTHROPIC_API_KEY or OPENROUTER_API_KEY"
-		console.error(`[agent] ${error}`)
-		return new ReadableStream<Uint8Array>({
+// Validate API configuration
+if (!apiKey && !authToken) {
+	const error =
+		"No API key configured. Set ANTHROPIC_API_KEY or OPENROUTER_API_KEY"
+	console.error(`[agent] $error`)
+	return new ReadableStream<Uint8Array>({
 			start(controller) {
 				controller.enqueue(encodeSSEJson({ type: "error", content: error }))
 				controller.enqueue(encodeDone())
 				controller.close()
 			}
 		})
-	}
+}
 
-	// For OpenRouter, authToken is required but apiKey should be empty
-	if (isUsingOpenRouter && !authToken) {
-		const error =
-			"OpenRouter requires ANTHROPIC_AUTH_TOKEN (set OPENROUTER_API_KEY)"
-		console.error(`[agent] ${error}`)
-		return new ReadableStream<Uint8Array>({
+// For OpenRouter, authToken is required but apiKey should be empty
+if (isUsingOpenRouter && !authToken) {
+	const error =
+		"OpenRouter requires ANTHROPIC_AUTH_TOKEN (set OPENROUTER_API_KEY)"
+	console.error(`[agent] $error`)
+	return new ReadableStream<Uint8Array>({
 			start(controller) {
 				controller.enqueue(encodeSSEJson({ type: "error", content: error }))
 				controller.enqueue(encodeDone())
 				controller.close()
 			}
 		})
-	}
+}
 
-	// For direct Anthropic, apiKey is required
-	if (!isUsingOpenRouter && !apiKey) {
-		const error = "Anthropic requires ANTHROPIC_API_KEY"
-		console.error(`[agent] ${error}`)
-		return new ReadableStream<Uint8Array>({
+// For direct Anthropic, apiKey is required
+if (!isUsingOpenRouter && !apiKey) {
+	const error = "Anthropic requires ANTHROPIC_API_KEY"
+	console.error(`[agent] $error`)
+	return new ReadableStream<Uint8Array>({
 			start(controller) {
 				controller.enqueue(encodeSSEJson({ type: "error", content: error }))
 				controller.enqueue(encodeDone())
 				controller.close()
 			}
 		})
-	}
+}
 
-	debug("API config:", {
-		baseUrl: baseUrl || "(default Anthropic)",
-		model,
-		hasAuthToken: !!authToken,
-		hasApiKey: !!apiKey
+debug("API config:", {
+	baseUrl: baseUrl || "(default Anthropic)",
+	model,
+	hasAuthToken: !!authToken,
+	hasApiKey: !!apiKey
+})
+
+// Build env object per OpenRouter docs
+// See: https://openrouter.ai/docs/guides/guides/claude-code-integration
+const envVars: Record<string, string | undefined> = {
+	...process.env, // Pass through PATH, HOME, etc.
+	ANTHROPIC_BASE_URL: baseUrl || undefined,
+	ANTHROPIC_AUTH_TOKEN: authToken || undefined,
+	// Use OpenRouter's model selection env var
+	...(isUsingOpenRouter
+		? { ANTHROPIC_SMALL_FAST_MODEL: "anthropic/claude-3.5-sonnet" }
+		: {})
+}
+
+// For OpenRouter: API_KEY must be explicitly empty to prevent conflicts
+// For Anthropic: API_KEY is required
+if (isUsingOpenRouter) {
+	envVars.ANTHROPIC_API_KEY = ""
+} else if (apiKey) {
+	envVars.ANTHROPIC_API_KEY = apiKey
+}
+
+const { role, acl } = resolveUserRole(PROJECT_ROOT, req.userId)
+const memoryMcpServer = createMemoryMcpServer(
+	PROJECT_ROOT,
+	req.userId || "anonymous",
+	role,
+	acl
+)
+
+const mcpServers: Options["mcpServers"] = {
+	memory: memoryMcpServer
+}
+
+if (scheduler) {
+	const schedulerTools = createSchedulerTools(scheduler)
+	const schedulerMcpServer = createSdkMcpServer({
+		name: "scheduler",
+		tools: schedulerTools
 	})
+	mcpServers.scheduler = schedulerMcpServer
+}
 
-	// Build env object per OpenRouter docs
-	// See: https://openrouter.ai/docs/guides/guides/claude-code-integration
-	const envVars: Record<string, string | undefined> = {
-		...process.env, // Pass through PATH, HOME, etc.
-		ANTHROPIC_BASE_URL: baseUrl || undefined,
-		ANTHROPIC_AUTH_TOKEN: authToken || undefined,
-		// Use OpenRouter's model selection env var
-		...(isUsingOpenRouter
-			? { ANTHROPIC_SMALL_FAST_MODEL: "anthropic/claude-3.5-sonnet" }
-			: {})
-	}
+const options: Options = {
+	abortController,
+	systemPrompt,
+	cwd: PROJECT_ROOT,
+	pathToClaudeCodeExecutable: resolveClaudeCodeExecutable(),
+	settingSources: [],
+	permissionMode: "bypassPermissions",
+	allowDangerouslySkipPermissions: true,
+	mcpServers,
+	maxTurns: 25,
+	includePartialMessages: true,
+	stderr: (data: string) => {
+		console.error(`[claude-stderr] $data`)
+	},
+	env: envVars
+}
 
-	// For OpenRouter: API_KEY must be explicitly empty to prevent conflicts
-	// For Anthropic: API_KEY is required
-	if (isUsingOpenRouter) {
-		envVars.ANTHROPIC_API_KEY = ""
-	} else if (apiKey) {
-		envVars.ANTHROPIC_API_KEY = apiKey
-	}
+debug(
+	"Options:",
+	JSON.stringify(
+		{ ...options, mcpServers: Object.keys(options.mcpServers || {}) },
+		null,
+		2
+	).slice(0, 500)
+)
+debug("System prompt:", systemPrompt.slice(0, 200))
+debug("User prompt:", prompt.slice(0, 200))
 
-	const { role, acl } = resolveUserRole(PROJECT_ROOT, req.userId)
-	const memoryMcpServer = createMemoryMcpServer(
-		PROJECT_ROOT,
-		req.userId || "anonymous",
-		role,
-		acl
-	)
-
-	const mcpServers: Options["mcpServers"] = {
-		memory: memoryMcpServer
-	}
-
-	if (scheduler) {
-		const schedulerTools = createSchedulerTools(scheduler)
-		const schedulerMcpServer = createSdkMcpServer({
-			name: "scheduler",
-			tools: schedulerTools
-		})
-		mcpServers.scheduler = schedulerMcpServer
-	}
-
-	const options: Options = {
-		abortController,
-		systemPrompt,
-		cwd: PROJECT_ROOT,
-		pathToClaudeCodeExecutable: resolveClaudeCodeExecutable(),
-		settingSources: [],
-		permissionMode: "bypassPermissions",
-		allowDangerouslySkipPermissions: true,
-		mcpServers,
-		maxTurns: 25,
-		includePartialMessages: true,
-		stderr: (data: string) => {
-			console.error(`[claude-stderr] ${data}`)
-		},
-		env: envVars
-	}
-
-	debug(
-		"Options:",
-		JSON.stringify(
-			{ ...options, mcpServers: Object.keys(options.mcpServers || {}) },
-			null,
-			2
-		).slice(0, 500)
-	)
-	debug("System prompt:", systemPrompt.slice(0, 200))
-	debug("User prompt:", prompt.slice(0, 200))
-
-	let conversation: AsyncGenerator<any, void, unknown>
-	try {
-		conversation = query({ prompt, options })
-	} catch (err) {
-		const errorMsg =
-			err instanceof Error ? err.message : "Failed to initialize agent"
-		console.error(`[agent] query() initialization failed:`, err)
-		return new ReadableStream<Uint8Array>({
+let conversation: AsyncGenerator<any, void, unknown>
+try {
+	conversation = query({ prompt, options })
+} catch (err) {
+	const errorMsg =
+		err instanceof Error ? err.message : "Failed to initialize agent"
+	console.error(`[agent] query() initialization failed:`, err)
+	return new ReadableStream<Uint8Array>({
 			start(controller) {
 				controller.enqueue(encodeSSEJson({ type: "error", content: errorMsg }))
 				controller.enqueue(encodeDone())
 				controller.close()
 			}
 		})
-	}
+}
 
-	let messageCount = 0
-	let hasStreamedText = false
+let messageCount = 0
+let hasStreamedText = false
 
-	// Use push-based streaming instead of pull-based
-	const stream = new ReadableStream<Uint8Array>({
-		start(controller) {
-			// Process the async generator in the background
-			;(async () => {
-				try {
-					for await (const msg of conversation) {
-						messageCount++
+// Use push-based streaming instead of pull-based
+const stream = new ReadableStream<Uint8Array>({
+	start(controller) {
+		// Process the async generator in the background
+		;(async () => {
+			try {
+				for await (const msg of conversation) {
+					messageCount++
 
-						if (msg.type === "stream_event") {
-							const event = msg.event as { type: string }
-							const text = extractTextDelta(msg)
-							if (text) {
-								hasStreamedText = true
-								controller.enqueue(
-									encodeSSEJson({ type: "text", content: text })
+					if (msg.type === "stream_event") {
+						const event = msg.event as { type: string }
+						const text = extractTextDelta(msg)
+						if (text) {
+							hasStreamedText = true
+							controller.enqueue(encodeSSEJson({ type: "text", content: text }))
+						}
+
+						if (event.type === "content_block_start") {
+							const block = (event as any).content_block
+							if (block?.type === "tool_use") {
+								console.log(
+									`$pc.cyan("[agent]")🔧 tool: $pc.yellow(block.name)`
 								)
-							}
-
-							if (event.type === "content_block_start") {
-								const block = (event as any).content_block
-								if (block?.type === "tool_use") {
-									console.log(
-										`${pc.cyan("[agent]")} 🔧 tool: ${pc.yellow(block.name)}`
-									)
-									controller.enqueue(
-										encodeSSEJson({
-											type: "tool-call-start",
-											toolCallId: block.id,
-											toolName: block.name
-										})
-									)
-								}
-							}
-
-							if (event.type === "content_block_delta") {
-								const delta = (event as any).delta
-								if (delta?.type === "input_json_delta") {
-									controller.enqueue(
-										encodeSSEJson({
-											type: "tool-call-delta",
-											toolCallId: (event as any).index?.toString(),
-											argsTextDelta: delta.partial_json ?? ""
-										})
-									)
-								}
-							}
-
-							if (event.type === "content_block_stop") {
 								controller.enqueue(
 									encodeSSEJson({
-										type: "tool-call-end",
-										toolCallId: (event as any).index?.toString()
+										type: "tool-call-start",
+										toolCallId: block.id,
+										toolName: block.name
 									})
 								)
 							}
-						} else if (msg.type === "assistant" && !hasStreamedText) {
-							// Only use assistant message if we haven't streamed text
-							const text = extractTextDelta(msg)
-							if (text) {
+						}
+
+						if (event.type === "content_block_delta") {
+							const delta = (event as any).delta
+							if (delta?.type === "input_json_delta") {
 								controller.enqueue(
-									encodeSSEJson({ type: "text", content: text })
+									encodeSSEJson({
+										type: "tool-call-delta",
+										toolCallId: (event as any).index?.toString(),
+										argsTextDelta: delta.partial_json ?? ""
+									})
 								)
 							}
-						} else if (msg.type === "result") {
-							const usage = msg.usage
-							console.log()
-							console.log(
-								`${pc.green("[agent]")} ${pc.bold("✓")} done ${pc.gray(`${messageCount} msgs`)} ${pc.gray(`| ${usage?.input_tokens ?? 0} in / ${usage?.output_tokens ?? 0} out`)}`
-							)
+						}
+
+						if (event.type === "content_block_stop") {
 							controller.enqueue(
 								encodeSSEJson({
-									type: "usage",
-									inputTokens: usage?.input_tokens ?? 0,
-									outputTokens: usage?.output_tokens ?? 0,
-									totalCostUsd: msg.total_cost_usd ?? 0,
-									numTurns: msg.num_turns ?? 1
+									type: "tool-call-end",
+									toolCallId: (event as any).index?.toString()
 								})
 							)
 						}
-					}
-
-					controller.enqueue(encodeDone())
-					controller.close()
-				} catch (err) {
-					const errorMessage =
-						err instanceof Error ? err.message : "Agent error"
-					console.error(`[agent] error in stream:`, err)
-
-					if (err instanceof Error) {
-						if (
-							errorMessage.includes("401") ||
-							errorMessage.includes("Unauthorized") ||
-							errorMessage.includes("invalid")
-						) {
-							console.error(
-								`[agent] API key error - check ANTHROPIC_API_KEY or OPENROUTER_API_KEY`
-							)
+					} else if (msg.type === "assistant" && !hasStreamedText) {
+						// Only use assistant message if we haven't streamed text
+						const text = extractTextDelta(msg)
+						if (text) {
+							controller.enqueue(encodeSSEJson({ type: "text", content: text }))
 						}
-						if (
-							errorMessage.includes("terminated") ||
-							errorMessage.includes("ECONNREFUSED")
-						) {
-							console.error(
-								`[agent] Connection error - check ANTHROPIC_BASE_URL`
+					} else if (msg.type === "result") {
+						const usage = msg.usage
+						console.log()
+						console.log(
+								`$pc.green("[agent]")$pc.bold("✓")done $pc.gray(`${messageCount} msgs`)$pc.gray(`| ${usage?.input_tokens ?? 0} in / ${usage?.output_tokens ?? 0} out`)`
 							)
-						}
-					}
-
-					try {
 						controller.enqueue(
-							encodeSSEJson({ type: "error", content: errorMessage })
+							encodeSSEJson({
+								type: "usage",
+								inputTokens: usage?.input_tokens ?? 0,
+								outputTokens: usage?.output_tokens ?? 0,
+								totalCostUsd: msg.total_cost_usd ?? 0,
+								numTurns: msg.num_turns ?? 1
+							})
 						)
-						controller.enqueue(encodeDone())
-						controller.close()
-					} catch {
-						// Stream already cancelled
 					}
 				}
-			})()
-		},
-		cancel() {
-			console.log("[agent] stream cancelled, aborting agent")
-			abortController.abort()
-		}
-	})
 
-	return stream
+				controller.enqueue(encodeDone())
+				controller.close()
+			} catch (err) {
+				const errorMessage = err instanceof Error ? err.message : "Agent error"
+				console.error(`[agent] error in stream:`, err)
+
+				if (err instanceof Error) {
+					if (
+						errorMessage.includes("401") ||
+						errorMessage.includes("Unauthorized") ||
+						errorMessage.includes("invalid")
+					) {
+						console.error(
+							`[agent] API key error - check ANTHROPIC_API_KEY or OPENROUTER_API_KEY`
+						)
+					}
+					if (
+						errorMessage.includes("terminated") ||
+						errorMessage.includes("ECONNREFUSED")
+					) {
+						console.error(`[agent] Connection error - check ANTHROPIC_BASE_URL`)
+					}
+				}
+
+				try {
+					controller.enqueue(
+						encodeSSEJson({ type: "error", content: errorMessage })
+					)
+					controller.enqueue(encodeDone())
+					controller.close()
+				} catch {
+					// Stream already cancelled
+				}
+			}
+		})()
+	},
+	cancel() {
+		console.log("[agent] stream cancelled, aborting agent")
+		abortController.abort()
+	}
+})
+
+return stream
 }
 
 const app = new Hono()
