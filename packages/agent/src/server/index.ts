@@ -440,7 +440,13 @@ When scheduling reminders, include delivery info to send the message back to thi
   "payload": { "kind": "agentTurn", "message": "Your reminder message" },
   "delivery": { "mode": "announce", "channel": "xmtp", "to": "${req.conversationId}" }
 }
-\`\`\``
+\`\`\`
+
+**Important**: When confirming a scheduled reminder to the user:
+- Use natural language like "in 1 minute" or "at 4:18 PM" 
+- Do NOT show ISO timestamps or technical details
+- Keep the confirmation brief and friendly
+- Example: "Got it! I'll remind you in 1 minute 👍"`
 		: ""
 
 	const systemPromptParts = [
