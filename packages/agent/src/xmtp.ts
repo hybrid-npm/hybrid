@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto"
 import fs from "node:fs"
+import http from "node:http"
 import path from "node:path"
 import { Agent, createUser } from "@xmtp/agent-sdk"
-import { Client } from "@xmtp/node-sdk"
+import { Client, type Signer } from "@xmtp/node-sdk"
 import pc from "picocolors"
 import { toBytes } from "viem"
 
@@ -13,7 +14,41 @@ const log = {
 	success: (msg: string) => console.log(`${pc.green("[xmtp]")} ${msg}`)
 }
 
+async function revokeOldInstallations(
+	signer: Signer,
+	inboxId: string
+): Promise<boolean> {
+	try {
+		log.info("Revoking old installations...")
+
+		const inboxStates = await Client.inboxStateFromInboxIds([inboxId], XMTP_ENV)
+
+		if (!inboxStates[0]) {
+			log.error("No inbox state found")
+			return false
+		}
+
+		const toRevokeInstallationBytes = inboxStates[0].installations.map(
+			(i: { bytes: Uint8Array }) => i.bytes
+		)
+
+		await Client.revokeInstallations(
+			signer,
+			inboxId,
+			toRevokeInstallationBytes,
+			XMTP_ENV
+		)
+
+		log.success(`Revoked ${toRevokeInstallationBytes.length} installations`)
+		return true
+	} catch (error) {
+		log.error(`Revocation failed: ${(error as Error).message}`)
+		return false
+	}
+}
+
 const AGENT_PORT = process.env.AGENT_PORT || "8454"
+const SIDECAR_PORT = process.env.XMTP_SIDECAR_PORT || "8455"
 const XMTP_ENV = (process.env.XMTP_ENV || "dev") as "dev" | "production"
 const MAX_HISTORY_MESSAGES = 20
 
@@ -52,7 +87,8 @@ function printBanner(walletAddress?: string) {
 	console.log(
 		`  ${pc.bold("Wallet")}     ${walletAddress ? pc.cyan(walletAddress) : pc.gray("(not configured)")}`
 	)
-	console.log(`  ${pc.bold("Server")}     http://localhost:${AGENT_PORT}`)
+	console.log(`  ${pc.bold("Agent")}      http://localhost:${AGENT_PORT}`)
+	console.log(`  ${pc.bold("Sidecar")}    http://localhost:${SIDECAR_PORT}`)
 	console.log("")
 
 	if (isHotReload) {
@@ -63,6 +99,11 @@ function printBanner(walletAddress?: string) {
 		console.log(`  ${pc.green("✓")} Listening for messages...`)
 	}
 	console.log("")
+}
+
+interface SendMessageRequest {
+	conversationId: string
+	message: string
 }
 
 async function startSidecar() {
@@ -105,15 +146,110 @@ async function startSidecar() {
 		`xmtp-${XMTP_ENV}-${user.account.address.toLowerCase().slice(0, 8)}.db3`
 	)
 
-	const agent = await Agent.create(signer as any, {
-		env: XMTP_ENV,
-		dbEncryptionKey,
-		dbPath
-	})
+	let agent: Agent | undefined
+	try {
+		agent = await Agent.create(signer as any, {
+			env: XMTP_ENV,
+			dbEncryptionKey,
+			dbPath
+		})
+	} catch (error) {
+		const errorMessage = error instanceof Error ? error.message : String(error)
+
+		// Handle installation limit error
+		if (
+			errorMessage.includes("installations") ||
+			/\d+\/\d+\s+installations/.test(errorMessage)
+		) {
+			log.warn(
+				"Installation limit reached, attempting to revoke old installations..."
+			)
+
+			// Extract inbox ID from error message
+			const inboxIdMatch = errorMessage.match(/InboxID ([a-f0-9]{64})/i)
+			const inboxId = inboxIdMatch ? inboxIdMatch[1] : undefined
+
+			if (inboxId) {
+				log.info(`Found InboxID: ${inboxId.slice(0, 16)}...`)
+				const success = await revokeOldInstallations(signer, inboxId)
+
+				if (success) {
+					log.success("Revoked old installations, retrying...")
+					// Retry agent creation
+					agent = await Agent.create(signer as any, {
+						env: XMTP_ENV,
+						dbEncryptionKey,
+						dbPath
+					})
+				} else {
+					log.error("Failed to revoke installations")
+					throw error
+				}
+			} else {
+				log.error("Could not extract InboxID from error")
+				throw error
+			}
+		} else {
+			throw error
+		}
+	}
 
 	log.success("connected to XMTP network")
 
 	const botInboxId = agent.client.inboxId
+
+	// HTTP server for scheduler to send messages
+	const httpServer = http.createServer(async (req, res) => {
+		if (req.method === "POST" && req.url === "/api/send") {
+			const chunks: Buffer[] = []
+			req.on("data", (chunk) => chunks.push(chunk))
+			req.on("end", async () => {
+				try {
+					const body = Buffer.concat(chunks).toString()
+					const { conversationId, message } = JSON.parse(
+						body
+					) as SendMessageRequest
+
+					if (!conversationId || !message) {
+						res.writeHead(400)
+						res.end(
+							JSON.stringify({ error: "Missing conversationId or message" })
+						)
+						return
+					}
+
+					const conversations = await agent.client.conversations.list()
+					const conversation = conversations.find(
+						(c: any) => c.id === conversationId
+					)
+
+					if (!conversation) {
+						res.writeHead(404)
+						res.end(JSON.stringify({ error: "Conversation not found" }))
+						return
+					}
+
+					await conversation.send(message)
+					log.success(`sent scheduled message to ${conversationId.slice(0, 8)}`)
+
+					res.writeHead(200)
+					res.end(JSON.stringify({ delivered: true }))
+				} catch (err) {
+					log.error(`send error: ${(err as Error).message}`)
+					res.writeHead(500)
+					res.end(JSON.stringify({ error: (err as Error).message }))
+				}
+			})
+			return
+		}
+
+		res.writeHead(404)
+		res.end(JSON.stringify({ error: "Not found" }))
+	})
+
+	httpServer.listen(Number.parseInt(SIDECAR_PORT), "127.0.0.1", () => {
+		log.success(`sidecar API on 127.0.0.1:${SIDECAR_PORT}`)
+	})
 
 	agent.on("text", async ({ conversation, message }) => {
 		log.info(`message ${pc.gray(message.id.slice(0, 8))}`)
@@ -131,7 +267,6 @@ async function startSidecar() {
 				.forEach((id) => processedMessages.delete(id))
 		}
 
-		// Resolve wallet address from inboxId using static method
 		let senderAddress = message.senderInboxId
 		try {
 			const states = await Client.inboxStateFromInboxIds(
@@ -201,7 +336,8 @@ async function startSidecar() {
 					messages,
 					chatId: conversation.id,
 					userId: senderAddress,
-					requestId
+					requestId,
+					conversationId: conversation.id
 				})
 			})
 

@@ -1,81 +1,92 @@
-import { Signer } from "@xmtp/node-sdk"
-import { createXMTPClient, validateEnvironment } from "../src/client"
+import { Client } from "@xmtp/node-sdk"
+import {
+	createSigner,
+	generateEncryptionKeyHex,
+	getDbPath
+} from "../src/client"
 import { revokeOldInstallations } from "./revoke-installations"
 
 async function revokeAllInstallations() {
 	console.log("🔄 Revoking ALL XMTP Installations")
 	console.log("==================================")
 
-	// Validate environment
-	const { AGENT_WALLET_KEY } = validateEnvironment(["AGENT_WALLET_KEY"])
+	const { AGENT_WALLET_KEY, AGENT_SECRET, XMTP_ENV } = process.env
 
 	if (!AGENT_WALLET_KEY) {
 		console.error("❌ AGENT_WALLET_KEY is required")
 		process.exit(1)
 	}
 
+	const env = XMTP_ENV || "dev"
+	console.log(`🌐 Environment: ${env}`)
+
+	// Create signer
+	const signer = createSigner(AGENT_WALLET_KEY as `0x${string}`)
+	const identifier = await signer.getIdentifier()
+	const address = identifier.identifier
+
+	console.log(`🔑 Wallet Address: ${address}`)
+
+	// Try to get inbox ID from error message by attempting to create a client
+	let inboxId: string | undefined
+
 	try {
-		console.log(`🌐 Environment: ${process.env.XMTP_ENV || "dev"}`)
+		console.log("\n📧 Looking up Inbox ID...")
 
-		// Try to create client to get current inbox ID
-		try {
-			const client = await createXMTPClient(AGENT_WALLET_KEY)
-			const currentInboxId = client.inboxId
+		// Try to create a client - this will fail with the installation limit error
+		// but the error message contains the inbox ID
+		const dbEncryptionKey = AGENT_SECRET
+			? new Uint8Array(Buffer.from(AGENT_SECRET, "hex"))
+			: new Uint8Array(Buffer.from(generateEncryptionKeyHex(), "hex"))
 
-			console.log(`📧 Current Inbox ID: ${currentInboxId}`)
-			console.log("🔧 Attempting to revoke all installations for this inbox...")
+		const dbPath = await getDbPath(`${env}-${address}`)
 
-			const success = await revokeOldInstallations(
-				client.signer as Signer,
-				currentInboxId
-			)
+		await Client.create(signer, {
+			dbEncryptionKey,
+			env: env as "dev" | "production",
+			dbPath
+		})
 
-			// Create signer
-			console.log(`🔑 Wallet Address: ${client.accountIdentifier?.identifier}`)
-
-			if (success) {
-				console.log("✅ Successfully revoked all installations")
-			} else {
-				console.log("❌ Failed to revoke installations")
-				process.exit(1)
-			}
-		} catch (clientError) {
-			console.log(
-				"⚠️ Could not create client, attempting alternative approach..."
-			)
-
-			// If we can't create a client, it might be because of installation limits
-			// Try to manually construct possible inbox IDs or use a different approach
-			console.log("🔍 This might indicate installation limit issues")
-			console.log("💡 You may need to:")
-			console.log("   1. Wait a few minutes and try again")
-			console.log("   2. Use the specific inbox ID if you know it")
-			console.log("   3. Try switching XMTP environments (dev <-> production)")
-
-			throw clientError
-		}
+		// If we get here, client was created successfully
+		console.log("✅ No installation limit reached - no need to revoke")
+		return
 	} catch (error) {
-		console.error("💥 Error revoking installations:", error)
+		const errorMessage = error instanceof Error ? error.message : String(error)
 
-		if (error instanceof Error) {
-			if (error.message.includes("5/5 installations")) {
-				console.log("\n💡 Installation limit reached. Possible solutions:")
-				console.log("   1. Wait 24 hours for installations to expire")
-				console.log(
-					"   2. Try switching XMTP environments (dev <-> production)"
-				)
-				console.log("   3. Use a different wallet")
-			} else if (error.message.includes("Missing existing member")) {
-				console.log(
-					"\n💡 This inbox ID may not exist or may be on a different environment"
-				)
-				console.log(
-					"   1. Check if you're using the correct XMTP_ENV (dev vs production)"
-				)
-				console.log("   2. Verify the inbox ID is correct")
-			}
+		// Extract inbox ID from error message
+		const inboxIdMatch = errorMessage.match(/InboxID ([a-f0-9]{64})/i)
+		if (inboxIdMatch) {
+			inboxId = inboxIdMatch[1]
+			console.log(`📧 Found Inbox ID: ${inboxId}`)
 		}
 
+		// Check if it's actually an installation limit error
+		if (!errorMessage.includes("installations") && !inboxId) {
+			console.error("❌ Unexpected error:", errorMessage)
+			process.exit(1)
+		}
+	}
+
+	if (!inboxId) {
+		console.error("\n❌ Could not determine Inbox ID")
+		console.error(
+			"This usually means there's no existing XMTP identity for this wallet."
+		)
+		console.error("\nTry running 'hybrid register' to create a new identity.")
+		process.exit(1)
+	}
+
+	console.log("\n🔧 Attempting to revoke all installations...")
+
+	const success = await revokeOldInstallations(signer, inboxId)
+
+	if (success) {
+		console.log("\n✅ Successfully revoked all installations")
+		console.log(
+			"   You can now run 'hybrid register' to create a new installation"
+		)
+	} else {
+		console.log("\n❌ Failed to revoke installations")
 		process.exit(1)
 	}
 }

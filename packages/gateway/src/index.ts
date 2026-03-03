@@ -54,7 +54,6 @@ app.get("/health", async (c) => {
 
 		return c.json({
 			status: allHealthy ? "healthy" : "unhealthy",
-			service: "hybrid-agent",
 			gateway: true,
 			container: serverRunning,
 			sidecar: sidecarRunning,
@@ -64,7 +63,6 @@ app.get("/health", async (c) => {
 	} catch (err) {
 		return c.json({
 			status: "unknown",
-			service: "hybrid-agent",
 			message: err instanceof Error ? err.message : "Health check failed",
 			timestamp: new Date().toISOString()
 		})
