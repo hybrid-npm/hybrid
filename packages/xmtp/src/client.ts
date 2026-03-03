@@ -13,7 +13,10 @@ import { http, createWalletClient, toBytes } from "viem"
 import { privateKeyToAccount } from "viem/accounts"
 import { sepolia } from "viem/chains"
 import { revokeOldInstallations } from "../scripts/revoke-installations"
+import { resolveAgentSecret } from "./lib/secret.js"
 import { XmtpClient } from "./types"
+
+export { deriveAgentSecret, resolveAgentSecret } from "./lib/secret.js"
 
 // ===================================================================
 // Module Setup
@@ -153,7 +156,8 @@ export async function createXMTPClient(
 		)
 	}
 
-	const { AGENT_SECRET, XMTP_ENV } = process.env
+	const { XMTP_ENV } = process.env
+	const agentSecret = resolveAgentSecret(privateKey)
 
 	// Get the wallet address to use the correct database
 	const identifier = await signer.getIdentifier()
@@ -174,11 +178,7 @@ export async function createXMTPClient(
 				)
 			}
 
-			if (!AGENT_SECRET) {
-				throw new Error("AGENT_SECRET must be set for persistent mode")
-			}
-
-			const dbEncryptionKey = getEncryptionKeyFromHex(AGENT_SECRET)
+			const dbEncryptionKey = getEncryptionKeyFromHex(agentSecret)
 			const dbPath = await getDbPath(
 				`${XMTP_ENV || "dev"}-${address}`,
 				storagePath
@@ -278,9 +278,7 @@ export async function createXMTPClient(
 					// Try to refresh identity by creating a persistent client first
 					try {
 						console.log("📝 Creating persistent client to refresh identity...")
-						const tempEncryptionKey = AGENT_SECRET
-							? getEncryptionKeyFromHex(AGENT_SECRET)
-							: getEncryptionKeyFromHex(generateEncryptionKeyHex())
+						const tempEncryptionKey = getEncryptionKeyFromHex(agentSecret)
 						const tempClient = await Client.create(signer, {
 							dbEncryptionKey: tempEncryptionKey,
 							env: XMTP_ENV as XmtpEnv,
@@ -816,7 +814,3 @@ export async function createXMTPConnectionManager(
 	await manager.connect()
 	return manager
 }
-
-// ===================================================================
-// User Address Resolution with Auto-Refresh
-// ===================================================================

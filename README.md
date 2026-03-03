@@ -28,11 +28,11 @@ Everything that works in OpenClaw works in Hybrid. Same files, same format, same
 | `SOUL.md` + `AGENTS.md` config | ✅ | ✅ |
 | `MEMORY.md` auto-memory | ✅ | ✅ |
 | `memory/*.md` indexed files | ✅ | ✅ |
-| Session transcripts | ✅ | ✅ |
+| Session transcripts (`.hybrid/memory/conversations/{userId}/{conversationId}.json`) | ✅ | ✅ |
 | Vector search (sqlite-vec) | ✅ | ✅ |
 | BM25 / FTS hybrid search | ✅ | ✅ |
 | Embedding providers (openai, gemini, voyage, mistral, local, auto) | ✅ | ✅ |
-| Daily logs | ✅ | ✅ |
+| Daily logs (`.hybrid/memory/logs/YYYY-MM-DD.md`) | ✅ | ✅ |
 | Skills (`SKILL.md` format) | ✅ | ✅ |
 | Scheduler (cron / every / at) | ✅ | ✅ |
 | **Per-user memory isolation** | ❌ | ✅ |
@@ -86,8 +86,11 @@ OPENROUTER_API_KEY=your_key    # or ANTHROPIC_API_KEY
 
 # New: XMTP identity
 AGENT_WALLET_KEY=0x...         # Private key for your agent's wallet
-AGENT_SECRET=...               # Encryption key for XMTP database
 XMTP_ENV=production
+
+# AGENT_SECRET is optional — automatically derived from AGENT_WALLET_KEY
+# via BIP-32 at m/44'/60'/0'/0/41. Set explicitly only if you need to override.
+# AGENT_SECRET=...
 ```
 
 ### 5. Register and run
@@ -107,7 +110,7 @@ That's it. Your agent is now reachable at your wallet address on any XMTP client
 
 **Per-user memory** — each sender's memory lives in `.hybrid/memory/users/0x.../MEMORY.md`. Owners (wallets in `ACL.md`) can read everything; guests only see their own slice.
 
-**PARA knowledge graph** — beyond flat `MEMORY.md`, the agent can create structured entities (`projects/`, `areas/`, `resources/`, `archives/`) with atomic facts. Facts have decay tiers: hot (<7d), warm (<30d), cold (>30d). High-access facts stay warm longer. Facts are never deleted — only superseded.
+**[PARA knowledge graph](https://fortelabs.com/blog/para/)** — beyond flat `MEMORY.md`, the agent can create structured entities (`projects/`, `areas/`, `resources/`, `archives/`) with atomic facts. Facts have decay tiers: hot (<7d), warm (<30d), cold (>30d). High-access facts stay warm longer. Facts are never deleted — only superseded (old fact is marked `superseded` and linked to the new one; both persist in `items.json`).
 
 **Channel adapters** — the scheduler can deliver messages to any registered channel. Add Telegram, Slack, or a custom webhook by implementing `ChannelAdapter` and registering a port.
 
@@ -122,8 +125,8 @@ cd my-agent
 # Fill in .env
 OPENROUTER_API_KEY=...
 AGENT_WALLET_KEY=...
-AGENT_SECRET=...
 XMTP_ENV=production
+# AGENT_SECRET is derived automatically from AGENT_WALLET_KEY
 
 hybrid register
 hybrid dev

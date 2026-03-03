@@ -1,6 +1,7 @@
 import { logger } from "@hybrd/utils"
 import { Context } from "hono"
 import jwt from "jsonwebtoken"
+import { resolveAgentSecret } from "./secret.js"
 
 export interface XMTPToolsPayload {
 	action: "send" | "reply" | "react" | "transaction" | "blockchain-event"
@@ -70,27 +71,21 @@ export function getValidatedPayload(c: Context): XMTPToolsPayload | null {
  * Only falls back to development secret in development/test environments
  */
 function getJwtSecret(): string {
-	const secret = process.env.AGENT_SECRET
-	const nodeEnv = process.env.NODE_ENV || "development"
-
-	// In production, require a real JWT secret
-	if (nodeEnv === "production" && !secret) {
-		throw new Error(
-			"AGENT_SECRET environment variable is required in production. " +
-				"Generate a secure random secret for JWT token signing."
-		)
-	}
-
-	// In development/test, allow fallback but warn only when actually used
-	if (!secret) {
+	try {
+		return resolveAgentSecret()
+	} catch {
+		const nodeEnv = process.env.NODE_ENV || "development"
+		if (nodeEnv === "production") {
+			throw new Error(
+				"AGENT_WALLET_KEY or AGENT_SECRET must be set in production for JWT token signing."
+			)
+		}
 		logger.warn(
 			"⚠️  [SECURITY] Using fallback JWT secret for development. " +
-				"Set AGENT_SECRET environment variable for production."
+				"Set AGENT_WALLET_KEY or AGENT_SECRET for production."
 		)
 		return "fallback-secret-for-dev-only"
 	}
-
-	return secret
 }
 
 /**

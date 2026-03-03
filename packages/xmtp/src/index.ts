@@ -25,7 +25,9 @@ export {
 	getDbPath,
 	logAgentDetails,
 	validateEnvironment,
-	XMTPConnectionManager
+	XMTPConnectionManager,
+	deriveAgentSecret,
+	resolveAgentSecret
 } from "./client"
 export type { XMTPConnectionConfig } from "./client"
 
