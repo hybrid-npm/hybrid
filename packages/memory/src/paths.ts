@@ -73,7 +73,7 @@ export function getMemoryPaths(
 	if (role === "owner") {
 		return {
 			read: [memoryRoot, projectMemoryFile, projectMemoryPath, userPath],
-			write: memoryRoot
+			write: workspaceDir
 		}
 	}
 

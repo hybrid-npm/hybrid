@@ -63,8 +63,8 @@ cd my-agent
 ```bash
 cp /path/to/openclaw/SOUL.md    ./SOUL.md
 cp /path/to/openclaw/AGENTS.md  ./AGENTS.md
-cp /path/to/openclaw/MEMORY.md  ./.hybrid/memory/MEMORY.md
-cp -r /path/to/openclaw/memory/ ./.hybrid/memory/
+cp /path/to/openclaw/MEMORY.md  ./MEMORY.md
+cp -r /path/to/openclaw/memory/ ./memory/
 ```
 
 ### 3. Copy your skills
