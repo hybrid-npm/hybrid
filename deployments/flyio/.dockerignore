@@ -1,6 +1,0 @@
-node_modules
-.git
-.env*
-*.md
-!agents/hybrid-agent/AGENTS.md
-!agents/hybrid-agent/SOUL.md
