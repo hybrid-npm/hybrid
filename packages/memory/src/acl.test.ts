@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test"
 import { existsSync, mkdirSync, rmSync } from "node:fs"
 import { join } from "node:path"
+import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import {
 	addACLAllowFromEntry,
 	approveACLPairingCode,
@@ -8,6 +8,7 @@ import {
 	listACLPendingRequests,
 	listOwners,
 	parseACL,
+	readACLAllowFrom,
 	rejectACLPairingCode,
 	removeACLAllowFromEntry,
 	upsertACLPendingRequest
@@ -185,5 +186,120 @@ describe("Pairing", () => {
 			const requests = await listACLPendingRequests(TEST_DIR)
 			expect(requests).toHaveLength(0)
 		})
+	})
+})
+
+describe("ACL Edge Cases", () => {
+	it("handles multiple owners correctly", async () => {
+		await addACLAllowFromEntry(TEST_DIR, "0xowner1")
+		await addACLAllowFromEntry(TEST_DIR, "0xowner2")
+		await addACLAllowFromEntry(TEST_DIR, "0xowner3")
+
+		const acl = parseACL(TEST_DIR)
+		expect(acl?.allowFrom).toHaveLength(3)
+		expect(acl?.allowFrom).toContain("0xowner1")
+		expect(acl?.allowFrom).toContain("0xowner2")
+		expect(acl?.allowFrom).toContain("0xowner3")
+	})
+
+	it("handles removing non-existent owner gracefully", async () => {
+		await addACLAllowFromEntry(TEST_DIR, "0xowner1")
+		const result = await removeACLAllowFromEntry(TEST_DIR, "0xnotexist")
+
+		expect(result.changed).toBe(false)
+		expect(result.allowFrom).toHaveLength(1)
+	})
+
+	it("handles adding owner twice", async () => {
+		await addACLAllowFromEntry(TEST_DIR, "0xowner1")
+		const result = await addACLAllowFromEntry(TEST_DIR, "0xowner1")
+
+		expect(result.changed).toBe(false)
+		expect(result.allowFrom).toHaveLength(1)
+	})
+
+	it("handles concurrent pairing requests", async () => {
+		const r1 = await upsertACLPendingRequest(TEST_DIR, "0xuser1")
+		const r2 = await upsertACLPendingRequest(TEST_DIR, "0xuser2")
+		const r3 = await upsertACLPendingRequest(TEST_DIR, "0xuser3")
+
+		expect(r1.code).toHaveLength(8)
+		expect(r2.code).toHaveLength(8)
+		expect(r3.code).toHaveLength(8)
+
+		// All codes should be different
+		expect(new Set([r1.code, r2.code, r3.code]).size).toBe(3)
+
+		const requests = await listACLPendingRequests(TEST_DIR)
+		expect(requests).toHaveLength(3)
+	})
+
+	it("limits pending requests to 3", async () => {
+		await upsertACLPendingRequest(TEST_DIR, "0xuser1")
+		await upsertACLPendingRequest(TEST_DIR, "0xuser2")
+		await upsertACLPendingRequest(TEST_DIR, "0xuser3")
+		const r4 = await upsertACLPendingRequest(TEST_DIR, "0xuser4")
+
+		// Fourth request should be rejected
+		expect(r4.code).toBe("")
+		expect(r4.created).toBe(false)
+
+		const requests = await listACLPendingRequests(TEST_DIR)
+		expect(requests).toHaveLength(3)
+	})
+
+	it("handles case-insensitive codes on approval", async () => {
+		const { code } = await upsertACLPendingRequest(TEST_DIR, "0xuser1")
+
+		// Try approving with lowercase
+		const result = await approveACLPairingCode(TEST_DIR, code.toLowerCase())
+		expect(result).not.toBeNull()
+	})
+
+	it("handles invalid JSON gracefully", async () => {
+		const { writeFileSync } = await import("node:fs")
+		const { join } = await import("node:path")
+		const credentialsDir = join(TEST_DIR, "credentials")
+		mkdirSync(credentialsDir, { recursive: true })
+
+		writeFileSync(join(credentialsDir, "xmtp-allowFrom.json"), "not valid json")
+
+		// Should not throw, return empty
+		const result = await readACLAllowFrom(TEST_DIR)
+		expect(result).toEqual([])
+	})
+
+	it("handles missing version field gracefully", async () => {
+		const { writeFileSync } = await import("node:fs")
+		const { join } = await import("node:path")
+		const credentialsDir = join(TEST_DIR, "credentials")
+		mkdirSync(credentialsDir, { recursive: true })
+
+		writeFileSync(
+			join(credentialsDir, "xmtp-allowFrom.json"),
+			JSON.stringify({ allowFrom: ["0xowner1"] })
+		)
+
+		// Should handle missing version
+		const acl = parseACL(TEST_DIR)
+		expect(acl).toBeNull() // version is required
+	})
+
+	it("persists data across operations", async () => {
+		// Add owners
+		await addACLAllowFromEntry(TEST_DIR, "0xowner1")
+		await addACLAllowFromEntry(TEST_DIR, "0xowner2")
+
+		// Read back
+		const allowFrom = await readACLAllowFrom(TEST_DIR)
+		expect(allowFrom).toHaveLength(2)
+
+		// Remove one
+		await removeACLAllowFromEntry(TEST_DIR, "0xowner1")
+
+		// Read back again
+		const allowFrom2 = await readACLAllowFrom(TEST_DIR)
+		expect(allowFrom2).toHaveLength(1)
+		expect(allowFrom2).toContain("0xowner2")
 	})
 })

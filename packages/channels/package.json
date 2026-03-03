@@ -23,7 +23,9 @@
 		"typecheck": "tsc --noEmit",
 		"lint": "biome lint --unsafe",
 		"lint:fix": "biome lint --write --unsafe",
-		"format": "biome format --write"
+		"format": "biome format --write",
+		"test": "vitest run",
+		"test:watch": "vitest"
 	},
 	"dependencies": {
 		"@hybrd/types": "workspace:*",
@@ -41,6 +43,7 @@
 		"@config/tsconfig": "workspace:*",
 		"@types/express": "^5.0.0",
 		"@types/node": "catalog:stack",
-		"tsup": "^8.5.0"
+		"tsup": "^8.5.0",
+		"vitest": "^3.2.4"
 	}
 }
