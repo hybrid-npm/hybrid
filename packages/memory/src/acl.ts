@@ -1,51 +1,179 @@
-import { existsSync, readFileSync } from "node:fs"
+import { randomInt } from "node:crypto"
+import { existsSync, mkdirSync, readFileSync } from "node:fs"
 import { readFile, writeFile } from "node:fs/promises"
 import { join } from "node:path"
-import { normalizeWalletAddress, validateWalletAddress } from "./validate.js"
+import { normalizeWalletAddress } from "./validate.js"
 
 export type Role = "owner" | "guest"
 
 export interface ACL {
-	owners: string[]
+	version: 1
+	allowFrom: string[]
 }
 
-const ACL_FILENAME = "ACL.md"
+export interface PairingRequest {
+	id: string
+	code: string
+	createdAt: string
+	lastSeenAt: string
+	meta?: Record<string, string>
+}
 
-const ACL_TEMPLATE = `# Access Control
+export interface PairingStore {
+	version: 1
+	requests: PairingRequest[]
+}
 
-This file defines access permissions for the agent's memory system.
+const CHANNEL = "xmtp"
+const PAIRING_CODE_LENGTH = 8
+const PAIRING_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+const PAIRING_PENDING_TTL_MS = 60 * 60 * 1000
+const PAIRING_PENDING_MAX = 3
 
-## Roles
+function getCredentialsDir(workspaceDir: string): string {
+	return join(workspaceDir, "credentials")
+}
 
-| Role  | Read Shared Memory | Write Shared Memory | Read User Memory | Write User Memory |
-|-------|-------------------|---------------------|------------------|-------------------|
-| Owner | ✅                | ✅                  | ✅               | ✅                |
-| Guest | ❌                | ❌                  | ✅               | ✅                |
+function getAllowFromPath(workspaceDir: string): string {
+	return join(getCredentialsDir(workspaceDir), `${CHANNEL}-allowFrom.json`)
+}
 
-### Owner
-- Full access to all memory sources
-- Can read and write shared/project memory
-- Can read any user's memory
-- Writes to OpenClaw-compatible path
-- Can modify this ACL.md file via agent commands
+function getPairingPath(workspaceDir: string): string {
+	return join(getCredentialsDir(workspaceDir), `${CHANNEL}-pairing.json`)
+}
 
-### Guest (default for unknown wallets)
-- Isolated memory only
-- Full read/write access to their own user memory
-- Any wallet not listed in Owners defaults to Guest
+function randomCode(): string {
+	let out = ""
+	for (let i = 0; i < PAIRING_CODE_LENGTH; i++) {
+		const idx = randomInt(0, PAIRING_CODE_ALPHABET.length)
+		out += PAIRING_CODE_ALPHABET[idx]
+	}
+	return out
+}
 
-## Wallet Addresses
+function generateUniqueCode(existing: Set<string>): string {
+	for (let attempt = 0; attempt < 500; attempt++) {
+		const code = randomCode()
+		if (!existing.has(code)) {
+			return code
+		}
+	}
+	throw new Error("Failed to generate unique pairing code")
+}
 
-Addresses are case-insensitive. Use full wallet addresses (0x + 40 hex characters).
+function normalizeAllowEntry(entry: string): string {
+	const trimmed = entry.trim()
+	if (!trimmed || trimmed === "*") {
+		return ""
+	}
+	return trimmed.toLowerCase()
+}
 
----
+function dedupePreserveOrder(entries: string[]): string[] {
+	const seen = new Set<string>()
+	const out: string[] = []
+	for (const entry of entries) {
+		const normalized = normalizeAllowEntry(entry)
+		if (!normalized || seen.has(normalized)) {
+			continue
+		}
+		seen.add(normalized)
+		out.push(normalized)
+	}
+	return out
+}
 
-## Owners
+function parseTimestamp(value: string | undefined): number | null {
+	if (!value) {
+		return null
+	}
+	const parsed = Date.parse(value)
+	if (!Number.isFinite(parsed)) {
+		return null
+	}
+	return parsed
+}
 
-`
+function isExpired(entry: PairingRequest, nowMs: number): boolean {
+	const createdAt = parseTimestamp(entry.createdAt)
+	if (!createdAt) {
+		return true
+	}
+	return nowMs - createdAt > PAIRING_PENDING_TTL_MS
+}
+
+function pruneExpiredRequests(
+	reqs: PairingRequest[],
+	nowMs: number
+): {
+	requests: PairingRequest[]
+	removed: boolean
+} {
+	const kept: PairingRequest[] = []
+	let removed = false
+	for (const req of reqs) {
+		if (isExpired(req, nowMs)) {
+			removed = true
+			continue
+		}
+		kept.push(req)
+	}
+	return { requests: kept, removed }
+}
+
+function resolveLastSeenAt(entry: PairingRequest): number {
+	return (
+		parseTimestamp(entry.lastSeenAt) ?? parseTimestamp(entry.createdAt) ?? 0
+	)
+}
+
+function pruneExcessRequests(
+	reqs: PairingRequest[],
+	maxPending: number
+): { requests: PairingRequest[]; removed: boolean } {
+	if (maxPending <= 0 || reqs.length <= maxPending) {
+		return { requests: reqs, removed: false }
+	}
+	const sorted = reqs
+		.slice()
+		.sort((a, b) => resolveLastSeenAt(a) - resolveLastSeenAt(b))
+	return { requests: sorted.slice(-maxPending), removed: true }
+}
+
+async function ensureDir(dir: string): Promise<void> {
+	if (!existsSync(dir)) {
+		mkdirSync(dir, { recursive: true })
+	}
+}
+
+async function readJsonFile<T>(
+	filePath: string,
+	fallback: T
+): Promise<{ value: T; exists: boolean }> {
+	try {
+		const raw = await readFile(filePath, "utf-8")
+		const parsed = JSON.parse(raw)
+		return { value: parsed, exists: true }
+	} catch (err) {
+		const code = (err as { code?: string }).code
+		if (code === "ENOENT") {
+			return { value: fallback, exists: false }
+		}
+		return { value: fallback, exists: true }
+	}
+}
+
+async function writeJsonFileAtomic(
+	filePath: string,
+	value: unknown
+): Promise<void> {
+	const tempPath = `${filePath}.tmp`
+	await writeFile(tempPath, JSON.stringify(value, null, 2), "utf-8")
+	await import("node:fs/promises").then((fs) => fs.rename(tempPath, filePath))
+}
 
 export function parseACL(workspaceDir: string): ACL | null {
-	const aclPath = join(workspaceDir, ACL_FILENAME)
+	const aclPath = getAllowFromPath(workspaceDir)
 
 	if (!existsSync(aclPath)) {
 		return null
@@ -53,39 +181,17 @@ export function parseACL(workspaceDir: string): ACL | null {
 
 	try {
 		const content = readFileSync(aclPath, "utf-8")
-		const owners = parseOwnerAddresses(content)
-		return { owners }
+		const parsed = JSON.parse(content) as ACL
+		if (parsed.version !== 1 || !Array.isArray(parsed.allowFrom)) {
+			return null
+		}
+		return {
+			version: 1,
+			allowFrom: dedupePreserveOrder(parsed.allowFrom)
+		}
 	} catch {
 		return null
 	}
-}
-
-function parseOwnerAddresses(content: string): string[] {
-	const owners: string[] = []
-	const lines = content.split("\n")
-	let inOwnersSection = false
-
-	for (const line of lines) {
-		const trimmed = line.trim()
-
-		if (trimmed === "## Owners") {
-			inOwnersSection = true
-			continue
-		}
-
-		if (trimmed.startsWith("## ") && inOwnersSection) {
-			break
-		}
-
-		if (inOwnersSection && trimmed.startsWith("- ")) {
-			const address = trimmed.slice(2).split("#")[0].trim()
-			if (/^0x[a-fA-F0-9]{40}$/.test(address)) {
-				owners.push(address.toLowerCase())
-			}
-		}
-	}
-
-	return owners
 }
 
 export function getRole(acl: ACL | null, userId: string): Role {
@@ -95,100 +201,308 @@ export function getRole(acl: ACL | null, userId: string): Role {
 
 	const normalizedUserId = normalizeWalletAddress(userId)
 
-	if (acl.owners.includes(normalizedUserId)) {
+	if (acl.allowFrom.includes(normalizedUserId)) {
 		return "owner"
 	}
 
 	return "guest"
 }
 
+export function listOwners(acl: ACL | null): string[] {
+	return acl?.allowFrom || []
+}
+
+export async function readACLAllowFrom(
+	workspaceDir: string
+): Promise<string[]> {
+	const filePath = getAllowFromPath(workspaceDir)
+	const { value } = await readJsonFile<ACL>(filePath, {
+		version: 1,
+		allowFrom: []
+	})
+	return dedupePreserveOrder(value.allowFrom || [])
+}
+
+export async function addACLAllowFromEntry(
+	workspaceDir: string,
+	entry: string
+): Promise<{ changed: boolean; allowFrom: string[] }> {
+	await ensureDir(getCredentialsDir(workspaceDir))
+	const filePath = getAllowFromPath(workspaceDir)
+	const normalized = normalizeAllowEntry(entry)
+
+	if (!normalized) {
+		const current = await readACLAllowFrom(workspaceDir)
+		return { changed: false, allowFrom: current }
+	}
+
+	const { value } = await readJsonFile<ACL>(filePath, {
+		version: 1,
+		allowFrom: []
+	})
+	const current = dedupePreserveOrder(value.allowFrom || [])
+
+	if (current.includes(normalized)) {
+		return { changed: false, allowFrom: current }
+	}
+
+	const next = [...current, normalized]
+	await writeJsonFileAtomic(filePath, { version: 1, allowFrom: next })
+	return { changed: true, allowFrom: next }
+}
+
+export async function removeACLAllowFromEntry(
+	workspaceDir: string,
+	entry: string
+): Promise<{ changed: boolean; allowFrom: string[] }> {
+	const filePath = getAllowFromPath(workspaceDir)
+	const normalized = normalizeAllowEntry(entry)
+
+	if (!normalized) {
+		const current = await readACLAllowFrom(workspaceDir)
+		return { changed: false, allowFrom: current }
+	}
+
+	const { value } = await readJsonFile<ACL>(filePath, {
+		version: 1,
+		allowFrom: []
+	})
+	const current = dedupePreserveOrder(value.allowFrom || [])
+	const next = current.filter((e) => e !== normalized)
+
+	if (next.length === current.length) {
+		return { changed: false, allowFrom: current }
+	}
+
+	await writeJsonFileAtomic(filePath, { version: 1, allowFrom: next })
+	return { changed: true, allowFrom: next }
+}
+
+export async function listACLPendingRequests(
+	workspaceDir: string
+): Promise<PairingRequest[]> {
+	const filePath = getPairingPath(workspaceDir)
+
+	if (!existsSync(filePath)) {
+		return []
+	}
+
+	const { value } = await readJsonFile<PairingStore>(filePath, {
+		version: 1,
+		requests: []
+	})
+
+	const nowMs = Date.now()
+	const { requests: prunedExpired, removed: expiredRemoved } =
+		pruneExpiredRequests(value.requests || [], nowMs)
+	const { requests: pruned, removed: cappedRemoved } = pruneExcessRequests(
+		prunedExpired,
+		PAIRING_PENDING_MAX
+	)
+
+	if (expiredRemoved || cappedRemoved) {
+		await ensureDir(getCredentialsDir(workspaceDir))
+		await writeJsonFileAtomic(filePath, { version: 1, requests: pruned })
+	}
+
+	return pruned
+		.filter(
+			(r) =>
+				r &&
+				typeof r.id === "string" &&
+				typeof r.code === "string" &&
+				typeof r.createdAt === "string"
+		)
+		.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+}
+
+export async function upsertACLPendingRequest(
+	workspaceDir: string,
+	id: string,
+	meta?: Record<string, string>
+): Promise<{ code: string; created: boolean }> {
+	await ensureDir(getCredentialsDir(workspaceDir))
+	const filePath = getPairingPath(workspaceDir)
+	const now = new Date().toISOString()
+	const nowMs = Date.now()
+	const normalizedId = normalizeAllowEntry(id) || id
+
+	const { value } = await readJsonFile<PairingStore>(filePath, {
+		version: 1,
+		requests: []
+	})
+
+	let reqs = value.requests || []
+	const { requests: prunedExpired, removed: expiredRemoved } =
+		pruneExpiredRequests(reqs, nowMs)
+	reqs = prunedExpired
+
+	const existingIdx = reqs.findIndex((r) => r.id === normalizedId)
+	const existingCodes = new Set(
+		reqs.map((req) => (req.code || "").trim().toUpperCase())
+	)
+
+	if (existingIdx >= 0) {
+		const existing = reqs[existingIdx]
+		const existingCode = existing?.code?.trim() || ""
+		const code = existingCode || generateUniqueCode(existingCodes)
+		const next: PairingRequest = {
+			id: normalizedId,
+			code,
+			createdAt: existing?.createdAt ?? now,
+			lastSeenAt: now,
+			meta: meta ?? existing?.meta
+		}
+		reqs[existingIdx] = next
+		const { requests: capped } = pruneExcessRequests(reqs, PAIRING_PENDING_MAX)
+		await writeJsonFileAtomic(filePath, { version: 1, requests: capped })
+		return { code, created: false }
+	}
+
+	const { requests: capped, removed: cappedRemoved } = pruneExcessRequests(
+		reqs,
+		PAIRING_PENDING_MAX
+	)
+	reqs = capped
+
+	if (PAIRING_PENDING_MAX > 0 && reqs.length >= PAIRING_PENDING_MAX) {
+		if (expiredRemoved || cappedRemoved) {
+			await writeJsonFileAtomic(filePath, { version: 1, requests: reqs })
+		}
+		return { code: "", created: false }
+	}
+
+	const code = generateUniqueCode(existingCodes)
+	const next: PairingRequest = {
+		id: normalizedId,
+		code,
+		createdAt: now,
+		lastSeenAt: now,
+		...(meta ? { meta } : {})
+	}
+	await writeJsonFileAtomic(filePath, { version: 1, requests: [...reqs, next] })
+	return { code, created: true }
+}
+
+export async function approveACLPairingCode(
+	workspaceDir: string,
+	code: string
+): Promise<{ id: string; entry?: PairingRequest } | null> {
+	await ensureDir(getCredentialsDir(workspaceDir))
+	const codeUpper = code.trim().toUpperCase()
+
+	if (!codeUpper) {
+		return null
+	}
+
+	const filePath = getPairingPath(workspaceDir)
+	const { value } = await readJsonFile<PairingStore>(filePath, {
+		version: 1,
+		requests: []
+	})
+
+	const nowMs = Date.now()
+	const { requests: pruned, removed } = pruneExpiredRequests(
+		value.requests || [],
+		nowMs
+	)
+
+	const idx = pruned.findIndex(
+		(r) => (r.code || "").toUpperCase() === codeUpper
+	)
+
+	if (idx < 0) {
+		if (removed) {
+			await writeJsonFileAtomic(filePath, { version: 1, requests: pruned })
+		}
+		return null
+	}
+
+	const entry = pruned[idx]
+	if (!entry) {
+		return null
+	}
+
+	pruned.splice(idx, 1)
+	await writeJsonFileAtomic(filePath, { version: 1, requests: pruned })
+
+	await addACLAllowFromEntry(workspaceDir, entry.id)
+
+	return { id: entry.id, entry }
+}
+
+export async function rejectACLPairingCode(
+	workspaceDir: string,
+	code: string
+): Promise<{ id: string } | null> {
+	await ensureDir(getCredentialsDir(workspaceDir))
+	const codeUpper = code.trim().toUpperCase()
+
+	if (!codeUpper) {
+		return null
+	}
+
+	const filePath = getPairingPath(workspaceDir)
+	const { value } = await readJsonFile<PairingStore>(filePath, {
+		version: 1,
+		requests: []
+	})
+
+	const nowMs = Date.now()
+	const { requests: pruned, removed } = pruneExpiredRequests(
+		value.requests || [],
+		nowMs
+	)
+
+	const idx = pruned.findIndex(
+		(r) => (r.code || "").toUpperCase() === codeUpper
+	)
+
+	if (idx < 0) {
+		if (removed) {
+			await writeJsonFileAtomic(filePath, { version: 1, requests: pruned })
+		}
+		return null
+	}
+
+	const entry = pruned[idx]
+	if (!entry) {
+		return null
+	}
+
+	pruned.splice(idx, 1)
+	await writeJsonFileAtomic(filePath, { version: 1, requests: pruned })
+
+	return { id: entry.id }
+}
+
+// Legacy API compatibility (deprecated)
 export async function addOwner(
 	workspaceDir: string,
 	userId: string
 ): Promise<{ success: boolean; message: string }> {
-	const normalizedAddress = validateWalletAddress(userId)
-	const aclPath = join(workspaceDir, ACL_FILENAME)
-
-	let content: string
-	if (!existsSync(aclPath)) {
-		content = ACL_TEMPLATE
-	} else {
-		content = await readFile(aclPath, "utf-8")
-	}
-
-	const owners = parseOwnerAddresses(content)
-
-	if (owners.includes(normalizedAddress)) {
+	try {
+		const { changed } = await addACLAllowFromEntry(workspaceDir, userId)
+		if (changed) {
+			return { success: true, message: `Added ${userId} as owner` }
+		}
 		return { success: false, message: "Address is already an owner" }
+	} catch (err) {
+		return { success: false, message: String(err) }
 	}
-
-	const timestamp = new Date().toISOString().split("T")[0]
-	const newLine = `- ${normalizedAddress}  # Added ${timestamp}\n`
-
-	let newContent: string
-	if (content.includes("## Owners")) {
-		const lines = content.split("\n")
-		let inserted = false
-		const newLines: string[] = []
-
-		for (const line of lines) {
-			newLines.push(line)
-			if (!inserted && line.trim() === "## Owners") {
-				newLines.push("")
-				newLines.push(newLine.trimEnd())
-				inserted = true
-			}
-		}
-
-		if (!inserted) {
-			newContent = `${content}\n${newLine}`
-		} else {
-			newContent = newLines.join("\n")
-		}
-	} else {
-		newContent = `${content}\n## Owners\n\n${newLine}`
-	}
-
-	await writeFile(aclPath, newContent, "utf-8")
-	return { success: true, message: `Added ${normalizedAddress} as owner` }
 }
 
 export async function removeOwner(
 	workspaceDir: string,
 	userId: string
 ): Promise<{ success: boolean; message: string }> {
-	const normalizedAddress = validateWalletAddress(userId)
-	const aclPath = join(workspaceDir, ACL_FILENAME)
-
-	if (!existsSync(aclPath)) {
-		return { success: false, message: "ACL.md does not exist" }
-	}
-
-	const content = await readFile(aclPath, "utf-8")
-	const owners = parseOwnerAddresses(content)
-
-	if (!owners.includes(normalizedAddress)) {
-		return { success: false, message: "Address is not an owner" }
-	}
-
-	const lines = content.split("\n")
-	const newLines: string[] = []
-
-	for (const line of lines) {
-		const trimmed = line.trim()
-		if (trimmed.startsWith("- ")) {
-			const address = trimmed.slice(2).split("#")[0].trim().toLowerCase()
-			if (address === normalizedAddress) {
-				continue
-			}
+	try {
+		const { changed } = await removeACLAllowFromEntry(workspaceDir, userId)
+		if (changed) {
+			return { success: true, message: `Removed ${userId} from owners` }
 		}
-		newLines.push(line)
+		return { success: false, message: "Address is not an owner" }
+	} catch (err) {
+		return { success: false, message: String(err) }
 	}
-
-	await writeFile(aclPath, newLines.join("\n"), "utf-8")
-	return { success: true, message: `Removed ${normalizedAddress} from owners` }
-}
-
-export function listOwners(acl: ACL | null): string[] {
-	return acl?.owners || []
 }

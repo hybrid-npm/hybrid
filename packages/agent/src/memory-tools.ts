@@ -7,15 +7,19 @@ import {
 	addFact,
 	addOwner,
 	appendToMemory,
+	approveACLPairingCode,
 	createEntity,
 	getRole,
+	listACLPendingRequests,
 	listOwners,
 	logDecision,
 	logFact,
 	parseACL,
 	readMemorySection,
+	rejectACLPairingCode,
 	removeOwner,
-	searchFacts
+	searchFacts,
+	upsertACLPendingRequest
 } from "@hybrid/memory"
 import { z } from "zod"
 
@@ -210,6 +214,252 @@ Wallet address must be a full Ethereum address (0x + 40 hex characters).`,
 						text: `Owners:\n${owners.map((o) => `- ${o}`).join("\n")}`
 					}
 				]
+			}
+		}
+	)
+
+	const aclRequestPairingTool = tool(
+		"ACLRequestPairing",
+		`Request pairing to become an owner. Generates a pairing code that must be approved by an existing owner.
+
+Use this when:
+- You want to request owner access
+- You're a guest and need elevated permissions
+
+The pairing code expires in 1 hour. Share it with an owner for approval.`,
+		{},
+		async () => {
+			if (!userId) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: "Cannot request pairing: no user identity available"
+						}
+					],
+					isError: true
+				}
+			}
+
+			if (role === "owner") {
+				return {
+					content: [
+						{
+							type: "text",
+							text: "You are already an owner"
+						}
+					]
+				}
+			}
+
+			try {
+				const result = await upsertACLPendingRequest(workspaceDir, userId)
+				if (!result.code) {
+					return {
+						content: [
+							{
+								type: "text",
+								text: "Too many pending requests. Wait for one to expire or be processed."
+							}
+						],
+						isError: true
+					}
+				}
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Pairing requested.\n\nYour code: \`${result.code}\`\n\nShare this code with an owner for approval. Code expires in 1 hour.`
+						}
+					]
+				}
+			} catch (err) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Error: ${(err as Error).message}`
+						}
+					],
+					isError: true
+				}
+			}
+		}
+	)
+
+	const aclListPendingTool = tool(
+		"ACLListPending",
+		"List pending pairing requests. Only owners can use this tool.",
+		{},
+		async () => {
+			if (role !== "owner") {
+				return {
+					content: [
+						{
+							type: "text",
+							text: "Permission denied: Only owners can list pending requests"
+						}
+					],
+					isError: true
+				}
+			}
+
+			try {
+				const requests = await listACLPendingRequests(workspaceDir)
+				if (requests.length === 0) {
+					return {
+						content: [
+							{
+								type: "text",
+								text: "No pending pairing requests"
+							}
+						]
+					}
+				}
+
+				const lines = requests.map(
+					(r) => `- Code: ${r.code} | ID: ${r.id} | Requested: ${r.createdAt}`
+				)
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Pending Requests:\n${lines.join("\n")}`
+						}
+					]
+				}
+			} catch (err) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Error: ${(err as Error).message}`
+						}
+					],
+					isError: true
+				}
+			}
+		}
+	)
+
+	const aclApprovePairingTool = tool(
+		"ACLApprovePairing",
+		`Approve a pairing request by code. Only owners can use this tool.
+
+Use this when:
+- A user has shared their pairing code with you
+- You want to grant owner access to someone`,
+		{
+			code: z.string().describe("8-character pairing code (e.g., ABCD1234)")
+		},
+		async (args) => {
+			if (role !== "owner") {
+				return {
+					content: [
+						{
+							type: "text",
+							text: "Permission denied: Only owners can approve pairing requests"
+						}
+					],
+					isError: true
+				}
+			}
+
+			try {
+				const result = await approveACLPairingCode(
+					workspaceDir,
+					args.code.toUpperCase()
+				)
+				if (!result) {
+					return {
+						content: [
+							{
+								type: "text",
+								text: "Invalid or expired pairing code"
+							}
+						],
+						isError: true
+					}
+				}
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Approved! ${result.id} is now an owner.`
+						}
+					]
+				}
+			} catch (err) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Error: ${(err as Error).message}`
+						}
+					],
+					isError: true
+				}
+			}
+		}
+	)
+
+	const aclRejectPairingTool = tool(
+		"ACLRejectPairing",
+		`Reject a pairing request by code. Only owners can use this tool.
+
+Use this when:
+- A pairing request should be denied
+- You want to remove a pending request without approving it`,
+		{
+			code: z.string().describe("8-character pairing code (e.g., ABCD1234)")
+		},
+		async (args) => {
+			if (role !== "owner") {
+				return {
+					content: [
+						{
+							type: "text",
+							text: "Permission denied: Only owners can reject pairing requests"
+						}
+					],
+					isError: true
+				}
+			}
+
+			try {
+				const result = await rejectACLPairingCode(
+					workspaceDir,
+					args.code.toUpperCase()
+				)
+				if (!result) {
+					return {
+						content: [
+							{
+								type: "text",
+								text: "Invalid or expired pairing code"
+							}
+						],
+						isError: true
+					}
+				}
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Rejected pairing request from ${result.id}`
+						}
+					]
+				}
+			} catch (err) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Error: ${(err as Error).message}`
+						}
+					],
+					isError: true
+				}
 			}
 		}
 	)
@@ -454,6 +704,10 @@ Decay Tiers:
 			aclAddOwnerTool,
 			aclRemoveOwnerTool,
 			aclListOwnersTool,
+			aclRequestPairingTool,
+			aclListPendingTool,
+			aclApprovePairingTool,
+			aclRejectPairingTool,
 			paraCreateEntityTool,
 			paraAddFactTool,
 			paraSearchTool,

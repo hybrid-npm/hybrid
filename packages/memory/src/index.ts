@@ -71,8 +71,17 @@ export {
 	addOwner,
 	removeOwner,
 	listOwners,
+	readACLAllowFrom,
+	addACLAllowFromEntry,
+	removeACLAllowFromEntry,
+	listACLPendingRequests,
+	upsertACLPendingRequest,
+	approveACLPairingCode,
+	rejectACLPairingCode,
 	type Role,
-	type ACL
+	type ACL,
+	type PairingRequest,
+	type PairingStore
 } from "./acl.js"
 export {
 	createEntity,
