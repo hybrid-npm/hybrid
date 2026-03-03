@@ -6,6 +6,7 @@ import type {
 	TriggerRequest,
 	TriggerResponse
 } from "@hybrd/types"
+import { readACLAllowFrom } from "@hybrid/memory"
 import { Agent } from "@xmtp/agent-sdk"
 import type { Conversation } from "@xmtp/node-sdk"
 import express from "express"
@@ -25,6 +26,7 @@ export interface XMTPAdapterConfig {
 	walletKey: `0x${string}`
 	dbEncryptionKey: Uint8Array
 	dbPath: string
+	workspaceDir?: string
 }
 
 interface TextMessage {
@@ -43,6 +45,7 @@ export class XMTPAdapter implements ChannelAdapter {
 	private app: express.Application
 	private botInboxId: string | null = null
 	private processedMessages: Set<string> = new Set()
+	private addressCache: Map<string, string> = new Map()
 
 	constructor(config: XMTPAdapterConfig) {
 		this.port = config.port
@@ -113,6 +116,63 @@ export class XMTPAdapter implements ChannelAdapter {
 		})
 	}
 
+	private async resolveSenderAddress(
+		inboxId: string,
+		conversation: Conversation
+	): Promise<string> {
+		const cached = this.addressCache.get(inboxId)
+		if (cached) return cached
+
+		try {
+			const members = await conversation.members()
+			const sender = members.find(
+				(m: any) => m.inboxId.toLowerCase() === inboxId.toLowerCase()
+			)
+
+			if (sender) {
+				const ethIdentifier = sender.accountIdentifiers.find(
+					(id: any) => id.identifierKind === 0
+				)
+				if (ethIdentifier) {
+					const address = ethIdentifier.identifier.toLowerCase()
+					this.addressCache.set(inboxId, address)
+					return address
+				}
+			}
+
+			const inboxState =
+				await this.agent?.client.preferences.inboxStateFromInboxIds([inboxId])
+			const firstState = inboxState?.[0]
+			if (firstState?.identifiers?.[0]?.identifier) {
+				const address = firstState.identifiers[0].identifier.toLowerCase()
+				this.addressCache.set(inboxId, address)
+				return address
+			}
+		} catch (err) {
+			log.warn(`failed to resolve address for ${inboxId.slice(0, 16)}...`)
+		}
+
+		return inboxId
+	}
+
+	private async isSenderAllowed(senderAddress: string): Promise<boolean> {
+		if (!this.config.workspaceDir) {
+			return true
+		}
+
+		try {
+			const allowFrom = await readACLAllowFrom(this.config.workspaceDir)
+			if (allowFrom.length === 0) {
+				return true
+			}
+			const normalized = senderAddress.toLowerCase()
+			return allowFrom.includes(normalized)
+		} catch (err) {
+			log.warn(`failed to read ACL, allowing sender: ${(err as Error).message}`)
+			return true
+		}
+	}
+
 	private async handleInbound(
 		conversation: Conversation,
 		message: TextMessage
@@ -128,6 +188,20 @@ export class XMTPAdapter implements ChannelAdapter {
 		if (this.processedMessages.size > 1000) {
 			const arr = Array.from(this.processedMessages)
 			arr.slice(0, 500).forEach((id) => this.processedMessages.delete(id))
+		}
+
+		// Check if sender is on the allowlist
+		const senderAddress = await this.resolveSenderAddress(
+			message.senderInboxId,
+			conversation
+		)
+		const isAllowed = await this.isSenderAllowed(senderAddress)
+
+		if (!isAllowed) {
+			log.warn(
+				`blocked message from ${senderAddress.slice(0, 10)}... (not on allowlist)`
+			)
+			return
 		}
 
 		await this.runAgentAndReply({

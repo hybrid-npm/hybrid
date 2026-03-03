@@ -1,5 +1,6 @@
 import fs from "node:fs"
 import path from "node:path"
+import { readACLAllowFrom } from "@hybrid/memory"
 import { createUser } from "@xmtp/agent-sdk"
 import pc from "picocolors"
 import { type XMTPAdapterConfig } from "./adapter.js"
@@ -28,7 +29,7 @@ process.on("unhandledRejection", (reason) => {
 	process.exit(1)
 })
 
-function printBanner(walletAddress?: string) {
+function printBanner(walletAddress?: string, aclCount?: number) {
 	const isHotReload = process.env.TSX_WATCH === "true"
 
 	console.log("")
@@ -54,6 +55,13 @@ function printBanner(walletAddress?: string) {
 	console.log(
 		`  ${pc.bold("Trigger")}    http://127.0.0.1:${XMTP_ADAPTER_PORT}/api/trigger`
 	)
+	if (aclCount !== undefined) {
+		const aclStatus =
+			aclCount > 0
+				? pc.green(`${aclCount} allowed`)
+				: pc.yellow("open (no allowlist)")
+		console.log(`  ${pc.bold("ACL")}        ${aclStatus}`)
+	}
 	console.log("")
 
 	if (isHotReload) {
@@ -78,7 +86,18 @@ async function start() {
 	}
 
 	const user = createUser(key as `0x${string}`)
-	printBanner(user.account.address)
+
+	// Read ACL count for banner
+	let aclCount: number | undefined
+	try {
+		const allowFrom = await readACLAllowFrom(process.cwd())
+		aclCount = allowFrom.length
+	} catch {
+		// ACL doesn't exist yet, that's fine
+		aclCount = 0
+	}
+
+	printBanner(user.account.address, aclCount)
 
 	const dbEncryptionKey = new Uint8Array(Buffer.from(secret, "hex"))
 
@@ -97,7 +116,8 @@ async function start() {
 		xmtpEnv: XMTP_ENV,
 		walletKey: key as `0x${string}`,
 		dbEncryptionKey,
-		dbPath
+		dbPath,
+		workspaceDir: process.cwd()
 	}
 
 	await import("./adapter.js").then(({ createXMTPAdapter }) =>

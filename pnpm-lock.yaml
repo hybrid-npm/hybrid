@@ -147,6 +147,9 @@ importers:
       '@hybrd/types':
         specifier: workspace:*
         version: link:../types
+      '@hybrid/memory':
+        specifier: workspace:*
+        version: link:../memory
       '@xmtp/agent-sdk':
         specifier: 0.0.14
         version: 0.0.14(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)
