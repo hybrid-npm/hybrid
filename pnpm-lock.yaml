@@ -33,31 +33,6 @@ importers:
         specifier: 5.9.2
         version: 5.9.2
 
-  agents/sandbox:
-    dependencies:
-      '@anthropic-ai/claude-agent-sdk':
-        specifier: ^0.2.38
-        version: 0.2.50(zod@4.3.6)
-      '@hybrid/memory':
-        specifier: workspace:*
-        version: link:../../packages/memory
-      better-sqlite3:
-        specifier: ^11.10.0
-        version: 11.10.0
-    devDependencies:
-      '@hybrd/cli':
-        specifier: workspace:*
-        version: link:../../packages/cli
-      '@types/node':
-        specifier: catalog:stack
-        version: 22.8.6
-      concurrently:
-        specifier: ^9.0.0
-        version: 9.2.1
-      tsx:
-        specifier: ^4.19.3
-        version: 4.20.5
-
   config/biome: {}
 
   config/typescript: {}
