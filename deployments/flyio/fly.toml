@@ -35,6 +35,10 @@ primary_region = 'iad'
     port = 443
     handlers = ['tls', 'http']
 
+[mounts]
+  source = 'agent_data'
+  destination = '/app/data'
+
 [vm]
   memory = '1gb'
   cpu_kind = 'shared'
