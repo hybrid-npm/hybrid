@@ -20,6 +20,7 @@ primary_region = 'iad'
 
 [metrics]
   path = "/metrics"
+  port = 4100
 
 [[services]]
   protocol = 'tcp'

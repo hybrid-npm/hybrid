@@ -878,7 +878,7 @@ function printStartup() {
 
 printStartup()
 Promise.all([initMemory(), initScheduler()]).then(() => {
-	serve({ port: AGENT_PORT, fetch: app.fetch })
+	serve({ hostname: "0.0.0.0", port: AGENT_PORT, fetch: app.fetch })
 })
 
 export default app
