@@ -72,10 +72,10 @@ cp -r /path/to/openclaw/memory/ ./memory/
 ```bash
 # Local skills
 cp -r /path/to/openclaw/skills/my-skill ./skills/my-skill
-hybrid install ./skills/my-skill
+hybrid skills add ./skills/my-skill
 
 # Or install from GitHub
-hybrid install github:you/my-skill
+hybrid skills add github:you/my-skill
 ```
 
 ### 4. Add the new env vars
