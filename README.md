@@ -47,9 +47,7 @@ Everything that works in OpenClaw works in Hybrid. Same files, same format, same
 
 ---
 
-## Porting from OpenClaw
-
-Your config files are read verbatim — no reformatting, no migration scripts.
+## Quickstart
 
 ### 1. Scaffold a new agent
 
@@ -58,39 +56,32 @@ npm create hybrid my-agent
 cd my-agent
 ```
 
-### 2. Copy your OpenClaw config
+### 2. Copy your OpenClaw project folder
 
 ```bash
-cp /path/to/openclaw/SOUL.md    ./SOUL.md
-cp /path/to/openclaw/AGENTS.md  ./AGENTS.md
-cp /path/to/openclaw/MEMORY.md  ./MEMORY.md
-cp -r /path/to/openclaw/memory/ ./memory/
+cp -r /path/to/openclaw/. .
 ```
 
-### 3. Copy your skills
+Your `SOUL.md`, `AGENTS.md`, `MEMORY.md`, `memory/`, and skills are all read verbatim — no reformatting, no migration.
+
+### 3. Add new skills
 
 ```bash
-# Local skills
-cp -r /path/to/openclaw/skills/my-skill ./skills/my-skill
-hybrid skills add ./skills/my-skill
-
-# Or install from GitHub
-hybrid skills add github:you/my-skill
+hybrid skills add github:cloudflare/skills   # e.g. wrangler skill
+hybrid skills add github:you/my-skill        # any GitHub repo with a SKILL.md
+hybrid skills add ./skills/my-skill          # or a local path
 ```
 
 ### 4. Add the new env vars
 
 ```env
-# Same as OpenClaw
+# Copy to .env.local
 OPENROUTER_API_KEY=your_key    # or ANTHROPIC_API_KEY
 
 # New: XMTP identity
 AGENT_WALLET_KEY=0x...         # Private key for your agent's wallet
 XMTP_ENV=production
-
-# AGENT_SECRET is optional — automatically derived from AGENT_WALLET_KEY
-# via BIP-32 at m/44'/60'/0'/0/41. Set explicitly only if you need to override.
-# AGENT_SECRET=...
+# AGENT_SECRET is derived automatically from AGENT_WALLET_KEY
 ```
 
 ### 5. Register and run
@@ -100,39 +91,7 @@ hybrid register    # One-time: registers wallet on XMTP network
 hybrid dev         # Start the agent
 ```
 
-That's it. Your agent is now reachable at your wallet address on any XMTP client, with all your existing memory, skills, and personality intact.
-
----
-
-## What's New After Porting
-
-**XMTP messaging** — users reach your agent from [xmtp.chat](https://xmtp.chat) or any XMTP-compatible app by DMing your wallet address. Reactions, replies, and threaded conversations work out of the box.
-
-**Per-user memory** — each sender's memory lives in `.hybrid/memory/users/0x.../MEMORY.md`. Owners (wallets in `ACL.md`) can read everything; guests only see their own slice.
-
-**[PARA knowledge graph](https://fortelabs.com/blog/para/)** — beyond flat `MEMORY.md`, the agent can create structured entities (`projects/`, `areas/`, `resources/`, `archives/`) with atomic facts. Facts have decay tiers: hot (<7d), warm (<30d), cold (>30d). High-access facts stay warm longer. Facts are never deleted — only superseded (old fact is marked `superseded` and linked to the new one; both persist in `items.json`).
-
-**Channel adapters** — the scheduler can deliver messages to any registered channel. Add Telegram, Slack, or a custom webhook by implementing `ChannelAdapter` and registering a port.
-
----
-
-## Quickstart (fresh agent)
-
-```bash
-npm create hybrid my-agent
-cd my-agent
-
-# Fill in .env
-OPENROUTER_API_KEY=...
-AGENT_WALLET_KEY=...
-XMTP_ENV=production
-# AGENT_SECRET is derived automatically from AGENT_WALLET_KEY
-
-hybrid register
-hybrid dev
-```
-
-Send a DM to your agent's wallet address at [xmtp.chat](https://xmtp.chat).
+Your agent is now reachable at your wallet address on any XMTP client. Send a DM at [xmtp.chat](https://xmtp.chat).
 
 ---
 
