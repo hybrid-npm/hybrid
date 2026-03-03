@@ -36,7 +36,6 @@ Everything that works in OpenClaw works in Hybrid. Same files, same format, same
 | Skills (`SKILL.md` format) | ✅ | ✅ |
 | Scheduler (cron / every / at) | ✅ | ✅ |
 | **Per-user memory isolation** | ❌ | ✅ |
-| **Conversation history storage** | ❌ | ✅ |
 | **PARA knowledge graph** | ❌ | ✅ |
 | **Atomic facts + decay tiers** | ❌ | ✅ |
 | **Fact supersession** | ❌ | ✅ |
@@ -49,48 +48,71 @@ Everything that works in OpenClaw works in Hybrid. Same files, same format, same
 
 ## Quickstart
 
-### 1. Scaffold a new agent
+### Porting from OpenClaw
+
+Your config files, memory, and skills work without modification.
+
+**1. Scaffold into a new directory**
 
 ```bash
 npm create hybrid my-agent
 cd my-agent
 ```
 
-### 2. Copy your OpenClaw project folder
+**2. Copy your OpenClaw files over**
 
 ```bash
-cp -r /path/to/openclaw/. .
+cp /path/to/openclaw/SOUL.md   ./SOUL.md
+cp /path/to/openclaw/AGENTS.md ./AGENTS.md
+cp /path/to/openclaw/MEMORY.md ./MEMORY.md
+cp -r /path/to/openclaw/memory ./memory
+cp -r /path/to/openclaw/skills ./skills
 ```
 
-Your `SOUL.md`, `AGENTS.md`, `MEMORY.md`, `memory/`, and skills are all read verbatim — no reformatting, no migration.
-
-### 3. Add new skills
+**3. Add new skills** (optional)
 
 ```bash
-hybrid skills add github:cloudflare/skills   # e.g. wrangler skill
-hybrid skills add github:you/my-skill        # any GitHub repo with a SKILL.md
+hybrid skills add github:cloudflare/skills/wrangler
+hybrid skills add github:you/my-skill
 ```
 
-### 4. Add the new env vars
+**4. Set your env vars**
+
+```bash
+cp .env.example .env
+```
+
+Then fill in `.env`:
 
 ```env
-# Copy to .env.local
 OPENROUTER_API_KEY=your_key    # or ANTHROPIC_API_KEY
 
-# New: XMTP identity
-AGENT_WALLET_KEY=0x...         # Private key for your agent's wallet
+# XMTP identity — generate a wallet key for your agent
+AGENT_WALLET_KEY=0x...
 XMTP_ENV=production
 # AGENT_SECRET is derived automatically from AGENT_WALLET_KEY
 ```
 
-### 5. Register and run
+**5. Register and run**
 
 ```bash
-hybrid register    # One-time: registers wallet on XMTP network
-hybrid dev         # Start the agent
+hybrid register    # one-time: registers your wallet on the XMTP network
+hybrid dev
 ```
 
-Your agent is now reachable at your wallet address on any XMTP client. Send a DM at [xmtp.chat](https://xmtp.chat).
+Your agent is reachable at its wallet address from any XMTP client. Send it a DM at [xmtp.chat](https://xmtp.chat).
+
+---
+
+### Starting fresh
+
+```bash
+npm create hybrid my-agent
+cd my-agent
+cp .env.example .env   # fill in OPENROUTER_API_KEY and AGENT_WALLET_KEY
+hybrid register
+hybrid dev
+```
 
 ---
 
