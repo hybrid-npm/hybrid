@@ -69,7 +69,6 @@ Your `SOUL.md`, `AGENTS.md`, `MEMORY.md`, `memory/`, and skills are all read ver
 ```bash
 hybrid skills add github:cloudflare/skills   # e.g. wrangler skill
 hybrid skills add github:you/my-skill        # any GitHub repo with a SKILL.md
-hybrid skills add ./skills/my-skill          # or a local path
 ```
 
 ### 4. Add the new env vars
