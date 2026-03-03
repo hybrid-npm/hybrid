@@ -116,6 +116,122 @@ hybrid dev
 
 ---
 
+## Memory
+
+Hybrid has a 3-layer memory system. All three layers are indexed together into SQLite for unified search.
+
+### Layer 1 — PARA Knowledge Graph
+
+Structured entity storage inspired by the [PARA method](https://fortelabs.com/blog/para/). The agent can create named entities in four buckets — `projects`, `areas`, `resources`, `archives` — and attach atomic facts to each one.
+
+```
+.hybrid/memory/life/
+  areas/people/Alice/
+    items.json     ← all facts, including superseded ones
+    summary.md     ← hot + warm facts only, used for search indexing
+```
+
+Each fact has a **decay tier** based on how recently and how often it's been accessed:
+
+| Tier | Condition |
+|------|-----------|
+| Hot | accessed in the last 7 days, or 5+ accesses in the last 14 days |
+| Warm | accessed in the last 30 days, or 10+ total accesses |
+| Cold | not accessed in 30+ days |
+
+Cold facts are excluded from search and from `summary.md` — but never deleted. When a fact becomes outdated, **supersession** marks the old fact as `superseded` and links it to the new one. Both stay in `items.json` as a history trail.
+
+### Layer 2 — Daily Log
+
+An append-only chronological log. Each day gets its own file:
+
+```
+.hybrid/memory/logs/2026-03-02.md
+```
+
+The agent logs facts, decisions, and actions throughout a session. Entries are timestamped and tagged `[FACT]`, `[DECISION]`, or `[ACTION]`. Nothing is ever rewritten — the file only grows.
+
+### Layer 3 — Auto Memory
+
+A structured `MEMORY.md` with five fixed sections: **User Preferences**, **Learnings**, **Decisions**, **Context**, **Notes**. The agent appends dated bullet points to the relevant section as it learns things about the user.
+
+### Per-User Isolation
+
+Every user's memory is scoped to their wallet address:
+
+```
+.hybrid/memory/users/0xabc.../MEMORY.md    ← guest's private memory
+MEMORY.md                                  ← shared memory (owners only)
+```
+
+Access control is defined in `ACL.md` at the project root:
+
+```markdown
+## Owners
+
+- 0xabc123...    # Added 2026-03-01
+```
+
+Owners can read all memory — shared, per-user, and the `memory/` directory. Guests only read and write their own slice. If there's no `ACL.md`, everyone is a guest.
+
+### Search
+
+Queries run both **vector search** (semantic, via sqlite-vec) and **BM25 keyword search** (FTS5) in parallel. Results are merged with a 70/30 weighting by default and filtered by a minimum relevance score. If no embedding provider is configured, it falls back to keyword-only.
+
+---
+
+## Scheduler
+
+The scheduler lets the agent take action on a time-based trigger — run a cron job, fire after an interval, or execute once at a specific time. Jobs are persisted to SQLite and survive restarts.
+
+### Schedule Types
+
+```typescript
+// One-time — fires once at a specific time
+{ kind: "at", at: "2026-03-15T09:00:00Z" }
+
+// Interval — fires every N milliseconds
+{ kind: "every", everyMs: 3_600_000 }  // every hour
+
+// Cron — standard cron expression with optional timezone
+{ kind: "cron", expr: "0 9 * * 1-5", tz: "America/New_York" }
+```
+
+### How It Works
+
+The scheduler uses precise `setTimeout` calls — it computes the exact millisecond of the next job and sleeps until then. There's no fixed polling loop. A maintenance heartbeat runs at most every 60 seconds to handle edge cases.
+
+When a job fires, the scheduler sends the agent an **agent turn** — a message it processes just like a user message. The agent's response can optionally be delivered to a recipient via a channel adapter (e.g. sent as an XMTP message).
+
+```typescript
+// Example job payload
+{
+  kind: "agentTurn",
+  message: "Send the daily summary to the team",
+  delivery: {
+    mode: "announce",
+    channel: "xmtp",
+    to: "0xrecipient..."
+  }
+}
+```
+
+### Error Handling
+
+Failed jobs back off exponentially before retrying:
+
+| Consecutive failures | Delay before retry |
+|---------------------|--------------------|
+| 1 | 30 seconds |
+| 2 | 1 minute |
+| 3 | 5 minutes |
+| 4 | 15 minutes |
+| 5+ | 1 hour |
+
+Jobs that appear stuck (running for more than 2 hours) are automatically unstuck on the next scheduler start.
+
+---
+
 ## Architecture
 
 ```
