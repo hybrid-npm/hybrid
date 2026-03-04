@@ -108,6 +108,47 @@ async function main() {
 	}
 }
 
+async function ensureSkills(projectDir: string, monorepoDir: string) {
+	const { resolve } = await import("node:path")
+	const { cpSync, existsSync, mkdirSync, readdirSync } = await import("node:fs")
+
+	const hybridDir = resolve(projectDir, ".hybrid")
+	const coreSkillsDir = resolve(monorepoDir, "packages/agent/skills")
+	const userSkillsDir = resolve(projectDir, "skills")
+
+	// Ensure .hybrid/skills directories exist
+	mkdirSync(resolve(hybridDir, "skills/core"), { recursive: true })
+	mkdirSync(resolve(hybridDir, "skills/ext"), { recursive: true })
+
+	// Copy core skills if not already present
+	if (existsSync(coreSkillsDir)) {
+		const coreSkills = readdirSync(coreSkillsDir, { withFileTypes: true })
+			.filter((dirent) => dirent.isDirectory())
+			.map((dirent) => dirent.name)
+
+		for (const skill of coreSkills) {
+			const destPath = resolve(hybridDir, "skills/core", skill)
+			if (!existsSync(destPath)) {
+				cpSync(resolve(coreSkillsDir, skill), destPath, { recursive: true })
+			}
+		}
+	}
+
+	// Copy user skills if not already present
+	if (existsSync(userSkillsDir)) {
+		const userSkills = readdirSync(userSkillsDir, { withFileTypes: true })
+			.filter((dirent) => dirent.isDirectory())
+			.map((dirent) => dirent.name)
+
+		for (const skill of userSkills) {
+			const destPath = resolve(hybridDir, "skills/ext", skill)
+			if (!existsSync(destPath)) {
+				cpSync(resolve(userSkillsDir, skill), destPath, { recursive: true })
+			}
+		}
+	}
+}
+
 async function build(target?: string) {
 	const { execSync } = await import("node:child_process")
 	const { resolve, dirname, basename } = await import("node:path")
@@ -752,6 +793,7 @@ async function dev(useDocker: boolean) {
 
 	const __dirname = dirname(fileURLToPath(import.meta.url))
 	const rootDir = resolve(__dirname, "../../..")
+	const projectDir = process.cwd()
 
 	console.log("\n🔧 Building packages...")
 
@@ -765,6 +807,9 @@ async function dev(useDocker: boolean) {
 		process.exit(1)
 	}
 
+	// Ensure skills are copied to .hybrid/
+	await ensureSkills(projectDir, rootDir)
+
 	if (useDocker) {
 		console.log("\n🐳 Starting with Docker...\n")
 		console.log("Docker dev not yet implemented for new structure")
@@ -774,7 +819,6 @@ async function dev(useDocker: boolean) {
 	console.log("\n🚀 Starting agent (server + sidecar)...\n")
 
 	const agentDir = resolve(rootDir, "packages/agent")
-	const projectDir = process.cwd()
 
 	try {
 		execSync("npx pnpm run dev", {
