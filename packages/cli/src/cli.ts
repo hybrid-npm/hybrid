@@ -1077,6 +1077,32 @@ async function deploy(platform = "fly") {
 			console.log("\n✅ Wallet already configured on Fly.io")
 		}
 
+		// Check for required API keys
+		const requiredSecrets = ["OPENROUTER_API_KEY", "ANTHROPIC_API_KEY"]
+		const missingSecrets: string[] = []
+		try {
+			const secretsJson = execSync(`fly secrets list --app ${appName} --json`, {
+				encoding: "utf-8",
+				stdio: ["pipe", "pipe", "pipe"]
+			})
+			const secretsList = JSON.parse(secretsJson)
+			const existingSecrets = new Set(secretsList.map((s: any) => s.name))
+			for (const secret of requiredSecrets) {
+				if (!existingSecrets.has(secret)) {
+					missingSecrets.push(secret)
+				}
+			}
+		} catch {
+			// Can't check secrets, skip warning
+		}
+
+		if (missingSecrets.length > 0) {
+			console.log("\n⚠️  Missing required secrets:")
+			for (const secret of missingSecrets) {
+				console.log(`   fly secrets set ${secret}=xxx --app ${appName}`)
+			}
+		}
+
 		// Get wallet address for summary
 		let walletAddress = "unknown"
 		if (walletKey) {
