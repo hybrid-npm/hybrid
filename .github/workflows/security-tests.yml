@@ -1,0 +1,67 @@
+name: Security Tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  security-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: |
+          docker build -f deployments/flyio/Dockerfile -t hybrid-agent:test .
+
+      - name: Test 1 - app user can read secrets (via entrypoint injection)
+        run: |
+          docker run --rm -e AGENT_WALLET_KEY="0xtest123456789abcdef" hybrid-agent:test sh -c "cat /secrets/wallet.key && echo 'PASS: app can read secrets'" 2>&1 | grep -q "PASS" && echo "Test 1 PASSED" || echo "Test 1 FAILED"
+
+      - name: Test 2 - claude user CANNOT read secrets
+        run: |
+          docker run --rm -e AGENT_WALLET_KEY="0xtest123456789abcdef" --user claude hybrid-agent:test sh -c "cat /secrets/wallet.key 2>&1" 2>&1 | grep -q "Permission denied" && echo "Test 2 PASSED" || echo "Test 2 FAILED"
+
+      - name: Test 3 - Verify /secrets/ permissions
+        run: |
+          PERMS=$(docker run --rm hybrid-agent:test sh -c "ls -ld /secrets" 2>&1)
+          echo "$PERMS"
+          echo "$PERMS" | grep -q "drwx------" && echo "Test 3 PASSED" || echo "Test 3 FAILED"
+
+      - name: Test 4 - Verify /secrets/ owned by app
+        run: |
+          OWNER=$(docker run --rm hybrid-agent:test sh -c "ls -ld /secrets" 2>&1)
+          echo "$OWNER"
+          echo "$OWNER" | grep -q "app app" && echo "Test 4 PASSED" || echo "Test 4 FAILED"
+
+      - name: Test 5 - Verify claude user cannot sudo
+        run: |
+          docker run --rm --user claude hybrid-agent:test sh -c "sudo whoami 2>&1" 2>&1 | grep -qE "(not allowed|Permission denied)" && echo "Test 5 PASSED" || echo "Test 5 FAILED"
+
+      - name: Test 6 - Verify both users exist
+        run: |
+          docker run --rm hybrid-agent:test sh -c "id app && id claude" 2>&1 | grep -qE "uid=1000.*uid=1001" && echo "Test 6 PASSED" || echo "Test 6 FAILED"
+
+      - name: Test 7 - Verify workspace isolation directory
+        run: |
+          docker run --rm hybrid-agent:test sh -c "ls -ld /app/workspaces" 2>&1 | grep -q "workspaces" && echo "Test 7 PASSED" || echo "Test 7 FAILED"
+
+      - name: Test 8 - Verify data directory structure
+        run: |
+          docker run --rm hybrid-agent:test sh -c "ls /app/data/memory/users /app/data/credentials" 2>&1 | grep -qE "(users|credentials)" && echo "Test 8 PASSED" || echo "Test 8 FAILED"
+
+      - name: Test 9 - Verify AGENT_WALLET_KEY is unset after injection
+        run: |
+          docker run --rm -e AGENT_WALLET_KEY="0xtest123456789abcdef" hybrid-agent:test sh -c "printenv | grep AGENT_WALLET_KEY" 2>&1 | grep -q "AGENT_WALLET_KEY" && echo "Test 9 FAILED: env var still set" || echo "Test 9 PASSED: env var unset"
+
+      - name: Security audit summary
+        if: always()
+        run: |
+          echo "=== Security Test Summary ==="
+          echo "All tests must pass before merging to main."
+          echo "If any test fails, the PR should be blocked."

@@ -2,6 +2,7 @@ import { randomInt } from "node:crypto"
 import { existsSync, mkdirSync, readFileSync } from "node:fs"
 import { readFile, writeFile } from "node:fs/promises"
 import { join } from "node:path"
+import { getCredentialsPath } from "./paths.js"
 import { normalizeWalletAddress } from "./validate.js"
 
 export type Role = "owner" | "guest"
@@ -30,16 +31,12 @@ const PAIRING_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 const PAIRING_PENDING_TTL_MS = 60 * 60 * 1000
 const PAIRING_PENDING_MAX = 3
 
-function getCredentialsDir(workspaceDir: string): string {
-	return join(workspaceDir, "credentials")
-}
-
 function getAllowFromPath(workspaceDir: string): string {
-	return join(getCredentialsDir(workspaceDir), `${CHANNEL}-allowFrom.json`)
+	return join(getCredentialsPath(workspaceDir), `${CHANNEL}-allowFrom.json`)
 }
 
 function getPairingPath(workspaceDir: string): string {
-	return join(getCredentialsDir(workspaceDir), `${CHANNEL}-pairing.json`)
+	return join(getCredentialsPath(workspaceDir), `${CHANNEL}-pairing.json`)
 }
 
 function randomCode(): string {
@@ -227,7 +224,7 @@ export async function addACLAllowFromEntry(
 	workspaceDir: string,
 	entry: string
 ): Promise<{ changed: boolean; allowFrom: string[] }> {
-	await ensureDir(getCredentialsDir(workspaceDir))
+	await ensureDir(getCredentialsPath(workspaceDir))
 	const filePath = getAllowFromPath(workspaceDir)
 	const normalized = normalizeAllowEntry(entry)
 
@@ -301,7 +298,7 @@ export async function listACLPendingRequests(
 	)
 
 	if (expiredRemoved || cappedRemoved) {
-		await ensureDir(getCredentialsDir(workspaceDir))
+		await ensureDir(getCredentialsPath(workspaceDir))
 		await writeJsonFileAtomic(filePath, { version: 1, requests: pruned })
 	}
 
@@ -321,7 +318,7 @@ export async function upsertACLPendingRequest(
 	id: string,
 	meta?: Record<string, string>
 ): Promise<{ code: string; created: boolean }> {
-	await ensureDir(getCredentialsDir(workspaceDir))
+	await ensureDir(getCredentialsPath(workspaceDir))
 	const filePath = getPairingPath(workspaceDir)
 	const now = new Date().toISOString()
 	const nowMs = Date.now()
@@ -388,7 +385,7 @@ export async function approveACLPairingCode(
 	workspaceDir: string,
 	code: string
 ): Promise<{ id: string; entry?: PairingRequest } | null> {
-	await ensureDir(getCredentialsDir(workspaceDir))
+	await ensureDir(getCredentialsPath(workspaceDir))
 	const codeUpper = code.trim().toUpperCase()
 
 	if (!codeUpper) {
@@ -435,7 +432,7 @@ export async function rejectACLPairingCode(
 	workspaceDir: string,
 	code: string
 ): Promise<{ id: string } | null> {
-	await ensureDir(getCredentialsDir(workspaceDir))
+	await ensureDir(getCredentialsPath(workspaceDir))
 	const codeUpper = code.trim().toUpperCase()
 
 	if (!codeUpper) {
