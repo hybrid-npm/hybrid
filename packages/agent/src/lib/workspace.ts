@@ -12,7 +12,7 @@ import { access, mkdir, symlink } from "node:fs/promises"
 import { join } from "node:path"
 
 const DATA_ROOT = process.env.DATA_ROOT || "/app/data"
-const PROJECT_ROOT = process.env.PROJECT_ROOT || process.cwd()
+const PROJECT_ROOT = process.env.AGENT_PROJECT_ROOT || process.cwd()
 
 export interface WorkspacePaths {
 	workspaceDir: string
