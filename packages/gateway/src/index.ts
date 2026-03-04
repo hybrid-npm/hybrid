@@ -9,7 +9,6 @@ export interface GatewayEnv {
 	AgentContainer: DurableObjectNamespace
 	XMTP_STORAGE: R2Bucket
 	AGENT_WALLET_KEY: string
-	AGENT_SECRET: string
 	XMTP_ENV: string
 	ANTHROPIC_API_KEY?: string
 	ANTHROPIC_BASE_URL?: string
@@ -182,7 +181,6 @@ async function ensureAgentServer(sandbox: SandboxStub, env: GatewayEnv) {
 
 	const processEnv = {
 		AGENT_WALLET_KEY: env.AGENT_WALLET_KEY ?? "",
-		AGENT_SECRET: env.AGENT_SECRET ?? "",
 		XMTP_ENV: env.XMTP_ENV ?? "dev",
 		ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY ?? "",
 		ANTHROPIC_BASE_URL:

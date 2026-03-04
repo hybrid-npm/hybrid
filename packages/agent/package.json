@@ -28,6 +28,7 @@
 		"@google/generative-ai": "^0.21.0",
 		"@hono/node-server": "^1.13.5",
 		"@hybrd/scheduler": "workspace:*",
+		"@hybrd/xmtp": "workspace:*",
 		"@hybrid/memory": "workspace:*",
 		"@xmtp/agent-sdk": "0.0.14",
 		"@xmtp/node-bindings": "^1.9.1",

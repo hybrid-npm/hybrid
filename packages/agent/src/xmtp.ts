@@ -2,10 +2,32 @@ import { randomUUID } from "node:crypto"
 import fs from "node:fs"
 import http from "node:http"
 import path from "node:path"
+import { resolveAgentSecret } from "@hybrd/xmtp"
 import { Agent, createUser } from "@xmtp/agent-sdk"
 import { Client, type Signer } from "@xmtp/node-sdk"
+import { config } from "dotenv"
 import pc from "picocolors"
 import { toBytes } from "viem"
+
+// Resolve project directory (where hybrid dev was called from)
+const projectDir = process.env.AGENT_PROJECT_ROOT || process.cwd()
+
+// Load .env files from project directory FIRST (before any other code)
+const envLocalPath = path.join(projectDir, ".env.local")
+const envPath = path.join(projectDir, ".env")
+
+config({ path: envLocalPath, override: true })
+config({ path: envPath })
+
+// Debug output AFTER loading env
+if (process.env.DEBUG) {
+	console.log(`[xmtp] Project dir: ${projectDir}`)
+	console.log(`[xmtp] .env path: ${envPath}`)
+	console.log(`[xmtp] .env exists: ${fs.existsSync(envPath)}`)
+	console.log(
+		`[xmtp] AGENT_WALLET_KEY: ${process.env.AGENT_WALLET_KEY ? "set" : "not set"}`
+	)
+}
 
 const log = {
 	info: (msg: string) => console.log(`${pc.magenta("[xmtp]")} ${msg}`),
@@ -108,10 +130,9 @@ interface SendMessageRequest {
 
 async function startSidecar() {
 	const key = process.env.AGENT_WALLET_KEY
-	const secret = process.env.AGENT_SECRET
 
-	if (!key || !secret) {
-		log.warn("AGENT_WALLET_KEY and AGENT_SECRET not set")
+	if (!key) {
+		log.warn("AGENT_WALLET_KEY not set")
 		printBanner()
 		await new Promise(() => {})
 		return
@@ -135,6 +156,7 @@ async function startSidecar() {
 		}
 	}
 
+	const secret = resolveAgentSecret(key)
 	const dbEncryptionKey = new Uint8Array(Buffer.from(secret, "hex"))
 
 	const dbDir = path.join(process.cwd(), ".hybrid", ".xmtp")

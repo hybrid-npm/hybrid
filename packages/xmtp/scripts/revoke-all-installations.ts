@@ -1,16 +1,12 @@
 import { Client } from "@xmtp/node-sdk"
-import {
-	createSigner,
-	generateEncryptionKeyHex,
-	getDbPath
-} from "../src/client"
+import { createSigner, getDbPath, resolveAgentSecret } from "../src/client"
 import { revokeOldInstallations } from "./revoke-installations"
 
 async function revokeAllInstallations() {
 	console.log("🔄 Revoking ALL XMTP Installations")
 	console.log("==================================")
 
-	const { AGENT_WALLET_KEY, AGENT_SECRET, XMTP_ENV } = process.env
+	const { AGENT_WALLET_KEY, XMTP_ENV } = process.env
 
 	if (!AGENT_WALLET_KEY) {
 		console.error("❌ AGENT_WALLET_KEY is required")
@@ -35,9 +31,8 @@ async function revokeAllInstallations() {
 
 		// Try to create a client - this will fail with the installation limit error
 		// but the error message contains the inbox ID
-		const dbEncryptionKey = AGENT_SECRET
-			? new Uint8Array(Buffer.from(AGENT_SECRET, "hex"))
-			: new Uint8Array(Buffer.from(generateEncryptionKeyHex(), "hex"))
+		const secret = resolveAgentSecret(AGENT_WALLET_KEY)
+		const dbEncryptionKey = new Uint8Array(Buffer.from(secret, "hex"))
 
 		const dbPath = await getDbPath(`${env}-${address}`)
 
@@ -91,12 +86,16 @@ async function revokeAllInstallations() {
 	}
 }
 
-// Run if called directly
-if (import.meta.url === `file://${process.argv[1]}`) {
-	revokeAllInstallations().catch((error) => {
-		console.error("💥 Fatal error:", error)
-		process.exit(1)
-	})
+// Run if called directly (ESM only)
+try {
+	if (import.meta.url === `file://${process.argv[1]}`) {
+		revokeAllInstallations().catch((error) => {
+			console.error("💥 Fatal error:", error)
+			process.exit(1)
+		})
+	}
+} catch {
+	// import.meta not available in CJS - script not run directly
 }
 
 export { revokeAllInstallations }

@@ -67,7 +67,7 @@ export function getValidatedPayload(c: Context): XMTPToolsPayload | null {
 
 /**
  * Gets the JWT secret for token signing, with lazy initialization
- * Uses AGENT_SECRET environment variable for consistency
+ * Derives secret from AGENT_WALLET_KEY using BIP-32
  * Only falls back to development secret in development/test environments
  */
 function getJwtSecret(): string {
@@ -77,12 +77,12 @@ function getJwtSecret(): string {
 		const nodeEnv = process.env.NODE_ENV || "development"
 		if (nodeEnv === "production") {
 			throw new Error(
-				"AGENT_WALLET_KEY or AGENT_SECRET must be set in production for JWT token signing."
+				"AGENT_WALLET_KEY must be set in production for JWT token signing."
 			)
 		}
 		logger.warn(
 			"⚠️  [SECURITY] Using fallback JWT secret for development. " +
-				"Set AGENT_WALLET_KEY or AGENT_SECRET for production."
+				"Set AGENT_WALLET_KEY for production."
 		)
 		return "fallback-secret-for-dev-only"
 	}

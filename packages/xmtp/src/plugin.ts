@@ -74,11 +74,7 @@ export function XMTPPlugin(): Plugin<PluginContext> {
 		name: "xmtp",
 		description: "Provides XMTP messaging functionality",
 		apply: async (app, context): Promise<void> => {
-			const {
-				AGENT_WALLET_KEY,
-				AGENT_SECRET,
-				XMTP_ENV = "production"
-			} = process.env
+			const { AGENT_WALLET_KEY, XMTP_ENV = "production" } = process.env
 
 			const { agent } = context
 			const pluginContext = context as PluginContext & {
@@ -87,10 +83,6 @@ export function XMTPPlugin(): Plugin<PluginContext> {
 
 			if (!AGENT_WALLET_KEY) {
 				throw new Error("AGENT_WALLET_KEY must be set")
-			}
-
-			if (!AGENT_SECRET) {
-				throw new Error("AGENT_SECRET must be set")
 			}
 
 			const user = createUser(AGENT_WALLET_KEY as `0x${string}`)

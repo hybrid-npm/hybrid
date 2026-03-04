@@ -1,7 +1,6 @@
 import { getRandomValues } from "node:crypto"
 import fs from "node:fs"
 import path from "node:path"
-import { fileURLToPath } from "node:url"
 import { logger } from "@hybrd/utils"
 import { ReactionCodec } from "@xmtp/content-type-reaction"
 import { ReplyCodec } from "@xmtp/content-type-reply"
@@ -17,13 +16,6 @@ import { resolveAgentSecret } from "./lib/secret.js"
 import { XmtpClient } from "./types"
 
 export { deriveAgentSecret, resolveAgentSecret } from "./lib/secret.js"
-
-// ===================================================================
-// Module Setup
-// ===================================================================
-// ES module equivalent of __dirname
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
 
 // ===================================================================
 // Type Definitions

@@ -86,10 +86,14 @@ async function main() {
 	}
 }
 
-// Run if called directly
-if (import.meta.url === `file://${process.argv[1]}`) {
-	main().catch((error) => {
-		console.error("💥 Fatal error:", error)
-		process.exit(1)
-	})
+// Run if called directly (ESM only)
+try {
+	if (import.meta.url === `file://${process.argv[1]}`) {
+		main().catch((error) => {
+			console.error("💥 Fatal error:", error)
+			process.exit(1)
+		})
+	}
+} catch {
+	// import.meta not available in CJS - script not run directly
 }

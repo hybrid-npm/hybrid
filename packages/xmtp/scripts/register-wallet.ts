@@ -30,10 +30,7 @@ async function registerOnXMTP() {
 
 	console.log(`🚀 Starting XMTP ${networkName} Network Registration...`)
 
-	const { AGENT_WALLET_KEY } = validateEnvironment([
-		"AGENT_WALLET_KEY",
-		"AGENT_SECRET"
-	])
+	const { AGENT_WALLET_KEY } = validateEnvironment(["AGENT_WALLET_KEY"])
 
 	if (!AGENT_WALLET_KEY) {
 		console.error("❌ AGENT_WALLET_KEY is required for registration")

@@ -264,10 +264,16 @@ async function build(target?: string) {
 		generateDockerfile(buildTarget)
 	)
 
-	// Generate fly.toml for Fly.io
+	// Copy or generate fly.toml for Fly.io
 	if (buildTarget === "fly") {
-		console.log("🚀 Generating fly.toml...")
-		writeFileSync(resolve(hybridDir, "fly.toml"), generateFlyToml())
+		const projectFlyToml = resolve(projectDir, "fly.toml")
+		if (existsSync(projectFlyToml)) {
+			console.log("📋 Copying fly.toml...")
+			cpSync(projectFlyToml, resolve(hybridDir, "fly.toml"))
+		} else {
+			console.log("🚀 Generating fly.toml...")
+			writeFileSync(resolve(hybridDir, "fly.toml"), generateFlyToml())
+		}
 	}
 
 	// Generate start script
@@ -310,9 +316,9 @@ RUN npm install
 # Create data directories
 RUN mkdir -p /app/data/xmtp
 
-ENV AGENT_PORT=4100
+ENV AGENT_PORT=8454
 ENV NODE_ENV=production
-EXPOSE 4100
+EXPOSE 8454
 
 CMD ["sh", "start.sh"]
 `
@@ -350,12 +356,11 @@ primary_region = "iad"
   max_machines = 1
 
 [env]
-  AGENT_PORT = "4100"
   XMTP_ENV = "production"
 
 [[services]]
   protocol = "tcp"
-  internal_port = 4100
+  internal_port = 8454
 
   [[services.ports]]
     port = 80
@@ -768,11 +773,17 @@ async function dev(useDocker: boolean) {
 
 	console.log("\n🚀 Starting agent (server + sidecar)...\n")
 
-	const agentDir = resolve(rootDir, "agents/hybrid-agent")
+	const agentDir = resolve(rootDir, "packages/agent")
+	const projectDir = process.cwd()
+
 	try {
 		execSync("npx pnpm run dev", {
 			cwd: agentDir,
-			stdio: "inherit"
+			stdio: "inherit",
+			env: {
+				...process.env,
+				AGENT_PROJECT_ROOT: projectDir
+			}
 		})
 	} catch {
 		console.error("\n❌ Failed to start dev server")
@@ -784,28 +795,227 @@ async function deploy(platform = "fly") {
 	const { spawn, execSync } = await import("node:child_process")
 	const { resolve, dirname } = await import("node:path")
 	const { fileURLToPath } = await import("node:url")
+	const { existsSync, readFileSync, appendFileSync } = await import("node:fs")
+	const prompts = (await import("prompts")).default
+	const { privateKeyToAccount } = await import("viem/accounts")
+	const { randomBytes } = await import("node:crypto")
 
 	const __dirname = dirname(fileURLToPath(import.meta.url))
 	const projectDir = process.cwd()
 	const monorepoDir = resolve(__dirname, "../../..")
 
+	// Check for wallet key
+	const envPath = resolve(projectDir, ".env")
+	let walletKey = process.env.AGENT_WALLET_KEY
+
+	// Try to read from .env file
+	if (existsSync(envPath)) {
+		const envContent = readFileSync(envPath, "utf-8")
+		const keyMatch = envContent.match(/AGENT_WALLET_KEY=(.+)/)
+		if (keyMatch) {
+			walletKey = keyMatch[1].trim().replace(/['"]/g, "")
+		}
+	}
+
+	// Get app name early to check Fly.io secrets
+	const hybridDir = resolve(projectDir, ".hybrid")
+	const flyTomlPath = resolve(hybridDir, "fly.toml")
+	const projectFlyToml = resolve(projectDir, "fly.toml")
+	let appName = "hybrid-agent"
+
+	// Check if app exists and has secrets
+	let appExists = false
+	let existingWalletOnFly = false
+
+	// Read app name from fly.toml
+	if (existsSync(flyTomlPath)) {
+		const flyToml = readFileSync(flyTomlPath, "utf-8")
+		const match = flyToml.match(/^app\s*=\s*["']([^"']+)["']/m)
+		if (match) {
+			appName = match[1]
+		}
+	}
+
+	// Check if app exists on Fly.io and has AGENT_WALLET_KEY
+	try {
+		execSync(`fly status --app ${appName}`, { stdio: "pipe" })
+		appExists = true
+		if (process.env.DEBUG) console.log(`   Found Fly.io app: ${appName}`)
+
+		// Check for existing secrets
+		const secretsJson = execSync(`fly secrets list --app ${appName} --json`, {
+			encoding: "utf-8",
+			stdio: ["pipe", "pipe", "pipe"]
+		})
+		const secretsList = JSON.parse(secretsJson)
+		existingWalletOnFly = secretsList.some(
+			(s: any) => s.name === "AGENT_WALLET_KEY"
+		)
+		if (existingWalletOnFly && process.env.DEBUG) {
+			console.log("   AGENT_WALLET_KEY already set on Fly.io")
+		}
+	} catch (e) {
+		if (process.env.DEBUG)
+			console.log(`   Fly.io app not found or error: ${appName}`)
+		appExists = false
+	}
+
+	// Generate wallet if not found locally or on Fly.io
+	if (!walletKey && existingWalletOnFly) {
+		console.log("\n🔐 AGENT_WALLET_KEY exists on Fly.io (using existing)")
+	} else if (!walletKey) {
+		console.log("\n🔐 No AGENT_WALLET_KEY found.")
+
+		const walletChoice = await prompts({
+			type: "select",
+			name: "action",
+			message: "How would you like to set up your agent wallet?",
+			choices: [
+				{ title: "Generate new wallet", value: "generate" },
+				{ title: "Paste existing key", value: "paste" }
+			],
+			initial: 0
+		})
+
+		if (!walletChoice.action) {
+			console.log("\n  Cancelled.\n")
+			process.exit(0)
+		}
+
+		if (walletChoice.action === "paste") {
+			const pasteResult = await prompts({
+				type: "password",
+				name: "key",
+				message: "Paste your private key (0x...)",
+				validate: (v: string) =>
+					v.startsWith("0x") && v.length === 66
+						? true
+						: "Key must be 0x followed by 64 hex characters"
+			})
+
+			if (!pasteResult.key) {
+				console.log("\n  Cancelled.\n")
+				process.exit(0)
+			}
+
+			walletKey = pasteResult.key
+		} else {
+			const vanityChoice = await prompts({
+				type: "text",
+				name: "prefix",
+				message: "Vanity prefix (1-4 hex chars, or leave empty)",
+				initial: "",
+				validate: (v: string) => {
+					if (!v) return true
+					if (v.length > 4) return "Max 4 characters"
+					if (!/^[0-9a-fA-F]+$/.test(v)) return "Hex chars only (0-9, a-f)"
+					return true
+				}
+			})
+
+			const prefix = vanityChoice.prefix?.toLowerCase() || ""
+
+			console.log("\n🔑 Generating wallet...")
+			if (prefix) {
+				console.log(`   Looking for address starting with 0x${prefix}...`)
+			}
+
+			walletKey = await generateVanityWallet(
+				prefix,
+				privateKeyToAccount,
+				randomBytes
+			)
+		}
+
+		const account = privateKeyToAccount(walletKey as `0x${string}`)
+		console.log(`\n✅ Wallet generated`)
+		console.log(`   Wallet address: ${account.address}\n`)
+
+		// Register wallet on XMTP network
+		console.log("🔐 Registering wallet on XMTP network...\n")
+		try {
+			execSync("npx pnpm --filter @hybrd/xmtp register", {
+				cwd: monorepoDir,
+				stdio: "inherit",
+				env: {
+					...process.env,
+					AGENT_WALLET_KEY: walletKey
+				}
+			})
+			console.log("\n✅ Wallet registered on XMTP\n")
+		} catch {
+			console.log(
+				"\n⚠️  XMTP registration failed. Run 'hybrid register' manually.\n"
+			)
+		}
+	}
 	// Build first
 	await build(platform)
 
 	if (platform === "fly" || !platform) {
 		console.log("\n🚀 Deploying to Fly.io...")
 
-		const hybridDir = resolve(projectDir, ".hybrid")
+		// Always copy the latest fly.toml from project root to .hybrid/
+		if (existsSync(projectFlyToml)) {
+			const { cpSync } = await import("node:fs")
+			cpSync(projectFlyToml, flyTomlPath)
+		}
 
-		// Deploy from .hybrid directory with the generated fly.toml
+		if (!appExists) {
+			console.log(`📦 Creating Fly.io app: ${appName}`)
+			try {
+				execSync(`fly apps create ${appName}`, {
+					cwd: hybridDir,
+					stdio: "inherit"
+				})
+			} catch {
+				console.log(`   App ${appName} may already exist, continuing...`)
+			}
+		}
+
+		// Check for volume requirement
+		const flyToml = existsSync(flyTomlPath)
+			? readFileSync(flyTomlPath, "utf-8")
+			: ""
+		const volumeMatch = flyToml.match(
+			/\[mounts\][\s\S]*?source\s*=\s*["']([^"']+)["']/
+		)
+		if (volumeMatch) {
+			const volumeName = volumeMatch[1]
+			const regionMatch = flyToml.match(/primary_region\s*=\s*["']([^"']+)["']/)
+			const region = regionMatch ? regionMatch[1] : "iad"
+
+			let volumeExists = false
+			try {
+				const volumesJson = execSync(
+					`fly volumes list --app ${appName} --json`,
+					{ encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
+				)
+				const volumes = JSON.parse(volumesJson)
+				volumeExists = volumes.some((v: any) => v.name === volumeName)
+			} catch {
+				// No volumes yet
+			}
+
+			if (!volumeExists) {
+				console.log(`💾 Creating volume: ${volumeName} (${region})`)
+				try {
+					execSync(
+						`fly volumes create ${volumeName} --size 10 --region ${region} --app ${appName} --yes`,
+						{ cwd: hybridDir, stdio: "inherit" }
+					)
+				} catch {
+					console.log(`   Volume may already exist, continuing...`)
+				}
+			}
+		}
+
+		// Deploy
 		await new Promise<void>((resolve, reject) => {
 			const deploy = spawn(
 				"fly",
 				["deploy", "--config", "fly.toml", "--dockerfile", "Dockerfile"],
-				{
-					cwd: hybridDir,
-					stdio: "inherit"
-				}
+				{ cwd: hybridDir, stdio: "inherit" }
 			)
 			deploy.on("error", (err) => {
 				reject(new Error(`Failed to run fly CLI: ${err.message}`))
@@ -816,7 +1026,122 @@ async function deploy(platform = "fly") {
 			})
 		})
 
-		console.log("✅ Deploy complete!")
+		// Set secrets on Fly.io (only if changed)
+		console.log("\n🔐 Checking secrets on Fly.io...")
+		const secrets: string[] = []
+
+		// Get existing secrets from Fly.io
+		const existingSecrets: Record<string, string> = {}
+		try {
+			const secretsJson = execSync(`fly secrets list --app ${appName} --json`, {
+				encoding: "utf-8",
+				stdio: ["pipe", "pipe", "pipe"]
+			})
+			const secretsList = JSON.parse(secretsJson)
+			for (const s of secretsList) {
+				// Fly returns secrets with lowercase "name" and "digest"
+				if (s.name) {
+					existingSecrets[s.name] = s.digest || "exists"
+				}
+			}
+		} catch {
+			// No secrets yet or error fetching
+		}
+
+		// Check if AGENT_WALLET_KEY needs to be set
+		if (walletKey) {
+			// We can't compare values (Fly doesn't return them), but we can check if it exists
+			// Always include it since we can't verify the value matches
+			secrets.push(`AGENT_WALLET_KEY=${walletKey}`)
+		}
+
+		// Add other secrets from .env (skip AGENT_WALLET_KEY)
+		if (existsSync(envPath)) {
+			const envContent = readFileSync(envPath, "utf-8")
+			const lines = envContent.split("\n")
+			for (const line of lines) {
+				const trimmed = line.trim()
+				if (!trimmed || trimmed.startsWith("#")) continue
+				const [key, ...valueParts] = trimmed.split("=")
+				const value = valueParts.join("=").replace(/['"]/g, "")
+				if (
+					key &&
+					value &&
+					key !== "AGENT_WALLET_KEY" &&
+					key !== "AGENT_SECRET"
+				) {
+					secrets.push(`${key}=${value}`)
+				}
+			}
+		}
+
+		// Check which secrets actually need updating
+		const secretsToUpdate = secrets.filter((s) => {
+			const key = s.split("=")[0]
+			return !(key in existingSecrets)
+		})
+
+		if (secretsToUpdate.length > 0) {
+			console.log(`   Setting ${secretsToUpdate.length} new secret(s)...`)
+			try {
+				execSync(
+					`fly secrets set ${secretsToUpdate.join(" ")} --app ${appName}`,
+					{
+						cwd: hybridDir,
+						stdio: "inherit"
+					}
+				)
+				console.log("✅ Secrets set successfully")
+
+				// Restart to pick up new secrets
+				console.log("🔄 Restarting app to apply secrets...")
+				execSync(`fly apps restart ${appName}`, {
+					cwd: hybridDir,
+					stdio: "inherit"
+				})
+			} catch {
+				console.log(
+					"⚠️  Could not set secrets. Run manually: fly secrets set KEY=value --app",
+					appName
+				)
+			}
+		} else {
+			console.log("✅ All secrets already set")
+		}
+
+		// Get wallet address for summary
+		let walletAddress = "unknown"
+		if (walletKey) {
+			try {
+				const account = privateKeyToAccount(walletKey as `0x${string}`)
+				walletAddress = account.address
+			} catch {
+				// Key parsing failed
+			}
+		}
+
+		console.log("\n")
+		console.log(
+			"═══════════════════════════════════════════════════════════════"
+		)
+		console.log("  🎉 Deploy is live!")
+		console.log(
+			"═══════════════════════════════════════════════════════════════"
+		)
+		console.log("")
+		console.log(`  App:        ${appName}`)
+		console.log(`  Dashboard:  https://fly.io/apps/${appName}`)
+		console.log("")
+		console.log("  💬 Message your agent:")
+		console.log(`     ${walletAddress}`)
+		console.log("")
+		console.log("     1. Go to https://xmtp.chat")
+		console.log("     2. Connect your wallet")
+		console.log(`     3. Send a message to ${walletAddress}`)
+		console.log("")
+		console.log(
+			"═══════════════════════════════════════════════════════════════"
+		)
 		return
 	}
 
@@ -864,6 +1189,46 @@ async function deploy(platform = "fly") {
 	console.error(`Unknown platform: ${platform}`)
 	console.error("Supported platforms: fly, railway, cf (cloudflare)")
 	process.exit(1)
+}
+
+async function generateVanityWallet(
+	prefix: string,
+	privateKeyToAccount: (key: `0x${string}`) => { address: string },
+	randomBytes: (size: number) => Buffer
+): Promise<string> {
+	const targetPrefix = prefix.toLowerCase()
+	let attempts = 0
+	const maxAttempts = targetPrefix ? 1000000 : 1
+	let dots = 0
+
+	while (attempts < maxAttempts) {
+		attempts++
+		const keyBytes = randomBytes(32)
+		const privateKey = `0x${keyBytes.toString("hex")}` as `0x${string}`
+
+		if (!targetPrefix) {
+			return privateKey
+		}
+
+		const account = privateKeyToAccount(privateKey)
+		const address = account.address.toLowerCase()
+
+		if (address.startsWith(`0x${targetPrefix}`)) {
+			console.log(`   Found in ${attempts} attempts!`)
+			return privateKey
+		}
+
+		if (attempts % 1000 === 0) {
+			dots = (dots + 1) % 4
+			process.stdout.write(
+				`\r   Searching${".".repeat(dots)}${" ".repeat(3 - dots)} ${attempts} attempts\r`
+			)
+		}
+	}
+
+	throw new Error(
+		`Could not find wallet with prefix ${targetPrefix} after ${maxAttempts} attempts`
+	)
 }
 
 async function init(name: string) {
@@ -927,9 +1292,7 @@ async function register() {
 			stdio: "inherit"
 		})
 	} catch {
-		console.log(
-			"\n❌ Registration failed. Make sure AGENT_WALLET_KEY and AGENT_SECRET are set"
-		)
+		console.log("\n❌ Registration failed. Make sure AGENT_WALLET_KEY is set")
 		process.exit(1)
 	}
 }

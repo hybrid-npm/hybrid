@@ -1,8 +1,30 @@
 import fs from "node:fs"
+import path from "node:path"
 import { serve } from "@hono/node-server"
+import { config } from "dotenv"
 import { Hono } from "hono"
 import pc from "picocolors"
 import { privateKeyToAccount } from "viem/accounts"
+
+// Resolve project directory (where hybrid dev was called from)
+const projectDir = process.env.AGENT_PROJECT_ROOT || process.cwd()
+
+// Load .env files from project directory FIRST (before any other code)
+const envLocalPath = path.join(projectDir, ".env.local")
+const envPath = path.join(projectDir, ".env")
+
+config({ path: envLocalPath, override: true })
+config({ path: envPath })
+
+// Debug output AFTER loading env
+if (process.env.DEBUG) {
+	console.log(`[server] Project dir: ${projectDir}`)
+	console.log(`[server] .env path: ${envPath}`)
+	console.log(`[server] .env exists: ${fs.existsSync(envPath)}`)
+	console.log(
+		`[server] AGENT_WALLET_KEY: ${process.env.AGENT_WALLET_KEY ? "set" : "not set"}`
+	)
+}
 
 const AGENT_PORT = Number.parseInt(process.env.AGENT_PORT || "8454")
 const DEBUG = process.env.DEBUG === "true" || process.env.DEBUG === "1"

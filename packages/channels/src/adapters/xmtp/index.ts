@@ -1,5 +1,6 @@
 import fs from "node:fs"
 import path from "node:path"
+import { resolveAgentSecret } from "@hybrd/xmtp"
 import { readACLAllowFrom } from "@hybrid/memory"
 import { createUser } from "@xmtp/agent-sdk"
 import pc from "picocolors"
@@ -76,10 +77,9 @@ function printBanner(walletAddress?: string, aclCount?: number) {
 
 async function start() {
 	const key = process.env.AGENT_WALLET_KEY
-	const secret = process.env.AGENT_SECRET
 
-	if (!key || !secret) {
-		log.warn("AGENT_WALLET_KEY and AGENT_SECRET not set")
+	if (!key) {
+		log.warn("AGENT_WALLET_KEY not set")
 		printBanner()
 		await new Promise(() => {})
 		return
@@ -99,6 +99,7 @@ async function start() {
 
 	printBanner(user.account.address, aclCount)
 
+	const secret = resolveAgentSecret(key)
 	const dbEncryptionKey = new Uint8Array(Buffer.from(secret, "hex"))
 
 	const dbDir = path.join(process.cwd(), ".hybrid", ".xmtp")

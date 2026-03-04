@@ -697,7 +697,6 @@ ANTHROPIC_API_KEY=your_api_key_here
 
 # Agent configuration
 AGENT_WALLET_KEY=your_private_key_here
-AGENT_SECRET=your_32_byte_hex_key_here
 XMTP_ENV=${data.env}
 `
 }

@@ -30,6 +30,8 @@
 		"@hybrd/xmtp": "workspace:*",
 		"concurrently": "^9.2.1",
 		"dotenv": "^16.4.5",
+		"ora": "^8.2.0",
+		"prompts": "^2.4.2",
 		"rimraf": "^5.0.10",
 		"tsx": "^4.20.5",
 		"uint8arrays": "^5.1.0",
@@ -40,6 +42,7 @@
 		"@config/tsconfig": "workspace:*",
 		"@types/jsonwebtoken": "^9.0.7",
 		"@types/node": "catalog:stack",
+		"@types/prompts": "^2.4.9",
 		"@vitest/coverage-v8": "^3.2.4",
 		"tsup": "^8.5.0",
 		"vitest": "^3.2.4"

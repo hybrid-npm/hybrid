@@ -12,13 +12,37 @@ npx hybrid <command>
 
 ## Commands
 
-### `hybrid init <name>`
+### `hybrid init [name]`
 
-Initialize a new agent project by cloning the `hybrid-agent` template:
+Initialize a new agent project with an interactive setup:
 
 ```bash
-hybrid init my-agent
-cd my-agent
+hybrid init          # Interactive mode
+hybrid init my-agent # Skip name prompt
+```
+
+The init command will ask:
+1. **Project name** - Directory name for the project
+2. **Agent display name** - Human-readable name for the agent
+3. **Deployment target** - Fly.io, Railway, Cloudflare, AWS, or GCP
+4. **Fly.io app name** - App identifier (lowercase, numbers, hyphens)
+5. **Primary region** - Closest region for deployment
+6. **VM size** - Resource allocation (shared/performance CPU, RAM)
+7. **Persistent storage** - Enable volume for data persistence
+8. **Storage size** - Volume size in GB (if enabled)
+
+**Generated files:**
+```
+my-agent/
+├── package.json      # Project dependencies
+├── SOUL.md           # Agent identity and behavior
+├── AGENTS.md         # Repository guidelines
+├── .env.example      # Environment variables template
+├── .gitignore        # Git ignore rules
+├── Dockerfile        # Container build instructions
+├── fly.toml          # Fly.io deployment config
+├── start.sh          # Start script
+└── README.md         # Project documentation
 ```
 
 ### `hybrid build [--target]`
@@ -73,7 +97,7 @@ Build then deploy to a platform:
 
 ```bash
 hybrid deploy          # Deploys to Fly.io (default)
-hybrid deploy fly      # Fly.io: runs `fly deploy` from .hybrid/
+hybrid deploy          # Fly.io: runs `fly deploy` from .hybrid/
 hybrid deploy cf       # Cloudflare: builds packages/gateway, runs `wrangler deploy`
 hybrid deploy railway  # Railway (builds only, manual deploy)
 ```
@@ -218,7 +242,7 @@ hybrid build
     │
     └── Generate: package.json, Dockerfile, fly.toml, start.sh
 
-hybrid deploy fly
+hybrid deploy
     │
     ├── hybrid build --target fly
     │
