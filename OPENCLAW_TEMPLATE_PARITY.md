@@ -1,8 +1,8 @@
-# OpenCode Template Parity - Implementation Complete
+# OpenClaw Template Parity - Implementation Complete
 
 ## Summary
 
-Successfully implemented 100% OpenCode template compatibility for Hybrid agents.
+Successfully implemented 100% OpenClaw template compatibility for Hybrid agents.
 
 ## What Was Implemented
 
@@ -19,7 +19,7 @@ Created in `packages/agent/src/templates/`:
 - **BOOTSTRAP.md** - First-run setup wizard
 - **HEARTBEAT.md** - Periodic check tasks
 
-All templates copied verbatim from OpenCode for 100% compatibility.
+All templates copied verbatim from OpenClaw for 100% compatibility.
 
 ### 2. Agent Server Updates
 
@@ -89,13 +89,13 @@ PROJECT_ROOT/
 2. Falls back to root `USER.md` if user-specific file doesn't exist
 3. Each user gets personalized context while agent personality stays consistent
 
-## OpenCode Compatibility
+## OpenClaw Compatibility
 
 ✅ **100% Compatible**
 
-- All templates match OpenCode format exactly
-- System prompt construction follows OpenCode's order
-- Multi-tenant USER.md matches OpenCode's pattern
+- All templates match OpenClaw format exactly
+- System prompt construction follows OpenClaw's order
+- Multi-tenant USER.md matches OpenClaw's pattern
 - No dev mode variants (simplified for Hybrid's use case)
 
 ## Testing
@@ -112,7 +112,7 @@ Users can now:
 1. Create a new agent with `npx create-hybrid my-agent`
 2. Customize templates for their specific agent
 3. Add user profiles in `users/{userId}/USER.md`
-4. Follow OpenCode documentation for template usage
+4. Follow OpenClaw documentation for template usage
 
 ## Files Modified
 
@@ -134,6 +134,6 @@ Users can now:
 ## Implementation Notes
 
 - **No dev mode**: Hybrid users build their own agents, so no dev/production split needed
-- **Verbatim templates**: All templates copied exactly from OpenCode for compatibility
+- **Verbatim templates**: All templates copied exactly from OpenClaw for compatibility
 - **Multi-tenant ready**: Per-user USER.md files for personalized experiences
 - **Startup visibility**: Agent logs which templates are loaded on startup
