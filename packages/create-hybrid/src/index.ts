@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import prompts from "prompts"
@@ -79,6 +79,7 @@ async function main() {
 	mkdirSync(projectDir, { recursive: true })
 	mkdirSync(join(projectDir, "src", "gateway"), { recursive: true })
 	mkdirSync(join(projectDir, "src", "server"), { recursive: true })
+	mkdirSync(join(projectDir, "users"), { recursive: true })
 
 	const templateData = {
 		name,
@@ -98,8 +99,36 @@ async function main() {
 		serverIndex(templateData)
 	)
 	writeFileSync(join(projectDir, "src", "dev-gateway.ts"), devGateway())
+
+	const agentTemplatesDir = join(
+		__dirname,
+		"..",
+		"..",
+		"agent",
+		"src",
+		"templates"
+	)
+
+	const templates = [
+		"AGENTS.md",
+		"SOUL.md",
+		"IDENTITY.md",
+		"USER.md",
+		"TOOLS.md",
+		"BOOT.md",
+		"BOOTSTRAP.md",
+		"HEARTBEAT.md"
+	]
+
+	for (const template of templates) {
+		const templatePath = join(agentTemplatesDir, template)
+		if (existsSync(templatePath)) {
+			const content = readFileSync(templatePath, "utf-8")
+			writeFileSync(join(projectDir, template), content)
+		}
+	}
+
 	writeFileSync(join(projectDir, "SOUL.md"), soulMd(templateData))
-	writeFileSync(join(projectDir, "INSTRUCTIONS.md"), instructionsMd())
 	writeFileSync(join(projectDir, ".env.example"), envExample(templateData))
 	writeFileSync(join(projectDir, ".gitignore"), gitignore())
 
@@ -205,7 +234,7 @@ COPY package.json ./
 RUN npm install --omit=dev --legacy-peer-deps
 
 COPY dist/server/ ./dist/server/
-COPY SOUL.md INSTRUCTIONS.md ./
+COPY AGENTS.md SOUL.md IDENTITY.md USER.md TOOLS.md BOOT.md BOOTSTRAP.md HEARTBEAT.md ./
 COPY start.sh ./
 RUN chmod +x start.sh
 
@@ -380,7 +409,7 @@ function resolveProjectRoot(): string {
 	let dir = __dirname
 	for (let i = 0; i < 5; i++) {
 		try {
-			readFileSync(join(dir, "INSTRUCTIONS.md"), "utf-8")
+			readFileSync(join(dir, "AGENTS.md"), "utf-8")
 			return dir
 		} catch {
 			dir = dirname(dir)
@@ -399,8 +428,22 @@ function loadMarkdownFile(relativePath: string): string {
 	}
 }
 
-const INSTRUCTIONS_MD = loadMarkdownFile("INSTRUCTIONS.md")
+function loadUserMarkdown(userId?: string): string {
+	if (!userId) return loadMarkdownFile("USER.md")
+	
+	const userPath = join("users", userId, "USER.md")
+	const userFile = loadMarkdownFile(userPath)
+	
+	return userFile || loadMarkdownFile("USER.md")
+}
+
+const IDENTITY_MD = loadMarkdownFile("IDENTITY.md")
 const SOUL_MD = loadMarkdownFile("SOUL.md")
+const AGENTS_MD = loadMarkdownFile("AGENTS.md")
+const TOOLS_MD = loadMarkdownFile("TOOLS.md")
+const BOOT_MD = loadMarkdownFile("BOOT.md")
+const BOOTSTRAP_MD = loadMarkdownFile("BOOTSTRAP.md")
+const HEARTBEAT_MD = loadMarkdownFile("HEARTBEAT.md")
 
 interface ContainerRequest {
 	messages: Array<{
@@ -410,6 +453,7 @@ interface ContainerRequest {
 	}>
 	chatId: string
 	teamId?: string
+	userId?: string
 	systemPrompt?: string
 }
 
@@ -486,7 +530,16 @@ function extractTextDelta(msg: any): string | null {
 }
 
 function runAgent(req: ContainerRequest): ReadableStream<Uint8Array> {
-	const systemPrompt = [SOUL_MD, req.systemPrompt, INSTRUCTIONS_MD]
+	const USER_MD = loadUserMarkdown(req.userId)
+	
+	const systemPrompt = [
+		IDENTITY_MD,
+		SOUL_MD,
+		req.systemPrompt,
+		AGENTS_MD,
+		TOOLS_MD,
+		USER_MD
+	]
 		.filter(Boolean)
 		.join("\\n\\n")
 	const prompt = buildPromptWithHistory(req.messages)
@@ -646,6 +699,15 @@ process.on("unhandledRejection", (reason) => {
 })
 
 console.log(\`${data.agentName} listening on http://localhost:\${AGENT_PORT}\`)
+console.log(\`  Templates loaded:\`)
+console.log(\`    IDENTITY.md      \${IDENTITY_MD ? "✓" : "✗"}\`)
+console.log(\`    SOUL.md          \${SOUL_MD ? "✓" : "✗"}\`)
+console.log(\`    AGENTS.md        \${AGENTS_MD ? "✓" : "✗"}\`)
+console.log(\`    TOOLS.md         \${TOOLS_MD ? "✓" : "✗"}\`)
+console.log(\`    USER.md          \${loadMarkdownFile("USER.md") ? "✓" : "✗"}\`)
+console.log(\`    BOOT.md          \${BOOT_MD ? "✓" : "✗"}\`)
+console.log(\`    BOOTSTRAP.md     \${BOOTSTRAP_MD ? "✓" : "✗"}\`)
+console.log(\`    HEARTBEAT.md     \${HEARTBEAT_MD ? "✓" : "✗"}\`)
 
 Bun.serve({
 	port: AGENT_PORT,
@@ -673,17 +735,6 @@ You are ${data.agentName}. Be accurate, concise, and practical.
 - Be direct and brief.
 - Use bullet points over numbered lists.
 - Anticipate follow-up questions.
-`
-}
-
-function instructionsMd() {
-	return `## Guidelines
-
-- Answer directly. Don't redirect users elsewhere.
-- Be concise. Adapt to the channel.
-- Use bullet points unless sequence matters.
-- Only confirm actions after tools succeed.
-- Never fabricate documents or data.
 `
 }
 
