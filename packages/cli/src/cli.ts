@@ -839,28 +839,11 @@ async function deploy(platform = "fly") {
 	const projectDir = process.cwd()
 	const monorepoDir = resolve(__dirname, "../../..")
 
-	// Check for wallet key
-	const envPath = resolve(projectDir, ".env")
-	let walletKey = process.env.AGENT_WALLET_KEY
-
-	// Try to read from .env file
-	if (existsSync(envPath)) {
-		const envContent = readFileSync(envPath, "utf-8")
-		const keyMatch = envContent.match(/AGENT_WALLET_KEY=(.+)/)
-		if (keyMatch) {
-			walletKey = keyMatch[1].trim().replace(/['"]/g, "")
-		}
-	}
-
-	// Get app name early to check Fly.io secrets
+	// Get app name from fly.toml
 	const hybridDir = resolve(projectDir, ".hybrid")
 	const flyTomlPath = resolve(hybridDir, "fly.toml")
 	const projectFlyToml = resolve(projectDir, "fly.toml")
 	let appName = "hybrid-agent"
-
-	// Check if app exists and has secrets
-	let appExists = false
-	let existingWalletOnFly = false
 
 	// Read app name from fly.toml
 	if (existsSync(flyTomlPath)) {
@@ -871,13 +854,17 @@ async function deploy(platform = "fly") {
 		}
 	}
 
-	// Check if app exists on Fly.io and has AGENT_WALLET_KEY
+	// Check if app exists and has AGENT_WALLET_KEY
+	let appExists = false
+	let existingWalletOnFly = false
+	let walletKey: string | undefined
+
 	try {
 		execSync(`fly status --app ${appName}`, { stdio: "pipe" })
 		appExists = true
 		if (process.env.DEBUG) console.log(`   Found Fly.io app: ${appName}`)
 
-		// Check for existing secrets
+		// Check for existing wallet on Fly.io
 		const secretsJson = execSync(`fly secrets list --app ${appName} --json`, {
 			encoding: "utf-8",
 			stdio: ["pipe", "pipe", "pipe"]
@@ -895,11 +882,11 @@ async function deploy(platform = "fly") {
 		appExists = false
 	}
 
-	// Generate wallet if not found locally or on Fly.io
-	if (!walletKey && existingWalletOnFly) {
+	// Generate wallet if not on Fly.io
+	if (existingWalletOnFly) {
 		console.log("\n🔐 AGENT_WALLET_KEY exists on Fly.io (using existing)")
-	} else if (!walletKey) {
-		console.log("\n🔐 No AGENT_WALLET_KEY found.")
+	} else {
+		console.log("\n🔐 No AGENT_WALLET_KEY found on Fly.io.")
 
 		const walletChoice = await prompts({
 			type: "select",
@@ -1061,72 +1048,18 @@ async function deploy(platform = "fly") {
 			})
 		})
 
-		// Set secrets on Fly.io (only if changed)
-		console.log("\n🔐 Checking secrets on Fly.io...")
-		const secrets: string[] = []
-
-		// Get existing secrets from Fly.io
-		const existingSecrets: Record<string, string> = {}
-		try {
-			const secretsJson = execSync(`fly secrets list --app ${appName} --json`, {
-				encoding: "utf-8",
-				stdio: ["pipe", "pipe", "pipe"]
-			})
-			const secretsList = JSON.parse(secretsJson)
-			for (const s of secretsList) {
-				// Fly returns secrets with lowercase "name" and "digest"
-				if (s.name) {
-					existingSecrets[s.name] = s.digest || "exists"
-				}
-			}
-		} catch {
-			// No secrets yet or error fetching
-		}
-
-		// Check if AGENT_WALLET_KEY needs to be set
+		// Set AGENT_WALLET_KEY on Fly.io if generated
 		if (walletKey) {
-			// We can't compare values (Fly doesn't return them), but we can check if it exists
-			// Always include it since we can't verify the value matches
-			secrets.push(`AGENT_WALLET_KEY=${walletKey}`)
-		}
-
-		// Add other secrets from .env (skip AGENT_WALLET_KEY)
-		if (existsSync(envPath)) {
-			const envContent = readFileSync(envPath, "utf-8")
-			const lines = envContent.split("\n")
-			for (const line of lines) {
-				const trimmed = line.trim()
-				if (!trimmed || trimmed.startsWith("#")) continue
-				const [key, ...valueParts] = trimmed.split("=")
-				const value = valueParts.join("=").replace(/['"]/g, "")
-				if (
-					key &&
-					value &&
-					key !== "AGENT_WALLET_KEY" &&
-					key !== "AGENT_SECRET"
-				) {
-					secrets.push(`${key}=${value}`)
-				}
-			}
-		}
-
-		// Check which secrets actually need updating
-		const secretsToUpdate = secrets.filter((s) => {
-			const key = s.split("=")[0]
-			return !(key in existingSecrets)
-		})
-
-		if (secretsToUpdate.length > 0) {
-			console.log(`   Setting ${secretsToUpdate.length} new secret(s)...`)
+			console.log("\n🔐 Setting wallet on Fly.io...")
 			try {
 				execSync(
-					`fly secrets set ${secretsToUpdate.join(" ")} --app ${appName}`,
+					`fly secrets set AGENT_WALLET_KEY=${walletKey} --app ${appName}`,
 					{
 						cwd: hybridDir,
 						stdio: "inherit"
 					}
 				)
-				console.log("✅ Secrets set successfully")
+				console.log("✅ Wallet key set")
 
 				// Restart to pick up new secrets
 				console.log("🔄 Restarting app to apply secrets...")
@@ -1136,13 +1069,17 @@ async function deploy(platform = "fly") {
 				})
 			} catch {
 				console.log(
-					"⚠️  Could not set secrets. Run manually: fly secrets set KEY=value --app",
+					"⚠️  Could not set wallet key. Run manually: fly secrets set AGENT_WALLET_KEY=xxx --app",
 					appName
 				)
 			}
 		} else {
-			console.log("✅ All secrets already set")
+			console.log("\n✅ Wallet already configured on Fly.io")
 		}
+
+		// Remind user to set other secrets
+		console.log("\n📝 To set other secrets (API keys, etc.), run:")
+		console.log(`   fly secrets set ANTHROPIC_API_KEY=xxx --app ${appName}`)
 
 		// Get wallet address for summary
 		let walletAddress = "unknown"
