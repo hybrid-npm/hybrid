@@ -19,6 +19,10 @@ async function main() {
 		return dev(args.includes("--docker"))
 	}
 
+	if (command === "start") {
+		return start()
+	}
+
 	if (command === "deploy") {
 		return deploy(args[1])
 	}
@@ -80,6 +84,7 @@ async function main() {
 	console.log("  build [--target]   Build agent bundle (.hybrid/)")
 	console.log("  dev                Start development server")
 	console.log("  dev --docker       Start development server with Docker")
+	console.log("  start              Run built agent from .hybrid/")
 	console.log("  register           Register wallet on XMTP network")
 	console.log("  revoke <inboxId>   Revoke installations for an inbox ID")
 	console.log(
@@ -824,6 +829,67 @@ async function dev(useDocker: boolean) {
 		console.error("\n❌ Failed to start dev server")
 		process.exit(1)
 	}
+}
+
+async function start() {
+	const { spawn } = await import("node:child_process")
+	const { resolve, dirname } = await import("node:path")
+	const { fileURLToPath } = await import("node:url")
+	const { existsSync } = await import("node:fs")
+
+	const __dirname = dirname(fileURLToPath(import.meta.url))
+	const rootDir = resolve(__dirname, "../../..")
+	const projectDir = process.cwd()
+	const hybridDir = resolve(projectDir, ".hybrid")
+
+	// Check if build exists
+	if (!existsSync(resolve(hybridDir, "dist"))) {
+		console.error("Error: No build found. Run 'hybrid build' first.")
+		process.exit(1)
+	}
+
+	// Ensure skills are copied to .hybrid/
+	await ensureSkills(projectDir, rootDir)
+
+	console.log("\n🚀 Starting agent from .hybrid/...\n")
+
+	const serverPath = resolve(hybridDir, "dist/server/simple.cjs")
+	const xmtpPath = resolve(hybridDir, "dist/xmtp.cjs")
+
+	// Run both processes
+	const server = spawn("node", [serverPath], {
+		cwd: hybridDir,
+		stdio: "inherit",
+		env: {
+			...process.env,
+			AGENT_PROJECT_ROOT: projectDir
+		}
+	})
+
+	const xmtp = spawn("node", [xmtpPath], {
+		cwd: hybridDir,
+		stdio: "inherit",
+		env: {
+			...process.env,
+			AGENT_PROJECT_ROOT: projectDir
+		}
+	})
+
+	const exitHandler = (code: number | null) => {
+		if (code !== 0 && code !== null) {
+			process.exit(code)
+		}
+	}
+
+	server.on("exit", exitHandler)
+	xmtp.on("exit", exitHandler)
+
+	// Handle Ctrl+C
+	process.on("SIGINT", () => {
+		server.kill("SIGINT")
+		xmtp.kill("SIGINT")
+		process.exit(0)
+	})
 }
 
 async function deploy(platform = "fly") {

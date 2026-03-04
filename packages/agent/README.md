@@ -154,11 +154,48 @@ Content-Type: application/json
 
 On each `/api/chat` request, the server builds the system prompt in this order:
 
-1. `SOUL.md` — Agent personality (loaded from `PROJECT_ROOT`)
-2. `AGENTS.md` — Agent instructions and behavioral guidelines
-3. Current timestamp
-4. Conversation history as `<conversation_history>` XML block
-5. Memory search results from `@hybrid/memory` (seeded from last user message)
+1. `IDENTITY.md` — Agent identity (name, emoji, avatar)
+2. `SOUL.md` — Agent personality and core truths
+3. Custom system prompt (if provided in request)
+4. `AGENTS.md` — Behavioral guidelines and workspace rules
+5. `TOOLS.md` — Local tool and environment notes
+6. `USER.md` — User profile (multi-tenant support)
+7. Current timestamp
+8. Conversation history as `<conversation_history>` XML block
+9. Memory search results from `@hybrid/memory` (seeded from last user message)
+
+### Multi-Tenant User Profiles
+
+The agent supports per-user `USER.md` files:
+
+```
+PROJECT_ROOT/
+├── USER.md              # Default/fallback user profile
+└── users/
+    ├── 0xalice/
+    │   └── USER.md      # Alice's profile
+    └── 0xbob/
+        └── USER.md      # Bob's profile
+```
+
+When a request includes a `userId`, the agent loads `users/{userId}/USER.md`. Falls back to root `USER.md` if user-specific file doesn't exist.
+
+### Template Files
+
+OpenCode-compatible template files (loaded from `PROJECT_ROOT`):
+
+| File | Purpose |
+|------|---------|
+| `IDENTITY.md` | Agent name, creature type, vibe, emoji, avatar |
+| `SOUL.md` | Personality, core truths, boundaries, vibe |
+| `AGENTS.md` | Behavioral guidelines, memory rules, safety, group chat behavior |
+| `USER.md` | Human's profile (name, timezone, preferences) |
+| `TOOLS.md` | Local environment notes (cameras, SSH, voices) |
+| `BOOT.md` | Startup instructions (executed on agent start) |
+| `BOOTSTRAP.md` | First-run setup wizard (deleted after completion) |
+| `HEARTBEAT.md` | Periodic check tasks |
+
+All templates follow OpenCode's format exactly. See OpenCode documentation for details.
 
 ## MCP Tool Servers
 

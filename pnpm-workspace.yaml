@@ -1,6 +1,7 @@
 packages:
   - agent
   - agents/*
+  - "!agents/hybrid-agent"
   - config/*
   - packages/*
   - site

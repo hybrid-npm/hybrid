@@ -9,7 +9,9 @@
 	"scripts": {
 		"build": "tsup",
 		"dev": "tsx src/index.ts",
-		"typecheck": "tsc --noEmit"
+		"typecheck": "tsc --noEmit",
+		"test": "vitest run",
+		"test:watch": "vitest"
 	},
 	"dependencies": {
 		"prompts": "^2.4.2"
@@ -19,6 +21,7 @@
 		"@types/node": "catalog:stack",
 		"@types/prompts": "^2.4.9",
 		"tsup": "^8.5.0",
-		"tsx": "^4.19.3"
+		"tsx": "^4.19.3",
+		"vitest": "^4.0.18"
 	}
 }

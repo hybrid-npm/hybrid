@@ -118,8 +118,22 @@ function loadMarkdownFile(relativePath: string): string {
 	}
 }
 
-const AGENTS_MD = loadMarkdownFile("AGENTS.md")
+function loadUserMarkdown(userId?: string): string {
+	if (!userId) return loadMarkdownFile("USER.md")
+
+	const userPath = join("users", userId, "USER.md")
+	const userFile = loadMarkdownFile(userPath)
+
+	return userFile || loadMarkdownFile("USER.md")
+}
+
+const IDENTITY_MD = loadMarkdownFile("IDENTITY.md")
 const SOUL_MD = loadMarkdownFile("SOUL.md")
+const AGENTS_MD = loadMarkdownFile("AGENTS.md")
+const TOOLS_MD = loadMarkdownFile("TOOLS.md")
+const BOOT_MD = loadMarkdownFile("BOOT.md")
+const BOOTSTRAP_MD = loadMarkdownFile("BOOTSTRAP.md")
+const HEARTBEAT_MD = loadMarkdownFile("HEARTBEAT.md")
 
 const AGENT_NAME = process.env.AGENT_NAME || "hybrid-agent"
 
@@ -449,10 +463,15 @@ When scheduling reminders, include delivery info to send the message back to thi
 - Keep it SHORT: "Got it! I'll remind you in 1 minute"`
 		: ""
 
+	const USER_MD = loadUserMarkdown(req.userId)
+
 	const systemPromptParts = [
+		IDENTITY_MD,
 		SOUL_MD,
 		req.systemPrompt,
 		AGENTS_MD,
+		TOOLS_MD,
+		USER_MD,
 		currentTime,
 		conversationContext
 	]
@@ -820,10 +839,28 @@ function printStartup() {
 	console.log("  Configuration Files:")
 	console.log(`    Project root          ${PROJECT_ROOT}`)
 	console.log(
-		`    AGENTS.md             ${AGENTS_MD ? "✓ loaded" : "✗ not found"}`
+		`    IDENTITY.md           ${IDENTITY_MD ? "✓ loaded" : "✗ not found"}`
 	)
 	console.log(
 		`    SOUL.md               ${SOUL_MD ? "✓ loaded" : "✗ not found"}`
+	)
+	console.log(
+		`    AGENTS.md             ${AGENTS_MD ? "✓ loaded" : "✗ not found"}`
+	)
+	console.log(
+		`    TOOLS.md              ${TOOLS_MD ? "✓ loaded" : "✗ not found"}`
+	)
+	console.log(
+		`    USER.md               ${loadMarkdownFile("USER.md") ? "✓ loaded" : "✗ not found"}`
+	)
+	console.log(
+		`    BOOT.md               ${BOOT_MD ? "✓ loaded" : "✗ not found"}`
+	)
+	console.log(
+		`    BOOTSTRAP.md          ${BOOTSTRAP_MD ? "✓ loaded" : "✗ not found"}`
+	)
+	console.log(
+		`    HEARTBEAT.md          ${HEARTBEAT_MD ? "✓ loaded" : "✗ not found"}`
 	)
 
 	console.log()
