@@ -82,7 +82,9 @@ function getProviderInfo(): { provider: string; model: string } {
 	return { provider: "Anthropic", model: "claude-sonnet-4-20250514" }
 }
 
-function resolveClaudeCodeExecutable(): string {
+const CLAUDE_WRAPPER_PATH = "/usr/local/bin/claude-wrapper.sh"
+
+function resolveClaudeCodeCliPath(): string {
 	if (process.env.CLAUDE_CODE_EXECUTABLE_PATH) {
 		return process.env.CLAUDE_CODE_EXECUTABLE_PATH
 	}
@@ -117,6 +119,40 @@ function resolveClaudeCodeExecutable(): string {
 	throw new Error(
 		"Claude Code executable not found. Install @anthropic-ai/claude-agent-sdk or set CLAUDE_CODE_EXECUTABLE_PATH"
 	)
+}
+
+/**
+ * Resolve the executable path for the Claude Agent SDK.
+ *
+ * In Docker (when the wrapper script exists), this returns the wrapper
+ * which drops privileges to the 'claude' user before running the real CLI.
+ * The real CLI path is passed via the CLAUDE_REAL_CLI env var.
+ *
+ * In local dev, this returns the CLI path directly (no privilege drop).
+ */
+function resolveClaudeCodeExecutable(): {
+	executablePath: string
+	realCliPath: string
+	useWrapper: boolean
+} {
+	const realCliPath = resolveClaudeCodeCliPath()
+
+	// Use the privilege-drop wrapper if it exists (Docker deployment)
+	try {
+		readFileSync(CLAUDE_WRAPPER_PATH, "utf-8")
+		return {
+			executablePath: CLAUDE_WRAPPER_PATH,
+			realCliPath,
+			useWrapper: true
+		}
+	} catch {
+		// No wrapper available (local dev) — run CLI directly
+		return {
+			executablePath: realCliPath,
+			realCliPath,
+			useWrapper: false
+		}
+	}
 }
 
 const SCHEDULER_DB_PATH =
@@ -559,6 +595,10 @@ When scheduling reminders, include delivery info to send the message back to thi
 		req.userId || "anonymous"
 	)
 
+	// Resolve Claude executable (wrapper in Docker, direct in local dev)
+	const { executablePath, realCliPath, useWrapper } =
+		resolveClaudeCodeExecutable()
+
 	// Sensitive keys that should NEVER be passed to Claude child processes
 	const SENSITIVE_ENV_KEYS = [
 		"AGENT_WALLET_KEY",
@@ -566,6 +606,7 @@ When scheduling reminders, include delivery info to send the message back to thi
 		"WALLET_KEY",
 		"PRIVATE_KEY",
 		"SECRET",
+		"SECRETS_PATH",
 		"DATA_ROOT"
 	]
 
@@ -585,7 +626,9 @@ When scheduling reminders, include delivery info to send the message back to thi
 		// Use OpenRouter's model selection env var
 		...(isUsingOpenRouter
 			? { ANTHROPIC_SMALL_FAST_MODEL: "anthropic/claude-3.5-sonnet" }
-			: {})
+			: {}),
+		// Pass real CLI path so the wrapper knows what to execute
+		...(useWrapper ? { CLAUDE_REAL_CLI: realCliPath } : {})
 	}
 
 	// For OpenRouter: API_KEY must be explicitly empty to prevent conflicts
@@ -621,7 +664,7 @@ When scheduling reminders, include delivery info to send the message back to thi
 		abortController,
 		systemPrompt,
 		cwd: workspaceDir, // Isolated workspace for user
-		pathToClaudeCodeExecutable: resolveClaudeCodeExecutable(),
+		pathToClaudeCodeExecutable: executablePath,
 		settingSources: [],
 		permissionMode: "bypassPermissions",
 		allowDangerouslySkipPermissions: true,

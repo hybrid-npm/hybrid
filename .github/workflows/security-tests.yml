@@ -73,3 +73,28 @@ jobs:
             echo "FAIL: secret env vars leaked through entrypoint"
             exit 1
           fi
+
+      - name: Test 9 - claude user CANNOT list secrets directory
+        run: |
+          docker run --rm hybrid-agent:test sh -c "
+            sudo -u claude ls /app/data/secrets 2>&1 | grep -q 'Permission denied'
+          " || (echo "FAIL: claude can list secrets directory" && exit 1)
+
+      - name: Test 10 - claude user CAN read code in /app/dist
+        run: |
+          docker run --rm hybrid-agent:test sh -c "
+            sudo -u claude ls /app/dist/agent/ >/dev/null 2>&1
+          " || (echo "FAIL: claude cannot read /app/dist" && exit 1)
+
+      - name: Test 11 - claude user CAN write to workspaces
+        run: |
+          docker run --rm hybrid-agent:test sh -c "
+            sudo -u claude touch /app/workspaces/test-file &&
+            sudo -u claude rm /app/workspaces/test-file
+          " || (echo "FAIL: claude cannot write to /app/workspaces" && exit 1)
+
+      - name: Test 12 - claude-wrapper.sh exists and is executable
+        run: |
+          docker run --rm hybrid-agent:test sh -c "
+            test -x /usr/local/bin/claude-wrapper.sh
+          " || (echo "FAIL: claude-wrapper.sh missing or not executable" && exit 1)
