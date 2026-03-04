@@ -795,18 +795,6 @@ async function dev(useDocker: boolean) {
 	const rootDir = resolve(__dirname, "../../..")
 	const projectDir = process.cwd()
 
-	console.log("\n🔧 Building packages...")
-
-	try {
-		execSync("npx pnpm --filter hybrid/agent run build", {
-			cwd: rootDir,
-			stdio: "inherit"
-		})
-	} catch (error) {
-		console.error("Build failed")
-		process.exit(1)
-	}
-
 	// Ensure skills are copied to .hybrid/
 	await ensureSkills(projectDir, rootDir)
 
@@ -821,14 +809,17 @@ async function dev(useDocker: boolean) {
 	const agentDir = resolve(rootDir, "packages/agent")
 
 	try {
-		execSync("npx pnpm run dev", {
-			cwd: agentDir,
-			stdio: "inherit",
-			env: {
-				...process.env,
-				AGENT_PROJECT_ROOT: projectDir
+		execSync(
+			'npx concurrently --names "server,xmtp" --prefix-colors "cyan,magenta" "npx tsx watch --clear-screen=false src/server/simple.ts" "npx tsx watch --clear-screen=false src/xmtp.ts"',
+			{
+				cwd: agentDir,
+				stdio: "inherit",
+				env: {
+					...process.env,
+					AGENT_PROJECT_ROOT: projectDir
+				}
 			}
-		})
+		)
 	} catch {
 		console.error("\n❌ Failed to start dev server")
 		process.exit(1)
