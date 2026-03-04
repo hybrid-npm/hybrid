@@ -1077,10 +1077,6 @@ async function deploy(platform = "fly") {
 			console.log("\n✅ Wallet already configured on Fly.io")
 		}
 
-		// Remind user to set other secrets
-		console.log("\n📝 To set other secrets (API keys, etc.), run:")
-		console.log(`   fly secrets set ANTHROPIC_API_KEY=xxx --app ${appName}`)
-
 		// Get wallet address for summary
 		let walletAddress = "unknown"
 		if (walletKey) {
