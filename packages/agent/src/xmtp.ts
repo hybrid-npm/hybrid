@@ -8,6 +8,7 @@ import { Client, type Signer } from "@xmtp/node-sdk"
 import { config } from "dotenv"
 import pc from "picocolors"
 import { toBytes } from "viem"
+import { getWalletKey, hasSecret, loadSecrets } from "./lib/secret-store"
 
 // Resolve project directory (where hybrid dev was called from)
 const projectDir = process.env.AGENT_PROJECT_ROOT || process.cwd()
@@ -19,14 +20,15 @@ const envPath = path.join(projectDir, ".env")
 config({ path: envLocalPath, override: true })
 config({ path: envPath })
 
-// Debug output AFTER loading env
+// Load secrets from persistent volume (must be after dotenv for DATA_ROOT)
+loadSecrets()
+
+// Debug output AFTER loading env and secrets
 if (process.env.DEBUG) {
 	console.log(`[xmtp] Project dir: ${projectDir}`)
 	console.log(`[xmtp] .env path: ${envPath}`)
 	console.log(`[xmtp] .env exists: ${fs.existsSync(envPath)}`)
-	console.log(
-		`[xmtp] AGENT_WALLET_KEY: ${process.env.AGENT_WALLET_KEY ? "set" : "not set"}`
-	)
+	console.log(`[xmtp] WALLET_KEY: ${hasSecret("WALLET_KEY") ? "set" : "not set"}`)
 }
 
 const log = {
@@ -129,15 +131,14 @@ interface SendMessageRequest {
 }
 
 async function startSidecar() {
-	const key = process.env.AGENT_WALLET_KEY
-
-	if (!key) {
-		log.warn("AGENT_WALLET_KEY not set")
+	if (!hasSecret("WALLET_KEY")) {
+		log.warn("WALLET_KEY not loaded (no secret file found)")
 		printBanner()
 		await new Promise(() => {})
 		return
 	}
 
+	const key = getWalletKey()
 	const user = createUser(key as `0x${string}`)
 	printBanner(user.account.address)
 

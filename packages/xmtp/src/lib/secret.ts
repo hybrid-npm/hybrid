@@ -23,39 +23,14 @@ export function deriveAgentSecret(walletKey: string): string {
 }
 
 /**
- * Resolves AGENT_SECRET: checks memory store first, then derives from wallet key.
+ * Resolves AGENT_SECRET by deriving it from the provided wallet key.
  *
- * Priority:
- * 1. Memory store (loaded from /secrets/agent.key via secret-store)
- * 2. Environment variable (fallback for local dev)
- * 3. Derive from wallet key
+ * The wallet key must be passed explicitly — this function does not
+ * read from environment variables or external stores.
  */
-export function resolveAgentSecret(walletKey?: string): string {
-	// Try memory store first (from secret-store module)
-	try {
-		// Dynamic import to avoid circular dependencies
-		const secretStore = require("@hybrd/agent/lib/secret-store")
-		if (secretStore.hasSecret("AGENT_SECRET")) {
-			return secretStore.getAgentSecret()
-		}
-		if (secretStore.hasSecret("WALLET_KEY")) {
-			return deriveAgentSecret(secretStore.getWalletKey())
-		}
-	} catch {
-		// Secret store not available, fall through to env/derive
+export function resolveAgentSecret(walletKey: string): string {
+	if (!walletKey) {
+		throw new Error("walletKey is required to derive AGENT_SECRET")
 	}
-
-	// Check environment variable (for local development)
-	if (process.env.AGENT_SECRET) {
-		return process.env.AGENT_SECRET
-	}
-
-	// Derive from wallet key
-	const key = walletKey || process.env.AGENT_WALLET_KEY
-	if (!key) {
-		throw new Error(
-			"AGENT_WALLET_KEY must be set to derive AGENT_SECRET automatically"
-		)
-	}
-	return deriveAgentSecret(key)
+	return deriveAgentSecret(walletKey)
 }

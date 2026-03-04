@@ -28,10 +28,10 @@ COPY packages/agent/dist/ ./dist/agent/
 COPY agents/hybrid-agent/AGENTS.md agents/hybrid-agent/SOUL.md ./
 
 # Create directory structure
-# /secrets - only accessible by 'app' user (created by entrypoint)
-# /app/data - persistent runtime data
+# /app/data - persistent runtime data (mounted volume)
+# /app/data/secrets - secret files (0700, app:app only)
 # /app/workspaces - isolated user workspaces
-RUN mkdir -p /secrets \
+RUN mkdir -p /app/data/secrets \
     /app/data/memory/users \
     /app/data/memory/life/projects \
     /app/data/memory/life/areas \
@@ -42,8 +42,7 @@ RUN mkdir -p /secrets \
     /app/data/xmtp \
     /app/workspaces && \
     chown -R app:app /app/data /app/workspaces && \
-    chmod 700 /secrets && \
-    chown app:app /secrets
+    chmod 700 /app/data/secrets
 
 # Copy privilege-drop wrapper script
 COPY deployments/flyio/claude-wrapper.sh /usr/local/bin/claude-wrapper.sh

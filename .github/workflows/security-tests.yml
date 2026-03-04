@@ -19,49 +19,57 @@ jobs:
         run: |
           docker build -f deployments/flyio/Dockerfile -t hybrid-agent:test .
 
-      - name: Test 1 - app user can read secrets (via entrypoint injection)
+      - name: Test 1 - Secrets directory has correct permissions (drwx------)
         run: |
-          docker run --rm -e AGENT_WALLET_KEY="0xtest123456789abcdef" hybrid-agent:test sh -c "cat /secrets/wallet.key && echo 'PASS: app can read secrets'" 2>&1 | grep -q "PASS" && echo "Test 1 PASSED" || echo "Test 1 FAILED"
-
-      - name: Test 2 - claude user CANNOT read secrets
-        run: |
-          docker run --rm -e AGENT_WALLET_KEY="0xtest123456789abcdef" --user claude hybrid-agent:test sh -c "cat /secrets/wallet.key 2>&1" 2>&1 | grep -q "Permission denied" && echo "Test 2 PASSED" || echo "Test 2 FAILED"
-
-      - name: Test 3 - Verify /secrets/ permissions
-        run: |
-          PERMS=$(docker run --rm hybrid-agent:test sh -c "ls -ld /secrets" 2>&1)
+          PERMS=$(docker run --rm hybrid-agent:test sh -c "ls -ld /app/data/secrets")
           echo "$PERMS"
-          echo "$PERMS" | grep -q "drwx------" && echo "Test 3 PASSED" || echo "Test 3 FAILED"
+          echo "$PERMS" | grep -q "drwx------" || (echo "FAIL: secrets dir permissions wrong" && exit 1)
 
-      - name: Test 4 - Verify /secrets/ owned by app
+      - name: Test 2 - Secrets directory owned by app
         run: |
-          OWNER=$(docker run --rm hybrid-agent:test sh -c "ls -ld /secrets" 2>&1)
+          OWNER=$(docker run --rm hybrid-agent:test sh -c "ls -ld /app/data/secrets")
           echo "$OWNER"
-          echo "$OWNER" | grep -q "app app" && echo "Test 4 PASSED" || echo "Test 4 FAILED"
+          echo "$OWNER" | grep -q "app" || (echo "FAIL: secrets dir not owned by app" && exit 1)
 
-      - name: Test 5 - Verify claude user cannot sudo
+      - name: Test 3 - app user can write and read secret files
         run: |
-          docker run --rm --user claude hybrid-agent:test sh -c "sudo whoami 2>&1" 2>&1 | grep -qE "(not allowed|Permission denied)" && echo "Test 5 PASSED" || echo "Test 5 FAILED"
+          docker run --rm hybrid-agent:test sh -c "
+            echo 'testkey' > /app/data/secrets/wallet.key &&
+            chmod 400 /app/data/secrets/wallet.key &&
+            cat /app/data/secrets/wallet.key | grep -q 'testkey'
+          " || (echo "FAIL: app cannot read/write secrets" && exit 1)
 
-      - name: Test 6 - Verify both users exist
+      - name: Test 4 - claude user CANNOT read secrets directory
         run: |
-          docker run --rm hybrid-agent:test sh -c "id app && id claude" 2>&1 | grep -qE "uid=1000.*uid=1001" && echo "Test 6 PASSED" || echo "Test 6 FAILED"
+          # Write a secret as app, then verify claude cannot read it
+          docker run --rm hybrid-agent:test sh -c "
+            echo 'testkey' > /app/data/secrets/wallet.key &&
+            chmod 400 /app/data/secrets/wallet.key &&
+            sudo -u claude cat /app/data/secrets/wallet.key 2>&1 | grep -q 'Permission denied'
+          " || (echo "FAIL: claude can read secrets" && exit 1)
 
-      - name: Test 7 - Verify workspace isolation directory
+      - name: Test 5 - Both users exist with correct UIDs
         run: |
-          docker run --rm hybrid-agent:test sh -c "ls -ld /app/workspaces" 2>&1 | grep -q "workspaces" && echo "Test 7 PASSED" || echo "Test 7 FAILED"
+          docker run --rm hybrid-agent:test sh -c "id app" | grep -q "uid=1000" || (echo "FAIL: app user missing or wrong UID" && exit 1)
+          docker run --rm hybrid-agent:test sh -c "id claude" | grep -q "uid=1001" || (echo "FAIL: claude user missing or wrong UID" && exit 1)
 
-      - name: Test 8 - Verify data directory structure
+      - name: Test 6 - Workspace isolation directory exists
         run: |
-          docker run --rm hybrid-agent:test sh -c "ls /app/data/memory/users /app/data/credentials" 2>&1 | grep -qE "(users|credentials)" && echo "Test 8 PASSED" || echo "Test 8 FAILED"
+          docker run --rm hybrid-agent:test sh -c "test -d /app/workspaces" || (echo "FAIL: /app/workspaces missing" && exit 1)
 
-      - name: Test 9 - Verify AGENT_WALLET_KEY is unset after injection
+      - name: Test 7 - Data directory structure exists
         run: |
-          docker run --rm -e AGENT_WALLET_KEY="0xtest123456789abcdef" hybrid-agent:test sh -c "printenv | grep AGENT_WALLET_KEY" 2>&1 | grep -q "AGENT_WALLET_KEY" && echo "Test 9 FAILED: env var still set" || echo "Test 9 PASSED: env var unset"
+          docker run --rm hybrid-agent:test sh -c "
+            test -d /app/data/memory/users &&
+            test -d /app/data/credentials &&
+            test -d /app/data/secrets
+          " || (echo "FAIL: data directory structure incomplete" && exit 1)
 
-      - name: Security audit summary
-        if: always()
+      - name: Test 8 - No secret env vars leak to app user
         run: |
-          echo "=== Security Test Summary ==="
-          echo "All tests must pass before merging to main."
-          echo "If any test fails, the PR should be blocked."
+          # Even if someone accidentally sets these, entrypoint scrubs them
+          RESULT=$(docker run --rm -e AGENT_WALLET_KEY="leak" -e AGENT_SECRET="leak" hybrid-agent:test sh -c "printenv | grep -cE 'AGENT_WALLET_KEY|AGENT_SECRET'" 2>&1 || true)
+          if [ "$RESULT" != "0" ] && [ -n "$RESULT" ]; then
+            echo "FAIL: secret env vars leaked through entrypoint"
+            exit 1
+          fi

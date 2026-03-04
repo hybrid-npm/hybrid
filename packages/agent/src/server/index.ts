@@ -23,16 +23,10 @@ import { createMemoryMcpServer, resolveUserRole } from "../memory-tools"
 const _dirname = typeof __dirname !== "undefined" ? __dirname : process.cwd()
 
 // ============================================================================
-// SECURITY: Load secrets into memory BEFORE anything else
-// This ensures secrets are never in process.env where child processes could see them
+// SECURITY: Load secrets from persistent volume into memory
+// Secrets are file-based only — never in process.env
 // ============================================================================
 loadSecrets()
-
-// Remove secrets from process.env so they can't leak to child processes
-delete process.env.AGENT_WALLET_KEY
-delete process.env.AGENT_SECRET
-delete process.env.WALLET_KEY
-delete process.env.PRIVATE_KEY
 
 // Set DATA_ROOT for memory package (where runtime data is stored)
 process.env.DATA_ROOT = process.env.DATA_ROOT || join(_dirname, "../../../data")
@@ -572,7 +566,6 @@ When scheduling reminders, include delivery info to send the message back to thi
 		"WALLET_KEY",
 		"PRIVATE_KEY",
 		"SECRET",
-		"SECRETS_PATH",
 		"DATA_ROOT"
 	]
 
