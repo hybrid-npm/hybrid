@@ -215,11 +215,26 @@ async function build(target?: string) {
 				console.log(`   ✓ ${file}`)
 			}
 		}
-		// Copy agent.ts config
-		const agentConfigSrc = resolve(agentDir, "agent.ts")
-		if (existsSync(agentConfigSrc)) {
-			cpSync(agentConfigSrc, resolve(hybridDir, "agent.config.js"))
-			console.log("   ✓ agent.config.js")
+		// Copy config file (priority: hybrid.config.ts > openclaw.json migration > agent.ts)
+		const hybridConfigPath = resolve(agentDir, "hybrid.config.ts")
+		const openclawConfigPath = resolve(agentDir, "openclaw.json")
+		const agentConfigPath = resolve(agentDir, "agent.ts")
+
+		if (existsSync(hybridConfigPath)) {
+			cpSync(hybridConfigPath, resolve(hybridDir, "hybrid.config.js"))
+			console.log("   ✓ hybrid.config.ts → hybrid.config.js")
+		} else if (existsSync(openclawConfigPath)) {
+			// Migrate openclaw.json → hybrid.config.ts
+			const openclawContent = readFileSync(openclawConfigPath, "utf-8")
+			const hybridConfigContent = `// Migrated from openclaw.json\nexport default ${openclawContent}`
+			writeFileSync(resolve(agentDir, "hybrid.config.ts"), hybridConfigContent)
+			cpSync(openclawConfigPath, resolve(hybridDir, "hybrid.config.js"))
+			console.log(
+				"   ✓ Migrated openclaw.json → hybrid.config.ts (original preserved)"
+			)
+		} else if (existsSync(agentConfigPath)) {
+			cpSync(agentConfigPath, resolve(hybridDir, "hybrid.config.js"))
+			console.log("   ✓ agent.ts → hybrid.config.js (legacy)")
 		}
 	}
 
