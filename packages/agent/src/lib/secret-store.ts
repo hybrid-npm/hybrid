@@ -19,12 +19,17 @@ export type SecretName = "WALLET_KEY" | "AGENT_SECRET"
 
 const secrets = new Map<SecretName, string>()
 
-const DATA_ROOT = process.env.DATA_ROOT || "/app/data"
-const SECRETS_DIR = join(DATA_ROOT, "secrets")
+function getSecretsDir(): string {
+	const dataRoot = process.env.DATA_ROOT || "/app/data"
+	return join(dataRoot, "secrets")
+}
 
-const SECRET_PATHS: Record<SecretName, string> = {
-	WALLET_KEY: join(SECRETS_DIR, "wallet.key"),
-	AGENT_SECRET: join(SECRETS_DIR, "agent.key")
+function getSecretPaths(): Record<SecretName, string> {
+	const secretsDir = getSecretsDir()
+	return {
+		WALLET_KEY: join(secretsDir, "wallet.key"),
+		AGENT_SECRET: join(secretsDir, "agent.key")
+	}
 }
 
 /**
@@ -36,7 +41,8 @@ const SECRET_PATHS: Record<SecretName, string> = {
  * load — they persist across deploys on the volume.
  */
 export function loadSecrets(): void {
-	for (const [name, path] of Object.entries(SECRET_PATHS) as [
+	const secretPaths = getSecretPaths()
+	for (const [name, path] of Object.entries(secretPaths) as [
 		SecretName,
 		string
 	][]) {

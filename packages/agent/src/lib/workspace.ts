@@ -11,8 +11,13 @@
 import { access, mkdir, symlink } from "node:fs/promises"
 import { join } from "node:path"
 
-const DATA_ROOT = process.env.DATA_ROOT || "/app/data"
-const PROJECT_ROOT = process.env.AGENT_PROJECT_ROOT || process.cwd()
+function getDataRoot(): string {
+	return process.env.DATA_ROOT || "/app/data"
+}
+
+function getProjectRoot(): string {
+	return process.env.AGENT_PROJECT_ROOT || process.cwd()
+}
 
 export interface WorkspacePaths {
 	workspaceDir: string
@@ -32,24 +37,26 @@ async function exists(path: string): Promise<boolean> {
 }
 
 /**
- * Create symlink if it doesn't exist
+ * Create symlink if it doesn't exist.
+ * Uses try/catch instead of check-then-act to avoid TOCTOU races
+ * when concurrent requests create the same workspace.
  */
 async function createSymlinkIfNotExists(
 	target: string,
 	link: string,
 	type: "file" | "dir" = "file"
 ): Promise<void> {
-	if (await exists(link)) {
-		return
-	}
-
 	// Ensure parent directory exists
 	const linkDir = join(link, "..")
-	if (!(await exists(linkDir))) {
-		await mkdir(linkDir, { recursive: true })
-	}
+	await mkdir(linkDir, { recursive: true })
 
-	await symlink(target, link, type)
+	try {
+		await symlink(target, link, type)
+	} catch (err) {
+		if ((err as NodeJS.ErrnoException).code !== "EEXIST") {
+			throw err
+		}
+	}
 }
 
 /**
@@ -82,8 +89,9 @@ export async function getOrCreateUserWorkspace(
 ): Promise<WorkspacePaths> {
 	const sanitizedUserId = sanitizeUserId(userId)
 
-	const workspaceDir = join(DATA_ROOT, "workspaces", sanitizedUserId)
-	const userMemoryDir = join(DATA_ROOT, "memory", "users", sanitizedUserId)
+	const dataRoot = getDataRoot()
+	const workspaceDir = join(dataRoot, "workspaces", sanitizedUserId)
+	const userMemoryDir = join(dataRoot, "memory", "users", sanitizedUserId)
 
 	// Create workspace directory
 	await createDirIfNotExists(workspaceDir)
@@ -92,23 +100,24 @@ export async function getOrCreateUserWorkspace(
 	await createDirIfNotExists(userMemoryDir)
 
 	// Symlink read-only resources (code)
+	const projectRoot = getProjectRoot()
 	const readOnlyLinks: Array<{
 		target: string
 		link: string
 		type: "file" | "dir"
 	}> = [
 		{
-			target: join(PROJECT_ROOT, "dist"),
+			target: join(projectRoot, "dist"),
 			link: join(workspaceDir, "dist"),
 			type: "dir"
 		},
 		{
-			target: join(PROJECT_ROOT, "AGENTS.md"),
+			target: join(projectRoot, "AGENTS.md"),
 			link: join(workspaceDir, "AGENTS.md"),
 			type: "file"
 		},
 		{
-			target: join(PROJECT_ROOT, "SOUL.md"),
+			target: join(projectRoot, "SOUL.md"),
 			link: join(workspaceDir, "SOUL.md"),
 			type: "file"
 		}
@@ -119,10 +128,7 @@ export async function getOrCreateUserWorkspace(
 	}
 
 	// Symlink user's memory (read-write)
-	const memoryLink = join(workspaceDir, "memory")
-	if (!(await exists(memoryLink))) {
-		await symlink(userMemoryDir, memoryLink, "dir")
-	}
+	await createSymlinkIfNotExists(userMemoryDir, join(workspaceDir, "memory"), "dir")
 
 	return { workspaceDir, userMemoryDir }
 }
@@ -137,16 +143,20 @@ export function isPathInUserWorkspace(
 	path: string
 ): boolean {
 	const sanitizedUserId = sanitizeUserId(userId)
-	const expectedWorkspace = join(DATA_ROOT, "workspaces", sanitizedUserId)
-	const expectedMemory = join(DATA_ROOT, "memory", "users", sanitizedUserId)
+	const dataRoot = getDataRoot()
+	const expectedWorkspace = join(dataRoot, "workspaces", sanitizedUserId)
+	const expectedMemory = join(dataRoot, "memory", "users", sanitizedUserId)
 
 	// Normalize paths to prevent traversal
 	const normalizedPath = join(workspaceDir, path)
 
 	// Check if path is within user's workspace or memory
+	// Use trailing separator to prevent prefix collisions (e.g. alice vs alicebob)
 	return (
-		normalizedPath.startsWith(expectedWorkspace) ||
-		normalizedPath.startsWith(expectedMemory)
+		normalizedPath === expectedWorkspace ||
+		normalizedPath.startsWith(expectedWorkspace + "/") ||
+		normalizedPath === expectedMemory ||
+		normalizedPath.startsWith(expectedMemory + "/")
 	)
 }
 
@@ -155,19 +165,19 @@ export function isPathInUserWorkspace(
  */
 export function getUserMemoryPath(userId: string): string {
 	const sanitizedUserId = sanitizeUserId(userId)
-	return join(DATA_ROOT, "memory", "users", sanitizedUserId)
+	return join(getDataRoot(), "memory", "users", sanitizedUserId)
 }
 
 /**
  * Get the path to the workspaces directory.
  */
 export function getWorkspacesPath(): string {
-	return join(DATA_ROOT, "workspaces")
+	return join(getDataRoot(), "workspaces")
 }
 
 /**
  * Get the DATA_ROOT path.
  */
-export function getDataRoot(): string {
-	return DATA_ROOT
+export function getDataRootPath(): string {
+	return getDataRoot()
 }

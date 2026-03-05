@@ -17,4 +17,6 @@ set -e
 REAL_CLI="${CLAUDE_REAL_CLI:?CLAUDE_REAL_CLI must be set}"
 
 # Drop to 'claude' user and execute the real CLI with all original args
-exec sudo -u claude -- node "$REAL_CLI" "$@"
+# Use gosu instead of sudo to preserve the environment (sudo's env_reset
+# would strip ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN, etc.)
+exec gosu claude node "$REAL_CLI" "$@"
