@@ -8,9 +8,6 @@ import { HDKey } from "viem/accounts"
  * index 41 is arbitrary but fixed — chosen to avoid collision with standard
  * account derivation paths). The child private key is used directly as the
  * 32-byte secret, returned as a 64-character hex string.
- *
- * This means AGENT_SECRET never needs to be set separately — it is always
- * deterministically recoverable from AGENT_WALLET_KEY alone.
  */
 export function deriveAgentSecret(walletKey: string): string {
 	const keyBytes = toBytes(walletKey as `0x${string}`)
@@ -23,14 +20,14 @@ export function deriveAgentSecret(walletKey: string): string {
 }
 
 /**
- * Resolves AGENT_SECRET by deriving it from the provided wallet key.
+ * Resolves the database encryption secret by deriving it from the provided wallet key.
  *
  * The wallet key must be passed explicitly — this function does not
  * read from environment variables or external stores.
  */
 export function resolveAgentSecret(walletKey: string): string {
 	if (!walletKey) {
-		throw new Error("walletKey is required to derive AGENT_SECRET")
+		throw new Error("walletKey is required to derive the encryption secret")
 	}
 	return deriveAgentSecret(walletKey)
 }

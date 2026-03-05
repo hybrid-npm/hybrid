@@ -27,7 +27,7 @@
 fly deploy --depot=false
 
 # Set secrets
-fly secrets set AGENT_WALLET_KEY=xxx AGENT_SECRET=xxx XMTP_ENV=production OPENROUTER_API_KEY=xxx
+fly secrets set AGENT_WALLET_KEY=xxx XMTP_ENV=production OPENROUTER_API_KEY=xxx
 ```
 
 ### Option B: Sprites (Recommended)

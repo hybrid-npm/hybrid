@@ -15,7 +15,7 @@
 import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 
-export type SecretName = "WALLET_KEY" | "AGENT_SECRET"
+export type SecretName = "WALLET_KEY"
 
 const secrets = new Map<SecretName, string>()
 
@@ -27,8 +27,7 @@ function getSecretsDir(): string {
 function getSecretPaths(): Record<SecretName, string> {
 	const secretsDir = getSecretsDir()
 	return {
-		WALLET_KEY: join(secretsDir, "wallet.key"),
-		AGENT_SECRET: join(secretsDir, "agent.key")
+		WALLET_KEY: join(secretsDir, "wallet.key")
 	}
 }
 
@@ -71,18 +70,6 @@ export function getWalletKey(): string {
 		throw new Error("WALLET_KEY not loaded. Call loadSecrets() at startup.")
 	}
 	return key
-}
-
-/**
- * Get the derived agent secret.
- * Throws if not loaded.
- */
-export function getAgentSecret(): string {
-	const secret = secrets.get("AGENT_SECRET")
-	if (!secret) {
-		throw new Error("AGENT_SECRET not loaded. Call loadSecrets() at startup.")
-	}
-	return secret
 }
 
 /**

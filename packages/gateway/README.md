@@ -92,7 +92,6 @@ The `ensureAgentServer()` function manages container process health:
 | Variable | Description |
 |----------|-------------|
 | `AGENT_WALLET_KEY` | Private key for the agent's XMTP wallet (required) |
-| `AGENT_SECRET` | Encryption key for XMTP database (required) |
 | `XMTP_ENV` | XMTP environment: `dev` or `production` |
 | `ANTHROPIC_API_KEY` | Anthropic API key |
 | `ANTHROPIC_BASE_URL` | Override Anthropic base URL (auto-set for OpenRouter) |
@@ -151,7 +150,6 @@ export interface GatewayEnv {
   AgentContainer: DurableObjectNamespace
   XMTP_STORAGE: R2Bucket
   AGENT_WALLET_KEY: string
-  AGENT_SECRET: string
   XMTP_ENV: string
   ANTHROPIC_API_KEY?: string
   ANTHROPIC_BASE_URL?: string

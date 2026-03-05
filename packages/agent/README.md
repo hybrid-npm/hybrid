@@ -267,7 +267,6 @@ The sidecar maintains an in-memory `Set<string>` of processed message IDs with L
 | `ANTHROPIC_BASE_URL` | Override Anthropic base URL (auto-set for OpenRouter) |
 | `OPENROUTER_API_KEY` | OpenRouter API key (auto-configures Anthropic client) |
 | `AGENT_WALLET_KEY` | Private key for XMTP wallet |
-| `AGENT_SECRET` | Encryption key for XMTP database |
 | `XMTP_ENV` | XMTP environment: `dev` or `production` |
 | `PROJECT_ROOT` | Override workspace root path |
 | `PORT` | Agent server port (default: `8454`) |

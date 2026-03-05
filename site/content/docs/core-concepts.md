@@ -56,7 +56,6 @@ npx hybrid keys --write
 
 This creates:
 - **AGENT_WALLET_KEY** - Private key for wallet identity
-- **AGENT_SECRET** - Key for encrypting local message database
 
 ### Optional: Blockchain Transaction Capabilities
 

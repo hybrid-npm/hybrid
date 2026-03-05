@@ -198,7 +198,7 @@ Secure XMTP tool API endpoints with short-lived JWTs:
 ```typescript
 import { generateXMTPToolsToken, validateXMTPToolsToken, getValidatedPayload } from "@hybrd/xmtp"
 
-// Generate a 5-minute token (signed with AGENT_SECRET)
+// Generate a 5-minute token (signed with derived secret)
 const token = generateXMTPToolsToken({
   action: "send",
   conversationId: "conv-123",
@@ -287,7 +287,6 @@ const key = generateEncryptionKeyHex()  // 32-byte random hex string
 | Variable | Description |
 |----------|-------------|
 | `AGENT_WALLET_KEY` | Private key for the agent wallet (required) |
-| `AGENT_SECRET` | Encryption key for XMTP database (required for persist mode) |
 | `XMTP_ENV` | XMTP environment: `dev` or `production` (default: `dev`) |
 | `XMTP_STORAGE_PATH` | Custom path for XMTP database files |
 | `XMTP_API_KEY` | Static API key for XMTP tool endpoints (alternative to JWT) |

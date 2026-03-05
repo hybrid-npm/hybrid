@@ -72,7 +72,6 @@ const adapter = await createXMTPAdapter({
   agentUrl: "http://localhost:8454",
   xmtpEnv: "dev",
   walletKey: process.env.AGENT_WALLET_KEY!,
-  dbEncryptionKey: process.env.AGENT_SECRET!,
   dbPath: "./.xmtp"
 })
 
@@ -119,7 +118,7 @@ The XMTP adapter can run as an independent process:
 
 ```bash
 # Environment variables required:
-# AGENT_WALLET_KEY, AGENT_SECRET, XMTP_ENV, PORT (optional)
+# AGENT_WALLET_KEY, XMTP_ENV, PORT (optional)
 
 node packages/channels/src/adapters/xmtp/index.js
 ```
@@ -166,7 +165,6 @@ class TelegramAdapter implements ChannelAdapter {
 | Variable | Description |
 |----------|-------------|
 | `AGENT_WALLET_KEY` | Private key for the agent's XMTP wallet |
-| `AGENT_SECRET` | Encryption key for XMTP database |
 | `XMTP_ENV` | XMTP environment: `dev` or `production` |
 | `AGENT_URL` | Base URL for the agent server (default: `http://localhost:8454`) |
 

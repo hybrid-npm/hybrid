@@ -101,9 +101,9 @@ async function refreshXMTPIdentity() {
 		const err = error as Error
 		console.error("❌ Identity refresh failed:", err)
 
-		if (err.message.includes("AGENT_SECRET")) {
-			console.log("\n💡 Add AGENT_SECRET to your environment:")
-			console.log("   export AGENT_SECRET=your_key_here")
+		if (err.message.includes("AGENT_WALLET_KEY")) {
+			console.log("\n💡 Add AGENT_WALLET_KEY to your environment:")
+			console.log("   export AGENT_WALLET_KEY=your_key_here")
 			console.log(
 				"   Or run: pnpm with-env pnpm --filter @hybrd/xmtp refresh:identity"
 			)

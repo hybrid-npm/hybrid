@@ -602,7 +602,6 @@ When scheduling reminders, include delivery info to send the message back to thi
 	// Sensitive keys that should NEVER be passed to Claude child processes
 	const SENSITIVE_ENV_KEYS = [
 		"AGENT_WALLET_KEY",
-		"AGENT_SECRET",
 		"WALLET_KEY",
 		"PRIVATE_KEY",
 		"SECRET",

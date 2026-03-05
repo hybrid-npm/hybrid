@@ -28,7 +28,7 @@ if ls "$SECRETS_DIR"/*.key 1>/dev/null 2>&1; then
 fi
 
 # Scrub any secret-related env vars that may have leaked in
-unset AGENT_WALLET_KEY AGENT_SECRET WALLET_KEY PRIVATE_KEY 2>/dev/null || true
+unset AGENT_WALLET_KEY WALLET_KEY PRIVATE_KEY 2>/dev/null || true
 
 # Ensure workspaces are writable by claude user (volume mount may reset perms)
 if [ -d "/app/data/workspaces" ]; then

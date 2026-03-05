@@ -84,7 +84,7 @@ jobs:
       - name: Test 8 - No secret env vars leak to app user
         run: |
           # Even if someone accidentally sets these, entrypoint scrubs them
-          RESULT=$(docker run --rm -e AGENT_WALLET_KEY="leak" -e AGENT_SECRET="leak" hybrid-agent:test sh -c "printenv | grep -cE 'AGENT_WALLET_KEY|AGENT_SECRET'" 2>&1 || true)
+          RESULT=$(docker run --rm -e AGENT_WALLET_KEY="leak" hybrid-agent:test sh -c "printenv | grep -cE 'AGENT_WALLET_KEY'" 2>&1 || true)
           if [ "$RESULT" != "0" ] && [ -n "$RESULT" ]; then
             echo "FAIL: secret env vars leaked through entrypoint"
             exit 1

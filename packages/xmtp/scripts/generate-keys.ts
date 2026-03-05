@@ -1,4 +1,3 @@
-import { generateEncryptionKeyHex } from "@hybrd/xmtp"
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts"
 
 // Check Node.js version
@@ -14,12 +13,10 @@ console.log("Generating XMTP keys...")
 
 const walletKey = generatePrivateKey()
 const account = privateKeyToAccount(walletKey)
-const encryptionKeyHex = generateEncryptionKeyHex()
 const publicKey = account.address
 
 console.log("\n# === Generated Keys ===")
 console.log(`# Public Address: ${publicKey}`)
 console.log(`AGENT_WALLET_KEY=${walletKey}`)
-console.log(`AGENT_SECRET=${encryptionKeyHex}`)
 
-console.log("\nCopy the above environment variables to your .env file")
+console.log("\nCopy the above environment variable to your .env file")

@@ -90,7 +90,6 @@ OPENROUTER_API_KEY=your_key    # or ANTHROPIC_API_KEY
 # XMTP identity — generate a wallet key for your agent
 AGENT_WALLET_KEY=0x...
 XMTP_ENV=production
-# AGENT_SECRET is derived automatically from AGENT_WALLET_KEY
 ```
 
 **5. Register and run**

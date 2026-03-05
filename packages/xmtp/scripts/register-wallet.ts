@@ -103,9 +103,7 @@ Next steps:
 				error.message.includes("base16") ||
 				error.message.includes("hex")
 			) {
-				console.log(
-					"🔐 AGENT_SECRET must be a valid 64-character hex string (32 bytes)"
-				)
+				console.log("🔐 AGENT_WALLET_KEY must be a valid private key")
 			} else {
 				console.log("💡 Make sure your wallet is connected and try again.")
 			}

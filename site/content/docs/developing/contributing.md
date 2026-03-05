@@ -215,7 +215,6 @@ For testing, create `.env` in your project:
 ```bash
 OPENROUTER_API_KEY=your_key
 AGENT_WALLET_KEY=0x...
-AGENT_SECRET=...
 XMTP_ENV=dev
 PORT=8454
 ```
