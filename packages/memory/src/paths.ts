@@ -1,12 +1,21 @@
 import { createHash } from "node:crypto"
 import { join } from "node:path"
 
+/**
+ * Get the DATA_ROOT directory.
+ * In production: /app/data
+ * In development: workspaceDir/.hybrid (backwards compatibility)
+ */
+function getDataRoot(workspaceDir: string): string {
+	return process.env.DATA_ROOT || join(workspaceDir, ".hybrid")
+}
+
 export function getProjectHash(workspaceDir: string): string {
 	return createHash("sha256").update(workspaceDir).digest("hex").slice(0, 16)
 }
 
 export function getMemoryRoot(workspaceDir: string): string {
-	return join(workspaceDir, ".hybrid", "memory")
+	return join(getDataRoot(workspaceDir), "memory")
 }
 
 export function getSharedMemoryPath(workspaceDir: string): string {
@@ -53,6 +62,15 @@ export function getLogsPath(workspaceDir: string): string {
 export function getDailyLogPath(workspaceDir: string, date?: string): string {
 	const logDate = date || new Date().toISOString().split("T")[0]
 	return join(getLogsPath(workspaceDir), `${logDate}.md`)
+}
+
+/**
+ * Get the credentials directory path.
+ * In production: /app/data/credentials
+ * In development: workspaceDir/.hybrid/credentials (backwards compatibility)
+ */
+export function getCredentialsPath(workspaceDir: string): string {
+	return join(getDataRoot(workspaceDir), "credentials")
 }
 
 export interface MemoryPaths {

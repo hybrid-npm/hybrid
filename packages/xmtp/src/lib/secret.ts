@@ -23,18 +23,14 @@ export function deriveAgentSecret(walletKey: string): string {
 }
 
 /**
- * Resolves AGENT_SECRET: uses the env var if set, otherwise derives it
- * deterministically from AGENT_WALLET_KEY.
+ * Resolves AGENT_SECRET by deriving it from the provided wallet key.
+ *
+ * The wallet key must be passed explicitly — this function does not
+ * read from environment variables or external stores.
  */
-export function resolveAgentSecret(walletKey?: string): string {
-	if (process.env.AGENT_SECRET) {
-		return process.env.AGENT_SECRET
+export function resolveAgentSecret(walletKey: string): string {
+	if (!walletKey) {
+		throw new Error("walletKey is required to derive AGENT_SECRET")
 	}
-	const key = walletKey || process.env.AGENT_WALLET_KEY
-	if (!key) {
-		throw new Error(
-			"AGENT_WALLET_KEY must be set to derive AGENT_SECRET automatically"
-		)
-	}
-	return deriveAgentSecret(key)
+	return deriveAgentSecret(walletKey)
 }

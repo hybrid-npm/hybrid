@@ -16,9 +16,22 @@ import { MemoryIndexManager, resolveMemoryConfig } from "@hybrid/memory"
 import { Hono } from "hono"
 import pc from "picocolors"
 import { privateKeyToAccount } from "viem/accounts"
+import { getWalletKey, hasSecret, loadSecrets } from "../lib/secret-store"
+import { getOrCreateUserWorkspace } from "../lib/workspace"
 import { createMemoryMcpServer, resolveUserRole } from "../memory-tools"
 
 const _dirname = typeof __dirname !== "undefined" ? __dirname : process.cwd()
+
+// ============================================================================
+// SECURITY: Load secrets from persistent volume into memory
+// Secrets are file-based only — never in process.env
+// ============================================================================
+loadSecrets()
+
+// Set DATA_ROOT for memory package (where runtime data is stored)
+process.env.DATA_ROOT = process.env.DATA_ROOT || join(_dirname, "../../../data")
+
+const PROJECT_ROOT = process.env.AGENT_PROJECT_ROOT || process.cwd()
 
 // Auto-configure OpenRouter if OPENROUTER_API_KEY is present
 // See: https://openrouter.ai/docs/guides/guides/claude-code-integration
@@ -38,7 +51,6 @@ function debug(...args: unknown[]) {
 }
 
 const XMTP_ENV = process.env.XMTP_ENV || "dev"
-const AGENT_WALLET_KEY = process.env.AGENT_WALLET_KEY
 
 const SCHEDULER_ENABLED = process.env.SCHEDULER_ENABLED !== "false"
 const SCHEDULER_POLL_MS = Number.parseInt(
@@ -49,8 +61,9 @@ const SCHEDULER_POLL_MS = Number.parseInt(
 let scheduler: SchedulerService | null = null
 
 function getWalletAddress(): string | null {
-	if (!AGENT_WALLET_KEY) return null
+	if (!hasSecret("WALLET_KEY")) return null
 	try {
+		const AGENT_WALLET_KEY = getWalletKey()
 		const key = AGENT_WALLET_KEY.startsWith("0x")
 			? (AGENT_WALLET_KEY as `0x${string}`)
 			: (`0x${AGENT_WALLET_KEY}` as `0x${string}`)
@@ -69,7 +82,9 @@ function getProviderInfo(): { provider: string; model: string } {
 	return { provider: "Anthropic", model: "claude-sonnet-4-20250514" }
 }
 
-function resolveClaudeCodeExecutable(): string {
+const CLAUDE_WRAPPER_PATH = "/usr/local/bin/claude-wrapper.sh"
+
+function resolveClaudeCodeCliPath(): string {
 	if (process.env.CLAUDE_CODE_EXECUTABLE_PATH) {
 		return process.env.CLAUDE_CODE_EXECUTABLE_PATH
 	}
@@ -106,7 +121,40 @@ function resolveClaudeCodeExecutable(): string {
 	)
 }
 
-const PROJECT_ROOT = process.env.AGENT_PROJECT_ROOT || process.cwd()
+/**
+ * Resolve the executable path for the Claude Agent SDK.
+ *
+ * In Docker (when the wrapper script exists), this returns the wrapper
+ * which drops privileges to the 'claude' user before running the real CLI.
+ * The real CLI path is passed via the CLAUDE_REAL_CLI env var.
+ *
+ * In local dev, this returns the CLI path directly (no privilege drop).
+ */
+function resolveClaudeCodeExecutable(): {
+	executablePath: string
+	realCliPath: string
+	useWrapper: boolean
+} {
+	const realCliPath = resolveClaudeCodeCliPath()
+
+	// Use the privilege-drop wrapper if it exists (Docker deployment)
+	try {
+		readFileSync(CLAUDE_WRAPPER_PATH, "utf-8")
+		return {
+			executablePath: CLAUDE_WRAPPER_PATH,
+			realCliPath,
+			useWrapper: true
+		}
+	} catch {
+		// No wrapper available (local dev) — run CLI directly
+		return {
+			executablePath: realCliPath,
+			realCliPath,
+			useWrapper: false
+		}
+	}
+}
+
 const SCHEDULER_DB_PATH =
 	process.env.SCHEDULER_DB_PATH || join(PROJECT_ROOT, "data", "scheduler.db")
 
@@ -542,16 +590,45 @@ When scheduling reminders, include delivery info to send the message back to thi
 		hasApiKey: !!apiKey
 	})
 
+	// Get or create isolated workspace for user
+	const { workspaceDir } = await getOrCreateUserWorkspace(
+		req.userId || "anonymous"
+	)
+
+	// Resolve Claude executable (wrapper in Docker, direct in local dev)
+	const { executablePath, realCliPath, useWrapper } =
+		resolveClaudeCodeExecutable()
+
+	// Sensitive keys that should NEVER be passed to Claude child processes
+	const SENSITIVE_ENV_KEYS = [
+		"AGENT_WALLET_KEY",
+		"AGENT_SECRET",
+		"WALLET_KEY",
+		"PRIVATE_KEY",
+		"SECRET",
+		"SECRETS_PATH",
+		"DATA_ROOT"
+	]
+
+	// Build filtered environment for Claude processes
+	const safeEnv = Object.fromEntries(
+		Object.entries(process.env).filter(
+			([key]) => !SENSITIVE_ENV_KEYS.includes(key)
+		)
+	)
+
 	// Build env object per OpenRouter docs
 	// See: https://openrouter.ai/docs/guides/guides/claude-code-integration
 	const envVars: Record<string, string | undefined> = {
-		...process.env, // Pass through PATH, HOME, etc.
+		...safeEnv,
 		ANTHROPIC_BASE_URL: baseUrl || undefined,
 		ANTHROPIC_AUTH_TOKEN: authToken || undefined,
 		// Use OpenRouter's model selection env var
 		...(isUsingOpenRouter
 			? { ANTHROPIC_SMALL_FAST_MODEL: "anthropic/claude-3.5-sonnet" }
-			: {})
+			: {}),
+		// Pass real CLI path so the wrapper knows what to execute
+		...(useWrapper ? { CLAUDE_REAL_CLI: realCliPath } : {})
 	}
 
 	// For OpenRouter: API_KEY must be explicitly empty to prevent conflicts
@@ -586,8 +663,8 @@ When scheduling reminders, include delivery info to send the message back to thi
 	const options: Options = {
 		abortController,
 		systemPrompt,
-		cwd: PROJECT_ROOT,
-		pathToClaudeCodeExecutable: resolveClaudeCodeExecutable(),
+		cwd: workspaceDir, // Isolated workspace for user
+		pathToClaudeCodeExecutable: executablePath,
 		settingSources: [],
 		permissionMode: "bypassPermissions",
 		allowDangerouslySkipPermissions: true,

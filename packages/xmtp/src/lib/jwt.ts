@@ -71,21 +71,22 @@ export function getValidatedPayload(c: Context): XMTPToolsPayload | null {
  * Only falls back to development secret in development/test environments
  */
 function getJwtSecret(): string {
-	try {
-		return resolveAgentSecret()
-	} catch {
-		const nodeEnv = process.env.NODE_ENV || "development"
-		if (nodeEnv === "production") {
-			throw new Error(
-				"AGENT_WALLET_KEY must be set in production for JWT token signing."
-			)
-		}
-		logger.warn(
-			"⚠️  [SECURITY] Using fallback JWT secret for development. " +
-				"Set AGENT_WALLET_KEY for production."
-		)
-		return "fallback-secret-for-dev-only"
+	const walletKey = process.env.AGENT_WALLET_KEY
+	if (walletKey) {
+		return resolveAgentSecret(walletKey)
 	}
+
+	const nodeEnv = process.env.NODE_ENV || "development"
+	if (nodeEnv === "production") {
+		throw new Error(
+			"AGENT_WALLET_KEY must be set in production for JWT token signing."
+		)
+	}
+	logger.warn(
+		"⚠️  [SECURITY] Using fallback JWT secret for development. " +
+			"Set AGENT_WALLET_KEY for production."
+	)
+	return "fallback-secret-for-dev-only"
 }
 
 /**
