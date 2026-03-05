@@ -30,7 +30,7 @@ COPY agents/hybrid-agent/AGENTS.md agents/hybrid-agent/SOUL.md ./
 # Create directory structure
 # /app/data - persistent runtime data (mounted volume)
 # /app/data/secrets - secret files (0700, app:app only — claude CANNOT access)
-# /app/workspaces - isolated user workspaces (claude can read/write)
+# /app/data/workspaces - isolated user workspaces (claude can read/write)
 RUN mkdir -p /app/data/secrets \
     /app/data/memory/users \
     /app/data/memory/life/projects \
@@ -40,14 +40,14 @@ RUN mkdir -p /app/data/secrets \
     /app/data/memory/logs \
     /app/data/credentials \
     /app/data/xmtp \
-    /app/workspaces && \
-    chown -R app:app /app/data /app/workspaces && \
+    /app/data/workspaces && \
+    chown -R app:app /app/data && \
     chmod 700 /app/data/secrets && \
     # Claude needs read access to /app (code, node_modules) and
     # read-write access to workspaces (where its cwd is set)
     chmod o+rx /app && \
     chmod -R o+rX /app/node_modules /app/dist && \
-    chmod -R o+rwX /app/workspaces
+    chmod -R o+rwX /app/data/workspaces
 
 # Copy privilege-drop wrapper script
 COPY deployments/flyio/claude-wrapper.sh /usr/local/bin/claude-wrapper.sh

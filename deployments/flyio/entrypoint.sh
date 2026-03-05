@@ -31,9 +31,9 @@ fi
 unset AGENT_WALLET_KEY AGENT_SECRET WALLET_KEY PRIVATE_KEY 2>/dev/null || true
 
 # Ensure workspaces are writable by claude user (volume mount may reset perms)
-if [ -d "/app/workspaces" ]; then
-    chown -R app:app /app/workspaces
-    chmod -R o+rwX /app/workspaces
+if [ -d "/app/data/workspaces" ]; then
+    chown -R app:app /app/data/workspaces
+    chmod -R o+rwX /app/data/workspaces
 fi
 
 # Ensure code dirs are readable by claude user
