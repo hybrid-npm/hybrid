@@ -240,6 +240,7 @@ async function build(target?: string) {
 
 	// Copy core skills from packages/agent/skills/
 	const coreSkillsDir = resolve(monorepoDir, "packages/agent/skills")
+	const coreSkillNames: string[] = []
 	if (existsSync(coreSkillsDir)) {
 		console.log("📚 Copying core skills...")
 		const coreSkills = readdirSync(coreSkillsDir, { withFileTypes: true })
@@ -250,12 +251,15 @@ async function build(target?: string) {
 			const srcPath = resolve(coreSkillsDir, skill)
 			const destPath = resolve(hybridDir, "skills/core", skill)
 			cpSync(srcPath, destPath, { recursive: true })
+			coreSkillNames.push(skill)
 			console.log(`   ✓ ${skill}`)
 		}
 	}
 
 	// Copy user skills from ./skills/
+	// User skills can override core skills by using the same name
 	const userSkillsDir = resolve(projectDir, "skills")
+	const userSkillNames: string[] = []
 	if (existsSync(userSkillsDir)) {
 		console.log("🔌 Copying user skills...")
 		const userSkills = readdirSync(userSkillsDir, { withFileTypes: true })
@@ -266,26 +270,22 @@ async function build(target?: string) {
 			const srcPath = resolve(userSkillsDir, skill)
 			const destPath = resolve(hybridDir, "skills/ext", skill)
 			cpSync(srcPath, destPath, { recursive: true })
-			console.log(`   ✓ ${skill}`)
+			userSkillNames.push(skill)
+
+			// Warn if overriding a core skill
+			if (coreSkillNames.includes(skill)) {
+				console.log(`   ✓ ${skill} (overrides core)`)
+			} else {
+				console.log(`   ✓ ${skill}`)
+			}
 		}
 	}
 
 	// Generate skill index
 	console.log("📝 Generating skill index...")
-	const coreSkills = existsSync(coreSkillsDir)
-		? readdirSync(coreSkillsDir, { withFileTypes: true })
-				.filter((dirent) => dirent.isDirectory())
-				.map((dirent) => dirent.name)
-		: []
-	const userSkills = existsSync(userSkillsDir)
-		? readdirSync(userSkillsDir, { withFileTypes: true })
-				.filter((dirent) => dirent.isDirectory())
-				.map((dirent) => dirent.name)
-		: []
-
 	writeFileSync(
 		resolve(hybridDir, "skills/skills_lock.json"),
-		JSON.stringify({ core: coreSkills, ext: userSkills }, null, 2)
+		JSON.stringify({ core: coreSkillNames, ext: userSkillNames }, null, 2)
 	)
 
 	// Generate package.json for the build (use deployment package.json if available)
@@ -350,8 +350,8 @@ wait
 
 	console.log("\n✅ Build complete!")
 	console.log(`   Output: ${hybridDir}`)
-	console.log(`   Core skills: ${coreSkills.length}`)
-	console.log(`   Extensions: ${userSkills.length}`)
+	console.log(`   Core skills: ${coreSkillNames.length}`)
+	console.log(`   Extensions: ${userSkillNames.length}`)
 	console.log(`   Target: ${buildTarget}`)
 }
 
@@ -466,8 +466,7 @@ async function install(source: string, isGlobal = false) {
 			baseDir,
 			resolve(baseDir, "skills", skillName),
 			resolve(baseDir, skillName),
-			resolve(baseDir, ".agents", "skills", skillName),
-			resolve(baseDir, ".claude", "skills", skillName)
+			resolve(baseDir, ".agents", "skills", skillName)
 		]
 		for (const path of searchPaths) {
 			if (existsSync(resolve(path, "SKILL.md"))) {
