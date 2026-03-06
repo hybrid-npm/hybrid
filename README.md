@@ -103,6 +103,60 @@ Your agent is reachable at its wallet address from any XMTP client. Send it a DM
 
 ---
 
+## Onboarding
+
+When you first create a Hybrid agent, it includes a `BOOTSTRAP.md` file that defines the first-run onboarding experience.
+
+### First Run
+
+1. **Configure ACL** — Add your wallet address to `ACL.md`:
+   ```markdown
+   ## Owners
+
+   - 0xyour_wallet_address
+   ```
+
+2. **Start the agent**:
+   ```bash
+   pnpm dev
+   ```
+
+3. **Chat with your agent** — The agent will:
+   - Ask about its identity (name, personality, emoji)
+   - Learn about you (name, preferences, timezone)
+   - Discuss boundaries and behavior
+   - Delete `BOOTSTRAP.md` when complete
+
+4. **Onboarding complete** — Your agent now has a unique identity!
+
+### How It Works
+
+- **Owner-only**: During onboarding, only the owner can interact with the agent
+- **State tracking**: Progress is saved in `.hybrid/workspace-state.json`
+- **Automatic completion**: The agent detects when `BOOTSTRAP.md` is deleted and marks onboarding complete
+- **OpenClaw compatible**: Uses the same BOOTSTRAP.md format and flow
+
+### Adding More Users
+
+After onboarding, add more owners or guests to `ACL.md`:
+- **Owners** can access all memory and modify agent configuration
+- **Guests** get isolated memory and can only create their own user profile
+
+### Multi-Tenant Profiles
+
+Each user gets their own profile:
+```
+users/
+├── 0xalice/
+│   └── USER.md    ← Alice's preferences
+└── 0xbob/
+    └── USER.md    ← Bob's preferences
+```
+
+The agent maintains its identity (`IDENTITY.md`, `SOUL.md`) across all users.
+
+---
+
 ### Starting fresh
 
 ```bash

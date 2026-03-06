@@ -18,6 +18,11 @@ import pc from "picocolors"
 import { privateKeyToAccount } from "viem/accounts"
 import { getWalletKey, hasSecret, loadSecrets } from "../lib/secret-store"
 import { getOrCreateUserWorkspace } from "../lib/workspace"
+import {
+	isOnboardingComplete,
+	recordBootstrapSeeded,
+	recordOnboardingCompleted
+} from "../lib/workspace-state"
 import { createMemoryMcpServer, resolveUserRole } from "../memory-tools"
 
 const _dirname = typeof __dirname !== "undefined" ? __dirname : process.cwd()
@@ -183,7 +188,22 @@ const BOOT_MD = loadMarkdownFile("BOOT.md")
 const BOOTSTRAP_MD = loadMarkdownFile("BOOTSTRAP.md")
 const HEARTBEAT_MD = loadMarkdownFile("HEARTBEAT.md")
 
+const BOOTSTRAP_EXISTS = BOOTSTRAP_MD.length > 0
+
 const AGENT_NAME = process.env.AGENT_NAME || "hybrid-agent"
+
+function shouldRunOnboarding(userId?: string): boolean {
+	if (!BOOTSTRAP_EXISTS) return false
+
+	const { role } = resolveUserRole(PROJECT_ROOT, userId || "anonymous")
+	return role === "owner"
+}
+
+function isAgentOnboardingMode(): boolean {
+	return (
+		BOOTSTRAP_EXISTS && !isOnboardingComplete(PROJECT_ROOT, BOOTSTRAP_EXISTS)
+	)
+}
 
 let memoryManager: Awaited<ReturnType<typeof MemoryIndexManager.get>> | null =
 	null
@@ -472,6 +492,25 @@ function extractTextDelta(msg: any): string | null {
 async function runAgent(
 	req: ContainerRequest
 ): Promise<ReadableStream<Uint8Array>> {
+	if (isAgentOnboardingMode() && !shouldRunOnboarding(req.userId)) {
+		const message =
+			"This agent is currently being set up. Please try again later."
+		console.log(
+			`[agent] Rejected non-owner request during onboarding (userId: ${req.userId})`
+		)
+		return new ReadableStream<Uint8Array>({
+			start(controller) {
+				controller.enqueue(encodeSSEJson({ type: "text", content: message }))
+				controller.enqueue(encodeDone())
+				controller.close()
+			}
+		})
+	}
+
+	if (BOOTSTRAP_EXISTS && shouldRunOnboarding(req.userId)) {
+		recordBootstrapSeeded(PROJECT_ROOT)
+	}
+
 	const lastMessage = req.messages.at(-1)?.content || ""
 
 	const memoryContext = lastMessage
@@ -513,6 +552,11 @@ When scheduling reminders, include delivery info to send the message back to thi
 
 	const USER_MD = loadUserMarkdown(req.userId)
 
+	const bootstrapContext =
+		BOOTSTRAP_EXISTS && shouldRunOnboarding(req.userId)
+			? `\n\n## BOOTSTRAP.md\n\n${BOOTSTRAP_MD}`
+			: ""
+
 	const systemPromptParts = [
 		IDENTITY_MD,
 		SOUL_MD,
@@ -521,7 +565,8 @@ When scheduling reminders, include delivery info to send the message back to thi
 		TOOLS_MD,
 		USER_MD,
 		currentTime,
-		conversationContext
+		conversationContext,
+		bootstrapContext
 	]
 	if (memoryContext) {
 		systemPromptParts.push(`\n\n## Relevant Memory\n\n${memoryContext}`)
@@ -790,6 +835,17 @@ When scheduling reminders, include delivery info to send the message back to thi
 
 					controller.enqueue(encodeDone())
 					controller.close()
+
+					if (BOOTSTRAP_EXISTS && shouldRunOnboarding(req.userId)) {
+						const bootstrapStillExists =
+							loadMarkdownFile("BOOTSTRAP.md").length > 0
+						if (!bootstrapStillExists) {
+							console.log(
+								`${pc.green("[agent]")} ${pc.bold("✓")} onboarding complete`
+							)
+							recordOnboardingCompleted(PROJECT_ROOT)
+						}
+					}
 				} catch (err) {
 					const errorMessage =
 						err instanceof Error ? err.message : "Agent error"
@@ -933,8 +989,12 @@ function printStartup() {
 		`    BOOT.md               ${BOOT_MD ? "✓ loaded" : "✗ not found"}`
 	)
 	console.log(
-		`    BOOTSTRAP.md          ${BOOTSTRAP_MD ? "✓ loaded" : "✗ not found"}`
+		`    BOOTSTRAP.md          ${BOOTSTRAP_MD ? "✓ ONBOARDING MODE" : "✗ not found"}`
 	)
+	if (BOOTSTRAP_EXISTS) {
+		console.log("    ⚠️  Agent waiting for owner to complete onboarding")
+		console.log("    ⚠️  Non-owner requests will be rejected")
+	}
 	console.log(
 		`    HEARTBEAT.md          ${HEARTBEAT_MD ? "✓ loaded" : "✗ not found"}`
 	)
@@ -947,7 +1007,7 @@ function printStartup() {
 		console.log("    Mode: OpenRouter")
 		console.log(`    ANTHROPIC_BASE_URL:   ${baseUrl}`)
 		console.log(
-			`    ANTHROPIC_AUTH_TOKEN: ${authToken ? "***" + authToken.slice(-4) : "✗ missing"}`
+			`    ANTHROPIC_AUTH_TOKEN: ${authToken ? `***${authToken.slice(-4)}` : "✗ missing"}`
 		)
 		console.log(`    ANTHROPIC_API_KEY:    "" (empty for OpenRouter)`)
 		if (!authToken) {
@@ -958,7 +1018,7 @@ function printStartup() {
 		console.log("    Mode: Anthropic Direct")
 		console.log(`    ANTHROPIC_BASE_URL:   (default)`)
 		console.log(
-			`    ANTHROPIC_API_KEY:    ${apiKey ? "***" + apiKey.slice(-4) : "✗ missing"}`
+			`    ANTHROPIC_API_KEY:    ${apiKey ? `***${apiKey.slice(-4)}` : "✗ missing"}`
 		)
 		if (!apiKey) {
 			console.log()

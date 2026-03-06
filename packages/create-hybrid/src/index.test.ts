@@ -62,6 +62,20 @@ describe("create-hybrid CLI", () => {
 		expect(existsSync(usersDir)).toBe(true)
 	})
 
+	it("should create ACL.md for owner access control", () => {
+		execSync(
+			`npx tsx "${CLI_PATH}" --name ${PROJECT_NAME} --env dev --agent-name "Test Agent"`,
+			{ cwd: TEMP_DIR, timeout: 15000 }
+		)
+
+		const aclPath = join(PROJECT_DIR, "ACL.md")
+		expect(existsSync(aclPath)).toBe(true)
+
+		const content = readFileSync(aclPath, "utf-8")
+		expect(content).toContain("## Owners")
+		expect(content).toContain("YOUR_WALLET_ADDRESS_HERE")
+	})
+
 	it("should create package.json with correct name", () => {
 		execSync(
 			`npx tsx "${CLI_PATH}" --name ${PROJECT_NAME} --env dev --agent-name "Test Agent"`,

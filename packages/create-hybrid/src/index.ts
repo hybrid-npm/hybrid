@@ -128,6 +128,14 @@ async function main() {
 		}
 	}
 
+	const aclContent = `## Owners
+
+<!-- Add your wallet address here to become the owner -->
+<!-- Example: 0xabc123... -->
+- YOUR_WALLET_ADDRESS_HERE
+`
+	writeFileSync(join(projectDir, "ACL.md"), aclContent)
+
 	writeFileSync(join(projectDir, "SOUL.md"), soulMd(templateData))
 	writeFileSync(join(projectDir, ".env.example"), envExample(templateData))
 	writeFileSync(join(projectDir, ".gitignore"), gitignore())
