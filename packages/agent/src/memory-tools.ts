@@ -22,6 +22,7 @@ import {
 	upsertACLPendingRequest
 } from "@hybrid/memory"
 import { z } from "zod"
+import { createFileTools } from "./tools/file.js"
 
 export function createMemoryMcpServer(
 	workspaceDir: string,
@@ -33,7 +34,7 @@ export function createMemoryMcpServer(
 		"MemorySave",
 		`Save information to THIS USER's persistent memory. Use this when the user asks you to remember something.
 
-This writes to .hybrid/memory/users/{userId}/MEMORY.md - each user has their own private memory.
+This writes to memory/users/{userId}/MEMORY.md - each user has their own private memory.
 
 Use for:
 - User preferences ("I prefer dark mode")
@@ -696,7 +697,7 @@ Decay Tiers:
 	)
 
 	return createSdkMcpServer({
-		name: "memory",
+		name: "hybrid",
 		version: "1.0.0",
 		tools: [
 			memorySaveTool,
@@ -712,7 +713,12 @@ Decay Tiers:
 			paraAddFactTool,
 			paraSearchTool,
 			logFactTool,
-			logDecisionTool
+			logDecisionTool,
+			...createFileTools({
+				workspaceDir,
+				userId,
+				role
+			})
 		]
 	})
 }

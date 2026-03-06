@@ -2,9 +2,12 @@ import { createHash } from "node:crypto"
 import { join } from "node:path"
 
 /**
- * Get the DATA_ROOT directory.
+ * Get the DATA_ROOT directory for secrets and credentials.
  * In production: /app/data
  * In development: workspaceDir/.hybrid (backwards compatibility)
+ *
+ * NOTE: Memory files now live in project root (workspaceDir/memory),
+ * not in DATA_ROOT. DATA_ROOT is only for secrets/credentials.
  */
 function getDataRoot(workspaceDir: string): string {
 	return process.env.DATA_ROOT || join(workspaceDir, ".hybrid")
@@ -14,8 +17,13 @@ export function getProjectHash(workspaceDir: string): string {
 	return createHash("sha256").update(workspaceDir).digest("hex").slice(0, 16)
 }
 
+/**
+ * Get the memory root directory in project root.
+ * Memory files are stored in: workspaceDir/memory/
+ * NOT in DATA_ROOT (which is for secrets only).
+ */
 export function getMemoryRoot(workspaceDir: string): string {
-	return join(getDataRoot(workspaceDir), "memory")
+	return join(workspaceDir, "memory")
 }
 
 export function getSharedMemoryPath(workspaceDir: string): string {

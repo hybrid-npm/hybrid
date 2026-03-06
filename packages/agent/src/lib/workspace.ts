@@ -4,17 +4,31 @@
  * Creates per-user isolated workspaces with symlinks to:
  * - Read-only code/resources (dist/, AGENTS.md, SOUL.md)
  * - User's own memory directory (read-write)
+ * - User's own file workspace (read-write)
  *
  * This prevents Claude from accessing other users' data.
+ *
+ * Architecture:
+ * - Memory: {projectRoot}/memory/users/{userId}/
+ * - Workspace: {projectRoot}/workspace/{userId}/
+ * - Secrets: DATA_ROOT/secrets/ (unchanged)
  */
 
+import { existsSync, realpathSync } from "node:fs"
 import { access, mkdir, symlink } from "node:fs/promises"
-import { join } from "node:path"
+import { isAbsolute, join, resolve } from "node:path"
 
+/**
+ * Get DATA_ROOT for secrets and credentials only.
+ * Memory and workspace are now in project root.
+ */
 function getDataRoot(): string {
 	return process.env.DATA_ROOT || "/app/data"
 }
 
+/**
+ * Get project root directory.
+ */
 function getProjectRoot(): string {
 	return process.env.AGENT_PROJECT_ROOT || process.cwd()
 }
@@ -22,6 +36,7 @@ function getProjectRoot(): string {
 export interface WorkspacePaths {
 	workspaceDir: string
 	userMemoryDir: string
+	userWorkspaceDir: string
 }
 
 /**
@@ -81,6 +96,7 @@ function sanitizeUserId(userId: string): string {
  * The workspace contains:
  * - Symlinks to read-only code/resources
  * - Symlink to user's memory directory
+ * - User's own file workspace (read-write)
  *
  * Claude's cwd is set to this workspace, preventing access to other users.
  */
@@ -88,10 +104,12 @@ export async function getOrCreateUserWorkspace(
 	userId: string
 ): Promise<WorkspacePaths> {
 	const sanitizedUserId = sanitizeUserId(userId)
+	const projectRoot = getProjectRoot()
 
-	const dataRoot = getDataRoot()
-	const workspaceDir = join(dataRoot, "workspaces", sanitizedUserId)
-	const userMemoryDir = join(dataRoot, "memory", "users", sanitizedUserId)
+	// Workspace is now in project root, not DATA_ROOT
+	const workspaceDir = join(projectRoot, "workspace", sanitizedUserId)
+	const userMemoryDir = join(projectRoot, "memory", "users", sanitizedUserId)
+	const userWorkspaceDir = workspaceDir
 
 	// Create workspace directory
 	await createDirIfNotExists(workspaceDir)
@@ -100,7 +118,6 @@ export async function getOrCreateUserWorkspace(
 	await createDirIfNotExists(userMemoryDir)
 
 	// Symlink read-only resources (code)
-	const projectRoot = getProjectRoot()
 	const readOnlyLinks: Array<{
 		target: string
 		link: string
@@ -128,9 +145,13 @@ export async function getOrCreateUserWorkspace(
 	}
 
 	// Symlink user's memory (read-write)
-	await createSymlinkIfNotExists(userMemoryDir, join(workspaceDir, "memory"), "dir")
+	await createSymlinkIfNotExists(
+		userMemoryDir,
+		join(workspaceDir, "memory"),
+		"dir"
+	)
 
-	return { workspaceDir, userMemoryDir }
+	return { workspaceDir, userMemoryDir, userWorkspaceDir }
 }
 
 /**
@@ -143,41 +164,115 @@ export function isPathInUserWorkspace(
 	path: string
 ): boolean {
 	const sanitizedUserId = sanitizeUserId(userId)
-	const dataRoot = getDataRoot()
-	const expectedWorkspace = join(dataRoot, "workspaces", sanitizedUserId)
-	const expectedMemory = join(dataRoot, "memory", "users", sanitizedUserId)
+	const projectRoot = getProjectRoot()
+	const expectedWorkspace = join(projectRoot, "workspace", sanitizedUserId)
+	const expectedMemory = join(projectRoot, "memory", "users", sanitizedUserId)
 
 	// Normalize paths to prevent traversal
-	const normalizedPath = join(workspaceDir, path)
+	const normalizedPath = resolve(workspaceDir, path)
 
 	// Check if path is within user's workspace or memory
 	// Use trailing separator to prevent prefix collisions (e.g. alice vs alicebob)
 	return (
 		normalizedPath === expectedWorkspace ||
-		normalizedPath.startsWith(expectedWorkspace + "/") ||
+		normalizedPath.startsWith(`${expectedWorkspace}/`) ||
 		normalizedPath === expectedMemory ||
-		normalizedPath.startsWith(expectedMemory + "/")
+		normalizedPath.startsWith(`${expectedMemory}/`)
 	)
 }
 
 /**
- * Get the path to a user's memory directory.
+ * Get the path to a user's memory directory (in project root).
  */
 export function getUserMemoryPath(userId: string): string {
 	const sanitizedUserId = sanitizeUserId(userId)
-	return join(getDataRoot(), "memory", "users", sanitizedUserId)
+	return join(getProjectRoot(), "memory", "users", sanitizedUserId)
 }
 
 /**
- * Get the path to the workspaces directory.
+ * Get the path to a user's file workspace (in project root).
+ */
+export function getUserWorkspacePath(userId: string): string {
+	const sanitizedUserId = sanitizeUserId(userId)
+	return join(getProjectRoot(), "workspace", sanitizedUserId)
+}
+
+/**
+ * Get the workspaces directory (in project root).
  */
 export function getWorkspacesPath(): string {
-	return join(getDataRoot(), "workspaces")
+	return join(getProjectRoot(), "workspace")
 }
 
 /**
- * Get the DATA_ROOT path.
+ * Get the DATA_ROOT path (for secrets only).
  */
 export function getDataRootPath(): string {
 	return getDataRoot()
+}
+
+// =============================================================================
+// File Operations Workspace Validation
+// =============================================================================
+
+export interface ValidationResult {
+	valid: boolean
+	resolvedPath?: string
+	error?: string
+}
+
+/**
+ * Validate that a path is within the user's file workspace.
+ * This is used by file operations (read/write/edit).
+ *
+ * Security checks:
+ * 1. Rejects directory traversal attempts (../)
+ * 2. Rejects absolute paths
+ * 3. Resolves symlinks to prevent escapes
+ * 4. Ensures resolved path is within workspace
+ */
+export function validatePathInWorkspace(params: {
+	workspaceRoot: string
+	userId: string
+	requestedPath: string
+}): ValidationResult {
+	const { workspaceRoot, userId, requestedPath } = params
+
+	// Get user's workspace directory
+	const userWorkspace = join(workspaceRoot, "workspace", sanitizeUserId(userId))
+
+	// Reject directory traversal attempts
+	if (requestedPath.includes("..")) {
+		return { valid: false, error: "Directory traversal not allowed" }
+	}
+
+	// Reject absolute paths (must be relative)
+	if (isAbsolute(requestedPath)) {
+		return { valid: false, error: "Only relative paths allowed" }
+	}
+
+	// Resolve the full path
+	const resolvedPath = resolve(userWorkspace, requestedPath)
+
+	// Ensure resolved path is within workspace
+	if (!resolvedPath.startsWith(userWorkspace)) {
+		return { valid: false, error: "Path escapes workspace" }
+	}
+
+	// Resolve symlinks to prevent escapes
+	if (existsSync(resolvedPath)) {
+		try {
+			const realPath = realpathSync(resolvedPath)
+			const realWorkspace = realpathSync(userWorkspace)
+
+			if (!realPath.startsWith(realWorkspace)) {
+				return { valid: false, error: "Symlink escapes workspace" }
+			}
+		} catch {
+			// If we can't resolve symlinks, fail safe
+			return { valid: false, error: "Cannot resolve path" }
+		}
+	}
+
+	return { valid: true, resolvedPath }
 }

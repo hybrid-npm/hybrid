@@ -21,6 +21,8 @@
 		"dev": "concurrently --names \"server,xmtp\" --prefix-colors \"cyan,magenta\" \"pnpm run dev:server\" \"pnpm run dev:sidecar\"",
 		"dev:server": "tsx watch --clear-screen=false src/server/simple.ts",
 		"dev:sidecar": "tsx watch --clear-screen=false src/xmtp.ts",
+		"test": "vitest run",
+		"test:watch": "vitest",
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
@@ -49,7 +51,8 @@
 		"concurrently": "^9.0.0",
 		"esbuild": "^0.27.3",
 		"tsx": "^4.19.3",
-		"typescript": "^5.9.2"
+		"typescript": "^5.9.2",
+		"vitest": "^4.0.18"
 	},
 	"optionalDependencies": {
 		"node-llama-cpp": "^3.0.0",

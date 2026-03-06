@@ -199,16 +199,48 @@ All templates follow OpenCode's format exactly. See OpenCode documentation for d
 
 ## MCP Tool Servers
 
-The agent runs two MCP (Model Context Protocol) servers for each request:
+The agent runs a unified MCP (Model Context Protocol) server for each request:
 
-- **Memory tools** — `createMemoryMcpServer()` from `src/memory-tools.ts`. Provides read/write access to PARA memory, daily logs, and auto-memory. Scoped by user role (owner vs guest) from `ACL.md`.
-- **Scheduler tools** — `SchedulerService` from `@hybrd/scheduler`. Provides `schedule`, `list`, `update`, `cancel` tools.
+- **Hybrid MCP Server** — `createMemoryMcpServer()` from `src/memory-tools.ts`. Provides:
+	- **Memory tools** — Read/write access to PARA memory, daily logs, and auto-memory
+	- **ACL tools** — Owner management, pairing requests
+	- **File tools** — OpenClaw-compatible read/write/edit/apply_patch operations
+	- All tools are scoped by user role (owner vs guest) from `ACL.md`
 
 ```typescript
 import { createMemoryMcpServer, resolveUserRole } from "hybrid/agent"
 
 const { role, acl } = resolveUserRole(workspaceDir, userId)
 const mcpServer = createMemoryMcpServer(workspaceDir, userId, role, acl)
+```
+
+### File Operations
+
+The agent provides OpenClaw-compatible file operation tools:
+
+| Tool | Description |
+|------|-------------|
+| `read` | Read file contents with adaptive paging for large files |
+| `write` | Create or overwrite files in workspace |
+| `edit` | Make precise edits (find/replace) to existing files |
+| `apply_patch` | Apply unified diff patches |
+
+**Security:**
+- Only owners can access file operations
+- All paths are restricted to `./workspace/{userId}/`
+- Path traversal attacks (`../`) are blocked
+- Symlink escapes are prevented
+- Each user has isolated workspace
+
+**Workspace Structure:**
+```
+./
+├── workspace/
+│   └── {userId}/          # User's file workspace
+├── memory/
+│   └── users/
+│       └── {userId}/      # User's memory
+└── acl.json              # Access control
 ```
 
 ## Scheduler Integration
