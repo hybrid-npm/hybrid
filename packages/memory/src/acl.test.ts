@@ -39,7 +39,7 @@ describe("ACL JSON", () => {
 		it("reads ACL from JSON file", async () => {
 			const { writeFile } = await import("node:fs/promises")
 			const { join } = await import("node:path")
-			const credentialsDir = join(TEST_DIR, "credentials")
+			const credentialsDir = join(TEST_DIR, ".hybrid", "credentials")
 			mkdirSync(credentialsDir, { recursive: true })
 
 			await writeFile(
@@ -259,7 +259,7 @@ describe("ACL Edge Cases", () => {
 	it("handles invalid JSON gracefully", async () => {
 		const { writeFileSync } = await import("node:fs")
 		const { join } = await import("node:path")
-		const credentialsDir = join(TEST_DIR, "credentials")
+		const credentialsDir = join(TEST_DIR, ".hybrid", "credentials")
 		mkdirSync(credentialsDir, { recursive: true })
 
 		writeFileSync(join(credentialsDir, "xmtp-allowFrom.json"), "not valid json")
@@ -272,7 +272,7 @@ describe("ACL Edge Cases", () => {
 	it("handles missing version field gracefully", async () => {
 		const { writeFileSync } = await import("node:fs")
 		const { join } = await import("node:path")
-		const credentialsDir = join(TEST_DIR, "credentials")
+		const credentialsDir = join(TEST_DIR, ".hybrid", "credentials")
 		mkdirSync(credentialsDir, { recursive: true })
 
 		writeFileSync(
