@@ -35,42 +35,24 @@ export default function SkillsManager() {
 	async function handleAuthenticate() {
 		setAuthenticating(true)
 		try {
-			// Use MiniKit context first (from frame)
-			if (context?.user?.fid) {
-				const userFid = context.user.fid.toString()
-				setFid(userFid)
-				// Verify with backend
+			// Always use Farcaster Quick Auth for verified identity
+			const { sdk } = await import("@farcaster/miniapp-sdk")
+			const result = await sdk.quickAuth.getToken()
+			if (result?.token) {
 				const res = await fetch("/api/auth/verify", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({ fid: userFid })
+					body: JSON.stringify({ token: result.token })
 				})
 				if (res.ok) {
 					const data = await res.json()
+					setFid(data.fid)
 					setRole(data.role)
 				} else {
 					setRole("guest")
 				}
 			} else {
-				// Try Farcaster Quick Auth
-				const { sdk } = await import("@farcaster/miniapp-sdk")
-				const result = await sdk.quickAuth.getToken()
-				if (result?.token) {
-					const res = await fetch("/api/auth/verify", {
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify({ token: result.token })
-					})
-					if (res.ok) {
-						const data = await res.json()
-						setFid(data.fid)
-						setRole(data.role)
-					} else {
-						setRole("guest")
-					}
-				} else {
-					setRole("guest")
-				}
+				setRole("guest")
 			}
 		} catch (err) {
 			console.error("Auth error:", err)

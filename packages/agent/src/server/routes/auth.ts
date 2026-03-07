@@ -21,11 +21,7 @@ export async function handleAuthVerify(c: Context) {
 
 		let fid: string | null = null
 
-		// Support direct FID authentication (from MiniKit context)
-		// This is less secure but useful for development/testing
-		if (directFid) {
-			fid = directFid
-		} else if (token) {
+		if (token) {
 			// Verify JWT with Farcaster Quick Auth
 			// The JWT is signed by Farcaster's Quick Auth server
 			const payload = await verifyQuickAuthToken(token)
