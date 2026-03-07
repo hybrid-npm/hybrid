@@ -1354,9 +1354,9 @@ async function init(name: string) {
 
 	const { resolve, dirname } = await import("node:path")
 	const { fileURLToPath } = await import("node:url")
-	const { readFileSync, writeFileSync, cpSync, existsSync } = await import(
-		"node:fs"
-	)
+	const { createInterface } = await import("node:readline")
+	const { readFileSync, writeFileSync, cpSync, existsSync, mkdirSync } =
+		await import("node:fs")
 
 	const __dirname = dirname(fileURLToPath(import.meta.url))
 	const templateDir = resolve(__dirname, "../templates/agent")
@@ -1375,6 +1375,38 @@ async function init(name: string) {
 	const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"))
 	pkg.name = name
 	writeFileSync(pkgPath, JSON.stringify(pkg, null, 2))
+
+	// Ask for owner wallet address
+	const rl = createInterface({
+		input: process.stdin,
+		output: process.stdout
+	})
+
+	const ownerAddress = await new Promise<string>((resolve) => {
+		rl.question("\nEnter your wallet address (owner): ", (answer: string) => {
+			rl.close()
+			resolve(answer.trim())
+		})
+	})
+
+	// Create ACL file with owner
+	if (ownerAddress) {
+		const normalized = ownerAddress.toLowerCase()
+		const credentialsDir = resolve(targetDir, "credentials")
+		mkdirSync(credentialsDir, { recursive: true })
+		writeFileSync(
+			resolve(credentialsDir, "xmtp-allowFrom.json"),
+			JSON.stringify(
+				{
+					version: 1,
+					allowFrom: [normalized]
+				},
+				null,
+				2
+			)
+		)
+		console.log(`\n✅ Added owner: ${normalized}`)
+	}
 
 	console.log(`\n✅ Created agent at: ${name}/`)
 	console.log("\nNext steps:")
