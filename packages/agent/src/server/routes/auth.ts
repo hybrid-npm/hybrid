@@ -62,7 +62,7 @@ interface QuickAuthPayload {
 	exp: number
 }
 
-async function verifyQuickAuthToken(
+export async function verifyQuickAuthToken(
 	token: string
 ): Promise<QuickAuthPayload | null> {
 	// Verify JWT with Farcaster Quick Auth

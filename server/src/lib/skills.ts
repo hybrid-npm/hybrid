@@ -51,12 +51,12 @@ export async function listSkills(): Promise<SkillsListResponse> {
 
 export async function addSkill(
 	source: string,
-	fid: string
+	token: string
 ): Promise<{ success: boolean; skill?: string; error?: string }> {
 	const res = await fetch(`${API_BASE}/skills/add`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ source, fid })
+		body: JSON.stringify({ source, token })
 	})
 
 	return res.json()
@@ -64,12 +64,12 @@ export async function addSkill(
 
 export async function removeSkill(
 	name: string,
-	fid: string
+	token: string
 ): Promise<{ success: boolean; error?: string }> {
 	const res = await fetch(`${API_BASE}/skills/remove`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ name, fid })
+		body: JSON.stringify({ name, token })
 	})
 
 	return res.json()

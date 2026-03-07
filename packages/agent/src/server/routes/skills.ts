@@ -11,7 +11,7 @@ import {
 import { join, resolve } from "node:path"
 import type { Context } from "hono"
 import { SKILLS_REGISTRY, type SkillInfo } from "../../skills/registry.js"
-import { isOwner } from "./auth.js"
+import { isOwner, verifyQuickAuthToken } from "./auth.js"
 
 const PROJECT_ROOT = process.env.AGENT_PROJECT_ROOT || process.cwd()
 
@@ -42,21 +42,29 @@ export async function handleListSkills(c: Context) {
 
 interface AddSkillRequest {
 	source: string
-	fid: string
+	token: string
 }
 
 export async function handleAddSkill(c: Context) {
 	try {
 		const body = await c.req.json<AddSkillRequest>()
-		const { source, fid } = body
+		const { source, token } = body
 
 		if (!source) {
 			return c.json({ error: "Source required" }, 400)
 		}
 
-		if (!fid) {
-			return c.json({ error: "FID required" }, 400)
+		if (!token) {
+			return c.json({ error: "Authentication token required" }, 401)
 		}
+
+		// Verify JWT and extract FID
+		const payload = await verifyQuickAuthToken(token)
+		if (!payload) {
+			return c.json({ error: "Invalid or expired token" }, 401)
+		}
+
+		const fid = payload.sub
 
 		// Verify owner
 		if (!isOwner(fid)) {
@@ -73,21 +81,29 @@ export async function handleAddSkill(c: Context) {
 
 interface RemoveSkillRequest {
 	name: string
-	fid: string
+	token: string
 }
 
 export async function handleRemoveSkill(c: Context) {
 	try {
 		const body = await c.req.json<RemoveSkillRequest>()
-		const { name, fid } = body
+		const { name, token } = body
 
 		if (!name) {
 			return c.json({ error: "Skill name required" }, 400)
 		}
 
-		if (!fid) {
-			return c.json({ error: "FID required" }, 400)
+		if (!token) {
+			return c.json({ error: "Authentication token required" }, 401)
 		}
+
+		// Verify JWT and extract FID
+		const payload = await verifyQuickAuthToken(token)
+		if (!payload) {
+			return c.json({ error: "Invalid or expired token" }, 401)
+		}
+
+		const fid = payload.sub
 
 		// Verify owner
 		if (!isOwner(fid)) {

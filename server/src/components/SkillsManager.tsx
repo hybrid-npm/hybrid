@@ -25,6 +25,7 @@ export default function SkillsManager() {
 	const [removing, setRemoving] = useState<string | null>(null)
 	const [authenticating, setAuthenticating] = useState(false)
 	const [fid, setFid] = useState<string | null>(null)
+	const [authToken, setAuthToken] = useState<string | null>(null)
 
 	useEffect(() => {
 		if (!isFrameReady) {
@@ -48,6 +49,7 @@ export default function SkillsManager() {
 					const data = await res.json()
 					setFid(data.fid)
 					setRole(data.role)
+					setAuthToken(result.token)
 				} else {
 					setRole("guest")
 				}
@@ -88,13 +90,13 @@ export default function SkillsManager() {
 	}
 
 	async function handleAddSkill() {
-		if (!addSource.trim() || !fid) return
+		if (!addSource.trim() || !authToken) return
 
 		setAdding(true)
 		setError(null)
 
 		try {
-			const result = await addSkill(addSource, fid)
+			const result = await addSkill(addSource, authToken)
 
 			if (result.success) {
 				setAddSource("")
@@ -110,13 +112,13 @@ export default function SkillsManager() {
 	}
 
 	async function handleRemoveSkill(name: string) {
-		if (!fid) return
+		if (!authToken) return
 
 		setRemoving(name)
 		setError(null)
 
 		try {
-			const result = await removeSkill(name, fid)
+			const result = await removeSkill(name, authToken)
 
 			if (result.success) {
 				await loadSkills()
