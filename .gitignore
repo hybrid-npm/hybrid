@@ -62,6 +62,10 @@ xmtp-development-*
 sandbox/
 scratchpad.md
 
+# agents (except template)
+agents/*
+!agents/hybrid-agent/
+
 # START Ruler Generated Files
 *.bak
 .cursor/rules/ruler_cursor_instructions.mdc

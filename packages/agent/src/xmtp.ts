@@ -3,6 +3,7 @@ import fs from "node:fs"
 import http from "node:http"
 import path from "node:path"
 import { resolveAgentSecret } from "@hybrd/xmtp"
+import { getRole, parseACL } from "@hybrid/memory"
 import { Agent, createUser } from "@xmtp/agent-sdk"
 import { Client, type Signer } from "@xmtp/node-sdk"
 import { config } from "dotenv"
@@ -28,7 +29,9 @@ if (process.env.DEBUG) {
 	console.log(`[xmtp] Project dir: ${projectDir}`)
 	console.log(`[xmtp] .env path: ${envPath}`)
 	console.log(`[xmtp] .env exists: ${fs.existsSync(envPath)}`)
-	console.log(`[xmtp] WALLET_KEY: ${hasSecret("WALLET_KEY") ? "set" : "not set"}`)
+	console.log(
+		`[xmtp] WALLET_KEY: ${hasSecret("WALLET_KEY") ? "set" : "not set"}`
+	)
 }
 
 const log = {
@@ -131,15 +134,32 @@ interface SendMessageRequest {
 }
 
 async function startSidecar() {
-	if (!hasSecret("WALLET_KEY")) {
-		log.warn("WALLET_KEY not loaded (no secret file found)")
+	// Try secret store first, then fall back to env var
+	let key: string | null = null
+
+	if (hasSecret("WALLET_KEY")) {
+		key = getWalletKey()
+	} else {
+		// Fall back to env var for development
+		const envKey = process.env.WALLET_KEY || process.env.AGENT_WALLET_KEY
+		if (envKey) {
+			key = envKey
+			log.info("Using WALLET_KEY from environment variable")
+		}
+	}
+
+	if (!key) {
+		log.warn("WALLET_KEY not loaded (no secret file or env var found)")
 		printBanner()
 		await new Promise(() => {})
 		return
 	}
 
-	const key = getWalletKey()
-	const user = createUser(key as `0x${string}`)
+	const user = createUser(
+		key.startsWith("0x")
+			? (key as `0x${string}`)
+			: (`0x${key}` as `0x${string}`)
+	)
 	printBanner(user.account.address)
 
 	const identifier = {
@@ -310,6 +330,18 @@ async function startSidecar() {
 			? senderAddress.slice(0, 10)
 			: senderAddress.slice(0, 8)
 		log.info(`${pc.cyan(displayId)}: ${message.content.slice(0, 50)}`)
+
+		// Check ACL - only respond to owners by default
+		const acl = parseACL(projectDir)
+		const role = getRole(acl, senderAddress)
+
+		if (role !== "owner") {
+			log.warn(`ignoring message from non-owner: ${displayId}`)
+			await conversation.send(
+				"Sorry, I can only talk to my owners. If you think this is a mistake, ask an owner to add your address to credentials/xmtp-allowFrom.json"
+			)
+			return
+		}
 
 		const requestId = randomUUID()
 		try {
