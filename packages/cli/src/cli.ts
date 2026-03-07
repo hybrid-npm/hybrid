@@ -1,5 +1,21 @@
 #!/usr/bin/env node
 
+import { existsSync } from "node:fs"
+import { resolve } from "node:path"
+import { config } from "dotenv"
+
+// Load .env first, then .env.local (which overrides)
+const projectRoot = process.cwd()
+const envFiles = [
+	resolve(projectRoot, ".env"),
+	resolve(projectRoot, ".env.local")
+]
+for (const envFile of envFiles) {
+	if (existsSync(envFile)) {
+		config({ path: envFile })
+	}
+}
+
 const nodeVersion = process.versions.node
 const [major] = nodeVersion.split(".").map(Number)
 if (!major || major < 20) {
@@ -41,6 +57,25 @@ async function main() {
 
 	if (command === "revoke-all") {
 		return revokeAll()
+	}
+
+	if (command === "owner") {
+		const subcommand = args[1]
+		if (subcommand === "add") {
+			return ownerAdd(args[2])
+		}
+		if (subcommand === "remove" || subcommand === "rm") {
+			return ownerRemove(args[2])
+		}
+		if (subcommand === "list" || subcommand === "ls") {
+			return ownerList()
+		}
+		console.log("\nUsage: hybrid owner <command>")
+		console.log("\nCommands:")
+		console.log("  owner add <address>    Add an owner")
+		console.log("  owner remove <address> Remove an owner")
+		console.log("  owner list             List all owners")
+		process.exit(1)
 	}
 
 	if (command === "install") {
@@ -91,6 +126,11 @@ async function main() {
 		"  revoke-all         Revoke all XMTP installations (auto-detect)"
 	)
 	console.log("  deploy [platform]  Deploy (fly, railway, cf)")
+	console.log("")
+	console.log("Owner:")
+	console.log("  owner add <address>    Add an owner")
+	console.log("  owner remove <address>  Remove an owner")
+	console.log("  owner list              List all owners")
 	console.log("")
 	console.log("Skills:")
 	console.log("  skills add <source> [-g]    Install a skill")
@@ -1352,22 +1392,220 @@ async function init(name: string) {
 
 async function register() {
 	const { execSync } = await import("node:child_process")
-	const { resolve, dirname } = await import("node:path")
+	const { resolve, dirname, join } = await import("node:path")
 	const { fileURLToPath } = await import("node:url")
+	const { existsSync, mkdirSync, writeFileSync, readFileSync } = await import(
+		"node:fs"
+	)
+	const { privateKeyToAccount } = await import("viem/accounts")
 
 	const __dirname = dirname(fileURLToPath(import.meta.url))
 	const rootDir = resolve(__dirname, "../../..")
+	const projectDir = process.cwd()
+
+	// Get wallet key from env
+	const walletKey = process.env.AGENT_WALLET_KEY || process.env.WALLET_KEY
+
+	if (!walletKey) {
+		console.log("\n❌ Registration failed. Make sure AGENT_WALLET_KEY is set")
+		process.exit(1)
+	}
+
+	// Derive wallet address
+	const key = walletKey.startsWith("0x")
+		? (walletKey as `0x${string}`)
+		: (`0x${walletKey}` as `0x${string}`)
+	const account = privateKeyToAccount(key)
+	const walletAddress = account.address.toLowerCase()
+
+	console.log(`\n📍 Wallet Address: ${walletAddress}`)
+
+	// Create ACL file with owner
+	const hybridDir = join(projectDir, ".hybrid")
+	const credentialsDir = join(hybridDir, "credentials")
+	const aclPath = join(credentialsDir, "xmtp-allowFrom.json")
+
+	if (!existsSync(credentialsDir)) {
+		mkdirSync(credentialsDir, { recursive: true })
+	}
+
+	// Read existing ACL or create new one
+	let acl: { version: number; allowFrom: string[] } = {
+		version: 1,
+		allowFrom: []
+	}
+	if (existsSync(aclPath)) {
+		try {
+			acl = JSON.parse(readFileSync(aclPath, "utf-8"))
+		} catch {
+			// Use defaults
+		}
+	}
+
+	// Add owner if not already present
+	if (!acl.allowFrom.includes(walletAddress)) {
+		acl.allowFrom.push(walletAddress)
+		writeFileSync(aclPath, JSON.stringify(acl, null, "\t"))
+		console.log(`\n✅ Added owner to ACL: ${walletAddress}`)
+	} else {
+		console.log(`\n✅ Owner already in ACL: ${walletAddress}`)
+	}
 
 	console.log("\n🔐 Registering wallet on XMTP network...\n")
 
 	try {
 		execSync("npx pnpm --filter @hybrd/xmtp register", {
 			cwd: rootDir,
-			stdio: "inherit"
+			stdio: "inherit",
+			env: process.env
 		})
 	} catch {
 		console.log("\n❌ Registration failed. Make sure AGENT_WALLET_KEY is set")
 		process.exit(1)
+	}
+}
+
+async function ownerAdd(address?: string) {
+	const { join } = await import("node:path")
+	const { existsSync, mkdirSync, writeFileSync, readFileSync } = await import(
+		"node:fs"
+	)
+
+	if (!address) {
+		console.error("Error: Address required")
+		console.error("Usage: hybrid owner add <address>")
+		process.exit(1)
+	}
+
+	const projectDir = process.cwd()
+	const hybridDir = join(projectDir, ".hybrid")
+	const credentialsDir = join(hybridDir, "credentials")
+	const aclPath = join(credentialsDir, "xmtp-allowFrom.json")
+
+	// Normalize address
+	const normalizedAddress = address.toLowerCase().trim()
+
+	if (!existsSync(credentialsDir)) {
+		mkdirSync(credentialsDir, { recursive: true })
+	}
+
+	// Read existing ACL or create new one
+	let acl: { version: number; allowFrom: string[] } = {
+		version: 1,
+		allowFrom: []
+	}
+	if (existsSync(aclPath)) {
+		try {
+			acl = JSON.parse(readFileSync(aclPath, "utf-8"))
+		} catch {
+			// Use defaults
+		}
+	}
+
+	// Add owner if not already present
+	if (!acl.allowFrom.includes(normalizedAddress)) {
+		acl.allowFrom.push(normalizedAddress)
+		writeFileSync(aclPath, JSON.stringify(acl, null, "\t"))
+		console.log(`\n✅ Added owner: ${normalizedAddress}`)
+	} else {
+		console.log(`\n⚠️  Already an owner: ${normalizedAddress}`)
+	}
+
+	console.log(`\n📋 Owners (${acl.allowFrom.length}):`)
+	for (const owner of acl.allowFrom) {
+		console.log(`  - ${owner}`)
+	}
+}
+
+async function ownerRemove(address?: string) {
+	const { join } = await import("node:path")
+	const { existsSync, writeFileSync, readFileSync } = await import("node:fs")
+
+	if (!address) {
+		console.error("Error: Address required")
+		console.error("Usage: hybrid owner remove <address>")
+		process.exit(1)
+	}
+
+	const projectDir = process.cwd()
+	const aclPath = join(
+		projectDir,
+		".hybrid",
+		"credentials",
+		"xmtp-allowFrom.json"
+	)
+
+	if (!existsSync(aclPath)) {
+		console.error("Error: No ACL file found. Run 'hybrid register' first.")
+		process.exit(1)
+	}
+
+	// Read existing ACL
+	let acl: { version: number; allowFrom: string[] }
+	try {
+		acl = JSON.parse(readFileSync(aclPath, "utf-8"))
+	} catch {
+		console.error("Error: Failed to read ACL file")
+		process.exit(1)
+	}
+
+	const normalizedAddress = address.toLowerCase().trim()
+	const index = acl.allowFrom.indexOf(normalizedAddress)
+
+	if (index === -1) {
+		console.log(`\n⚠️  Not an owner: ${normalizedAddress}`)
+		process.exit(1)
+	}
+
+	acl.allowFrom.splice(index, 1)
+	writeFileSync(aclPath, JSON.stringify(acl, null, "\t"))
+	console.log(`\n✅ Removed owner: ${normalizedAddress}`)
+
+	if (acl.allowFrom.length > 0) {
+		console.log(`\n📋 Remaining owners (${acl.allowFrom.length}):`)
+		for (const owner of acl.allowFrom) {
+			console.log(`  - ${owner}`)
+		}
+	} else {
+		console.log(`\n⚠️  No owners remaining. Agent will be open to all users.`)
+	}
+}
+
+async function ownerList() {
+	const { join } = await import("node:path")
+	const { existsSync, readFileSync } = await import("node:fs")
+
+	const projectDir = process.cwd()
+	const aclPath = join(
+		projectDir,
+		".hybrid",
+		"credentials",
+		"xmtp-allowFrom.json"
+	)
+
+	if (!existsSync(aclPath)) {
+		console.log("\n⚠️  No ACL file found. Run 'hybrid register' first.")
+		console.log("\n  No owners configured. Agent is open to all users.")
+		return
+	}
+
+	// Read existing ACL
+	let acl: { version: number; allowFrom: string[] }
+	try {
+		acl = JSON.parse(readFileSync(aclPath, "utf-8"))
+	} catch {
+		console.error("Error: Failed to read ACL file")
+		process.exit(1)
+	}
+
+	if (acl.allowFrom.length === 0) {
+		console.log("\n📋 No owners configured. Agent is open to all users.")
+		return
+	}
+
+	console.log(`\n📋 Owners (${acl.allowFrom.length}):`)
+	for (const owner of acl.allowFrom) {
+		console.log(`  - ${owner}`)
 	}
 }
 

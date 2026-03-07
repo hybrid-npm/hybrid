@@ -5,6 +5,14 @@ import { config } from "dotenv"
 import { Hono } from "hono"
 import pc from "picocolors"
 import { privateKeyToAccount } from "viem/accounts"
+import { getWalletKey, hasSecret, loadSecrets } from "../lib/secret-store.js"
+import { handleAuthVerify } from "./routes/auth.js"
+import {
+	handleAddSkill,
+	handleListSkills,
+	handleRemoveSkill
+} from "./routes/skills.js"
+import { serveMiniApp } from "./static.js"
 
 // Resolve project directory (where hybrid dev was called from)
 const projectDir = process.env.AGENT_PROJECT_ROOT || process.cwd()
@@ -15,6 +23,12 @@ const envPath = path.join(projectDir, ".env")
 
 config({ path: envLocalPath, override: true })
 config({ path: envPath })
+
+// Load secrets from persistent volume (must be after dotenv for DATA_ROOT)
+loadSecrets()
+
+// Set DATA_ROOT for memory package
+process.env.DATA_ROOT = process.env.DATA_ROOT || path.join(projectDir, "data")
 
 // Debug output AFTER loading env
 if (process.env.DEBUG) {
@@ -48,10 +62,30 @@ function getProviderConfig() {
 }
 
 function getWalletAddress(): string | null {
-	const key = process.env.AGENT_WALLET_KEY
+	// Try secret store first (production)
+	if (hasSecret("WALLET_KEY")) {
+		try {
+			const key = getWalletKey()
+			const account = privateKeyToAccount(
+				key.startsWith("0x")
+					? (key as `0x${string}`)
+					: (`0x${key}` as `0x${string}`)
+			)
+			return account.address
+		} catch {
+			return null
+		}
+	}
+
+	// Fall back to env var (development)
+	const key = process.env.AGENT_WALLET_KEY || process.env.WALLET_KEY
 	if (!key) return null
 	try {
-		const account = privateKeyToAccount(key as `0x${string}`)
+		const account = privateKeyToAccount(
+			key.startsWith("0x")
+				? (key as `0x${string}`)
+				: (`0x${key}` as `0x${string}`)
+		)
 		return account.address
 	} catch {
 		return null
@@ -70,6 +104,17 @@ app.get("/health", (c) => {
 app.get("/container/health", async (c) => {
 	return c.json({ status: "running" })
 })
+
+// Skills API routes
+app.get("/api/skills", handleListSkills)
+app.post("/api/skills/add", handleAddSkill)
+app.post("/api/skills/remove", handleRemoveSkill)
+
+// Auth routes
+app.post("/api/auth/verify", handleAuthVerify)
+
+// Mini app static files
+app.use("*", serveMiniApp)
 
 app.get("/sidecar-logs", (c) => {
 	try {

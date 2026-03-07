@@ -1,19 +1,27 @@
+import { existsSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { config } from "dotenv"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-// Try multiple possible locations for .env
+
+// Load .env first, then .env.local (which overrides)
+const projectRoot = process.cwd()
 const envPaths = [
+	join(projectRoot, ".env"),
+	join(projectRoot, ".env.local"),
 	join(__dirname, "..", "..", "agents", "hybrid-agent", ".env"),
+	join(__dirname, "..", "..", "agents", "hybrid-agent", ".env.local"),
 	join(__dirname, "..", "..", "..", "agents", "hybrid-agent", ".env"),
-	join(__dirname, "..", "..", ".env")
+	join(__dirname, "..", "..", "..", "agents", "hybrid-agent", ".env.local"),
+	join(__dirname, "..", "..", ".env"),
+	join(__dirname, "..", "..", ".env.local")
 ]
+
 for (const envPath of envPaths) {
-	try {
+	if (existsSync(envPath)) {
 		config({ path: envPath })
-		break
-	} catch {}
+	}
 }
 
 import {
