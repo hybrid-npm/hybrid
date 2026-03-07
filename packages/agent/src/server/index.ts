@@ -104,19 +104,8 @@ function resolveClaudeCodeCliPath(): string {
 	// - /project/packages/agent/dist/server (prod, bundled)
 	// We need to go up to find node_modules at project root
 	const possiblePaths = [
-		// Dev mode: from packages/agent/src/server -> need 4 levels up to root
-		join(
-			_dirname,
-			"..",
-			"..",
-			"..",
-			"..",
-			"node_modules",
-			"@anthropic-ai",
-			"claude-agent-sdk",
-			"cli.js"
-		),
-		// Prod mode: from packages/agent/dist/server -> need 4 levels up to root
+		// Dev/prod mode: from packages/agent/src/server or packages/agent/dist/server
+		// both need 4 levels up to reach monorepo root node_modules
 		join(
 			_dirname,
 			"..",
