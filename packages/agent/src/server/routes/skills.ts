@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process"
+import { execFileSync } from "node:child_process"
 import {
 	cpSync,
 	existsSync,
@@ -176,6 +176,11 @@ function parseSkillMd(filePath: string, defaultName: string): SkillInfo | null {
 	}
 }
 
+// Validate GitHub owner/repo format (alphanumeric, hyphens, underscores, dots)
+const GITHUB_REPO_RE = /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/
+// Validate npm package name (scoped or unscoped)
+const NPM_PACKAGE_RE = /^(@[a-zA-Z0-9._-]+\/)?[a-zA-Z0-9._-]+$/
+
 async function installSkill(
 	source: string
 ): Promise<{ success: boolean; skill?: string; error?: string }> {
@@ -199,6 +204,9 @@ async function installSkill(
 		}
 
 		const repo = parts.slice(0, 2).join("/")
+		if (!GITHUB_REPO_RE.test(repo)) {
+			return { success: false, error: "Invalid GitHub repository name" }
+		}
 		skillName = parts[2] || parts[1]
 
 		// Clone to temp directory
@@ -206,8 +214,15 @@ async function installSkill(
 		rmSync(tempDir, { recursive: true, force: true })
 
 		try {
-			execSync(
-				`git clone --depth 1 https://github.com/${repo}.git ${tempDir}`,
+			execFileSync(
+				"git",
+				[
+					"clone",
+					"--depth",
+					"1",
+					`https://github.com/${repo}.git`,
+					tempDir
+				],
 				{
 					stdio: "pipe",
 					env: { ...process.env, DISABLE_TELEMETRY: "1", DO_NOT_TRACK: "1" }
@@ -240,14 +255,21 @@ async function installSkill(
 		cpSync(localPath, destPath, { recursive: true })
 	} else {
 		// npm package
+		if (!NPM_PACKAGE_RE.test(source)) {
+			return { success: false, error: "Invalid npm package name" }
+		}
 		skillName = source.split("/").pop() || source
 		const tempDir = resolve(projectSkillsDir, ".temp", "npm-install")
 
 		try {
-			execSync(`npm install ${source} --prefix ${tempDir}`, {
-				stdio: "pipe",
-				env: { ...process.env, DISABLE_TELEMETRY: "1", DO_NOT_TRACK: "1" }
-			})
+			execFileSync(
+				"npm",
+				["install", source, "--prefix", tempDir],
+				{
+					stdio: "pipe",
+					env: { ...process.env, DISABLE_TELEMETRY: "1", DO_NOT_TRACK: "1" }
+				}
+			)
 		} catch {
 			return { success: false, error: "Failed to install npm package" }
 		}
