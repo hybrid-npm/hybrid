@@ -60,6 +60,7 @@ xmtp-development-*
 .temp-npm-install/
 
 sandbox/
+workspace/
 scratchpad.md
 
 # START Ruler Generated Files
