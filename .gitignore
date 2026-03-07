@@ -23,6 +23,9 @@ build
 .DS_Store
 *.pem
 
+# generated files
+site/.source/
+
 # debug
 npm-debug.log*
 yarn-debug.log*
