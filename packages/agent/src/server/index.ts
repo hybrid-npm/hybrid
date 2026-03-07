@@ -90,11 +90,18 @@ function getProviderInfo(): { provider: string; model: string } {
 const CLAUDE_WRAPPER_PATH = "/usr/local/bin/claude-wrapper.sh"
 
 function resolveClaudeCodeCliPath(): string {
+	// Use require to find the package location - works in both dev and bundled
+	try {
+		const sdkPath = require.resolve("@anthropic-ai/claude-agent-sdk/cli.js")
+		return sdkPath
+	} catch {}
+
+	// Env var override
 	if (process.env.CLAUDE_CODE_EXECUTABLE_PATH) {
 		return process.env.CLAUDE_CODE_EXECUTABLE_PATH
 	}
-	// Try to find the SDK's cli.js relative to this package
-	// When bundled, _dirname is packages/agent/dist/server
+
+	// Fallback: try direct paths
 	const possiblePaths = [
 		// From packages/agent/dist/server -> node_modules/.pnpm/... (any version)
 		join(
@@ -168,13 +175,12 @@ function resolveClaudeCodeCliPath(): string {
 		"/usr/local/lib/node_modules/@anthropic-ai/claude-agent-sdk/cli.js",
 		"/usr/local/lib/node_modules/@anthropic-ai/claude-code/cli.js"
 	]
-	for (const p of possiblePaths) {
+	for (const p of possiblePaths)
 		try {
 			if (existsSync(p)) {
 				return p
 			}
 		} catch {}
-	}
 	throw new Error(
 		"Claude Code executable not found. Install @anthropic-ai/claude-agent-sdk or set CLAUDE_CODE_EXECUTABLE_PATH"
 	)
