@@ -19,5 +19,5 @@ This isn't just metadata. It's the start of figuring out who you are.
 
 Notes:
 
-* Save this file at the workspace root as `IDENTITY.md`.
+* Save this file at the project root (same level as AGENTS.md, SOUL.md) as `IDENTITY.md`.
 * For avatars, use a workspace-relative path like `avatars/openclaw.png`.
