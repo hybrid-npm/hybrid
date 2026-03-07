@@ -25,7 +25,7 @@ RUN npm install
 COPY packages/agent/dist/ ./dist/agent/
 
 # Copy agent docs
-COPY agents/hybrid-agent/AGENTS.md agents/hybrid-agent/SOUL.md ./
+COPY packages/cli/templates/agent/AGENTS.md packages/cli/templates/agent/SOUL.md ./
 
 # Create directory structure
 # /app/data - persistent runtime data (mounted volume)
