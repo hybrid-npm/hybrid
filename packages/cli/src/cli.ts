@@ -1348,11 +1348,10 @@ async function generateVanityWallet(
 async function init(name: string) {
 	if (!name) {
 		console.error("Error: Agent name required")
-		console.error("Usage: hybrid init my-agent")
+		console.error("Usage: hybrid init <name>")
 		process.exit(1)
 	}
 
-	const { execSync } = await import("node:child_process")
 	const { resolve, dirname } = await import("node:path")
 	const { fileURLToPath } = await import("node:url")
 	const { readFileSync, writeFileSync, cpSync, existsSync } = await import(
@@ -1360,34 +1359,28 @@ async function init(name: string) {
 	)
 
 	const __dirname = dirname(fileURLToPath(import.meta.url))
-	const rootDir = resolve(__dirname, "../../..")
-	const agentsDir = resolve(rootDir, "agents")
-	const newAgentDir = resolve(agentsDir, name)
+	const templateDir = resolve(__dirname, "../templates/agent")
+	const targetDir = resolve(process.cwd(), name)
 
-	if (existsSync(newAgentDir)) {
-		console.error(`Error: Agent '${name}' already exists at agents/${name}`)
+	if (existsSync(targetDir)) {
+		console.error(`Error: Directory '${name}' already exists`)
 		process.exit(1)
 	}
 
 	console.log(`Creating agent: ${name}`)
 
-	cpSync(resolve(agentsDir, "hybrid-agent"), newAgentDir, { recursive: true })
+	cpSync(templateDir, targetDir, { recursive: true })
 
-	const pkg = JSON.parse(
-		readFileSync(resolve(newAgentDir, "package.json"), "utf-8")
-	)
+	const pkgPath = resolve(targetDir, "package.json")
+	const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"))
 	pkg.name = name
-	writeFileSync(
-		resolve(newAgentDir, "package.json"),
-		JSON.stringify(pkg, null, 2)
-	)
+	writeFileSync(pkgPath, JSON.stringify(pkg, null, 2))
 
-	console.log(`\n✅ Created agent at: agents/${name}`)
+	console.log(`\n✅ Created agent at: ${name}/`)
 	console.log("\nNext steps:")
-	console.log(`  cd agents/${name}`)
+	console.log(`  cd ${name}`)
 	console.log("  cp .env.example .env  # Add your keys")
-	console.log("  hybrid build          # Build agent bundle")
-	console.log("  hybrid deploy         # Deploy to Fly.io")
+	console.log("  hybrid dev             # Start development")
 }
 
 async function register() {
