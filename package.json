@@ -34,5 +34,8 @@
 		"tsx": "4.19.3",
 		"turbo": "2.5.0",
 		"typescript": "5.9.2"
+	},
+	"dependencies": {
+		"@anthropic-ai/claude-agent-sdk": "^0.2.38"
 	}
 }

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import {
 	type Options,
@@ -96,7 +96,7 @@ function resolveClaudeCodeCliPath(): string {
 	// Try to find the SDK's cli.js relative to this package
 	// When bundled, _dirname is packages/agent/dist/server
 	const possiblePaths = [
-		// From packages/agent/dist/server -> node_modules/.pnpm/...
+		// From packages/agent/dist/server -> node_modules/.pnpm/... (any version)
 		join(
 			_dirname,
 			"..",
@@ -111,14 +111,68 @@ function resolveClaudeCodeCliPath(): string {
 			"claude-agent-sdk",
 			"cli.js"
 		),
+		join(
+			_dirname,
+			"..",
+			"..",
+			"..",
+			"..",
+			"node_modules",
+			".pnpm",
+			"@anthropic-ai+claude-agent-sdk@0.2.50",
+			"node_modules",
+			"@anthropic-ai",
+			"claude-agent-sdk",
+			"cli.js"
+		),
+		join(
+			_dirname,
+			"..",
+			"..",
+			"..",
+			"..",
+			"node_modules",
+			".pnpm",
+			"@anthropic-ai+claude-agent-sdk@0.2.38",
+			"node_modules",
+			"@anthropic-ai",
+			"claude-agent-sdk",
+			"cli.js"
+		),
+		// From packages/agent/src/server -> node_modules (during dev)
+		join(
+			_dirname,
+			"..",
+			"..",
+			"..",
+			"..",
+			"node_modules",
+			"@anthropic-ai",
+			"claude-agent-sdk",
+			"cli.js"
+		),
+		// Root node_modules
+		join(
+			_dirname,
+			"..",
+			"..",
+			"..",
+			"..",
+			"..",
+			"node_modules",
+			"@anthropic-ai",
+			"claude-agent-sdk",
+			"cli.js"
+		),
 		// Global installs
 		"/usr/local/lib/node_modules/@anthropic-ai/claude-agent-sdk/cli.js",
 		"/usr/local/lib/node_modules/@anthropic-ai/claude-code/cli.js"
 	]
 	for (const p of possiblePaths) {
 		try {
-			readFileSync(p, "utf-8")
-			return p
+			if (existsSync(p)) {
+				return p
+			}
 		} catch {}
 	}
 	throw new Error(
