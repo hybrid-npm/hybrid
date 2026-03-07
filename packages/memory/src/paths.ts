@@ -2,15 +2,11 @@ import { createHash } from "node:crypto"
 import { join } from "node:path"
 
 /**
- * Get the DATA_ROOT directory for secrets and credentials.
- * In production: /app/data
- * In development: workspaceDir/.hybrid (backwards compatibility)
- *
- * NOTE: Memory files now live in project root (workspaceDir/memory),
- * not in DATA_ROOT. DATA_ROOT is only for secrets/credentials.
+ * Get the credentials directory path.
+ * Credentials are stored at projectDir/credentials/
  */
-function getDataRoot(workspaceDir: string): string {
-	return process.env.DATA_ROOT || join(workspaceDir, ".hybrid")
+export function getCredentialsPath(workspaceDir: string): string {
+	return join(workspaceDir, "credentials")
 }
 
 export function getProjectHash(workspaceDir: string): string {
@@ -18,9 +14,8 @@ export function getProjectHash(workspaceDir: string): string {
 }
 
 /**
- * Get the memory root directory in project root.
+ * Get the memory root directory.
  * Memory files are stored in: workspaceDir/memory/
- * NOT in DATA_ROOT (which is for secrets only).
  */
 export function getMemoryRoot(workspaceDir: string): string {
 	return join(workspaceDir, "memory")
@@ -70,15 +65,6 @@ export function getLogsPath(workspaceDir: string): string {
 export function getDailyLogPath(workspaceDir: string, date?: string): string {
 	const logDate = date || new Date().toISOString().split("T")[0]
 	return join(getLogsPath(workspaceDir), `${logDate}.md`)
-}
-
-/**
- * Get the credentials directory path.
- * In production: /app/data/credentials
- * In development: workspaceDir/.hybrid/credentials (backwards compatibility)
- */
-export function getCredentialsPath(workspaceDir: string): string {
-	return join(getDataRoot(workspaceDir), "credentials")
 }
 
 export interface MemoryPaths {
