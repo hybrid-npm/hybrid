@@ -30,7 +30,7 @@ if (process.env.DEBUG) {
 	console.log(`[xmtp] .env path: ${envPath}`)
 	console.log(`[xmtp] .env exists: ${fs.existsSync(envPath)}`)
 	console.log(
-		`[xmtp] WALLET_KEY: ${hasSecret("WALLET_KEY") ? "set" : "not set"}`
+		`[xmtp] AGENT_WALLET_KEY: ${hasSecret("AGENT_WALLET_KEY") ? "set" : "not set"}`
 	)
 }
 
@@ -92,7 +92,10 @@ process.on("unhandledRejection", (reason) => {
 	process.exit(1)
 })
 
-function printBanner(walletAddress?: string) {
+function printBanner(
+	walletAddress?: string,
+	status?: "connecting" | "listening" | "error"
+) {
 	const isHotReload = process.env.TSX_WATCH === "true"
 
 	console.log("")
@@ -122,8 +125,18 @@ function printBanner(walletAddress?: string) {
 		console.log(
 			`  ${pc.yellow("⚡")} Hot reload enabled - watching for changes...`
 		)
-	} else {
+		console.log("")
+		return
+	}
+
+	if (status === "connecting") {
+		console.log(`  ${pc.yellow("◌")} Connecting to XMTP network...`)
+	} else if (status === "listening") {
 		console.log(`  ${pc.green("✓")} Listening for messages...`)
+	} else if (status === "error") {
+		console.log(`  ${pc.red("✗")} Failed to connect`)
+	} else if (!walletAddress) {
+		console.log(`  ${pc.yellow("○")} Waiting for wallet configuration...`)
 	}
 	console.log("")
 }
@@ -137,19 +150,19 @@ async function startSidecar() {
 	// Try secret store first, then fall back to env var
 	let key: string | null = null
 
-	if (hasSecret("WALLET_KEY")) {
+	if (hasSecret("AGENT_WALLET_KEY")) {
 		key = getWalletKey()
 	} else {
 		// Fall back to env var for development
-		const envKey = process.env.WALLET_KEY || process.env.AGENT_WALLET_KEY
+		const envKey = process.env.AGENT_WALLET_KEY
 		if (envKey) {
 			key = envKey
-			log.info("Using WALLET_KEY from environment variable")
+			log.info("Using AGENT_WALLET_KEY from environment variable")
 		}
 	}
 
 	if (!key) {
-		log.warn("WALLET_KEY not loaded (no secret file or env var found)")
+		log.warn("AGENT_WALLET_KEY not loaded (no secret file or env var found)")
 		printBanner()
 		await new Promise(() => {})
 		return
@@ -160,7 +173,8 @@ async function startSidecar() {
 			? (key as `0x${string}`)
 			: (`0x${key}` as `0x${string}`)
 	)
-	printBanner(user.account.address)
+
+	printBanner(user.account.address, "connecting")
 
 	const identifier = {
 		identifier: user.account.address.toLowerCase(),
@@ -432,7 +446,9 @@ async function startSidecar() {
 
 	log.info("starting message stream...")
 	await agent.start()
-	log.success("listening for messages")
+	console.log("")
+	console.log(`  ${pc.green("✓")} Listening for messages...`)
+	console.log("")
 }
 
 startSidecar().catch((e) => {

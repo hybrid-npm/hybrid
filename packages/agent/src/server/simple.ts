@@ -63,7 +63,7 @@ function getProviderConfig() {
 
 function getWalletAddress(): string | null {
 	// Try secret store first (production)
-	if (hasSecret("WALLET_KEY")) {
+	if (hasSecret("AGENT_WALLET_KEY")) {
 		try {
 			const key = getWalletKey()
 			const account = privateKeyToAccount(
@@ -78,7 +78,7 @@ function getWalletAddress(): string | null {
 	}
 
 	// Fall back to env var (development)
-	const key = process.env.AGENT_WALLET_KEY || process.env.WALLET_KEY
+	const key = process.env.AGENT_WALLET_KEY
 	if (!key) return null
 	try {
 		const account = privateKeyToAccount(

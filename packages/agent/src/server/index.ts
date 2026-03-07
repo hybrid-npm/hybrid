@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
 import {
 	type Options,
 	createSdkMcpServer,
@@ -25,7 +26,10 @@ import {
 } from "../lib/workspace-state"
 import { createMemoryMcpServer, resolveUserRole } from "../memory-tools"
 
-const _dirname = typeof __dirname !== "undefined" ? __dirname : process.cwd()
+const _dirname =
+	typeof __dirname !== "undefined"
+		? __dirname
+		: dirname(fileURLToPath(import.meta.url))
 
 // ============================================================================
 // SECURITY: Load secrets from persistent volume into memory
@@ -66,13 +70,13 @@ const SCHEDULER_POLL_MS = Number.parseInt(
 let scheduler: SchedulerService | null = null
 
 function getWalletAddress(): string | null {
-	if (!hasSecret("WALLET_KEY")) return null
+	if (!hasSecret("AGENT_WALLET_KEY")) return null
 	try {
-		const AGENT_WALLET_KEY = getWalletKey()
-		const key = AGENT_WALLET_KEY.startsWith("0x")
-			? (AGENT_WALLET_KEY as `0x${string}`)
-			: (`0x${AGENT_WALLET_KEY}` as `0x${string}`)
-		const account = privateKeyToAccount(key)
+		const key = getWalletKey()
+		const keyWithPrefix = key.startsWith("0x")
+			? (key as `0x${string}`)
+			: (`0x${key}` as `0x${string}`)
+		const account = privateKeyToAccount(keyWithPrefix)
 		return account.address
 	} catch {
 		return null
@@ -90,20 +94,17 @@ function getProviderInfo(): { provider: string; model: string } {
 const CLAUDE_WRAPPER_PATH = "/usr/local/bin/claude-wrapper.sh"
 
 function resolveClaudeCodeCliPath(): string {
-	// Use require to find the package location - works in both dev and bundled
-	try {
-		const sdkPath = require.resolve("@anthropic-ai/claude-agent-sdk/cli.js")
-		return sdkPath
-	} catch {}
-
 	// Env var override
 	if (process.env.CLAUDE_CODE_EXECUTABLE_PATH) {
 		return process.env.CLAUDE_CODE_EXECUTABLE_PATH
 	}
 
-	// Fallback: try direct paths
+	// _dirname is either:
+	// - /project/packages/agent/src/server (dev, tsx watch)
+	// - /project/packages/agent/dist/server (prod, bundled)
+	// We need to go up to find node_modules at project root
 	const possiblePaths = [
-		// From packages/agent/dist/server -> node_modules/.pnpm/... (any version)
+		// Dev mode: from packages/agent/src/server -> need 4 levels up to root
 		join(
 			_dirname,
 			"..",
@@ -111,13 +112,23 @@ function resolveClaudeCodeCliPath(): string {
 			"..",
 			"..",
 			"node_modules",
-			".pnpm",
-			"@anthropic-ai+claude-agent-sdk@0.2.50_zod@4.3.6",
+			"@anthropic-ai",
+			"claude-agent-sdk",
+			"cli.js"
+		),
+		// Prod mode: from packages/agent/dist/server -> need 4 levels up to root
+		join(
+			_dirname,
+			"..",
+			"..",
+			"..",
+			"..",
 			"node_modules",
 			"@anthropic-ai",
 			"claude-agent-sdk",
 			"cli.js"
 		),
+		// pnpm hoisted location (dev)
 		join(
 			_dirname,
 			"..",
@@ -132,55 +143,15 @@ function resolveClaudeCodeCliPath(): string {
 			"claude-agent-sdk",
 			"cli.js"
 		),
-		join(
-			_dirname,
-			"..",
-			"..",
-			"..",
-			"..",
-			"node_modules",
-			".pnpm",
-			"@anthropic-ai+claude-agent-sdk@0.2.38",
-			"node_modules",
-			"@anthropic-ai",
-			"claude-agent-sdk",
-			"cli.js"
-		),
-		// From packages/agent/src/server -> node_modules (during dev)
-		join(
-			_dirname,
-			"..",
-			"..",
-			"..",
-			"..",
-			"node_modules",
-			"@anthropic-ai",
-			"claude-agent-sdk",
-			"cli.js"
-		),
-		// Root node_modules
-		join(
-			_dirname,
-			"..",
-			"..",
-			"..",
-			"..",
-			"..",
-			"node_modules",
-			"@anthropic-ai",
-			"claude-agent-sdk",
-			"cli.js"
-		),
 		// Global installs
 		"/usr/local/lib/node_modules/@anthropic-ai/claude-agent-sdk/cli.js",
 		"/usr/local/lib/node_modules/@anthropic-ai/claude-code/cli.js"
 	]
-	for (const p of possiblePaths)
-		try {
-			if (existsSync(p)) {
-				return p
-			}
-		} catch {}
+	for (const p of possiblePaths) {
+		if (existsSync(p)) {
+			return p
+		}
+	}
 	throw new Error(
 		"Claude Code executable not found. Install @anthropic-ai/claude-agent-sdk or set CLAUDE_CODE_EXECUTABLE_PATH"
 	)
@@ -707,7 +678,6 @@ When scheduling reminders, include delivery info to send the message back to thi
 	// Sensitive keys that should NEVER be passed to Claude child processes
 	const SENSITIVE_ENV_KEYS = [
 		"AGENT_WALLET_KEY",
-		"WALLET_KEY",
 		"PRIVATE_KEY",
 		"SECRET",
 		"SECRETS_PATH",
