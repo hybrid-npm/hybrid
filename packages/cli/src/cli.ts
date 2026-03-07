@@ -1351,10 +1351,38 @@ async function generateVanityWallet(
 }
 
 async function keygen(prefix?: string) {
+	if (prefix === "-h" || prefix === "--help") {
+		console.log("\nUsage: hybrid keygen [prefix]")
+		console.log("")
+		console.log("Generate a new wallet key for your agent.")
+		console.log("")
+		console.log("Arguments:")
+		console.log(
+			"  prefix    Optional hex prefix for vanity address (max 6 chars)"
+		)
+		console.log("")
+		console.log("Examples:")
+		console.log("  hybrid keygen          # Generate random wallet")
+		console.log("  hybrid keygen abc      # Generate vanity with 0xabc...")
+		console.log("  hybrid keygen dead     # Generate vanity with 0xdead...")
+		console.log("")
+		process.exit(0)
+	}
+
 	const { randomBytes } = await import("node:crypto")
 	const { privateKeyToAccount } = await import("viem/accounts")
 
 	const targetPrefix = prefix?.toLowerCase() || ""
+
+	if (targetPrefix && !/^[0-9a-f]+$/.test(targetPrefix)) {
+		console.error("\n❌ Error: Prefix must be valid hexadecimal (0-9, a-f)")
+		process.exit(1)
+	}
+
+	if (targetPrefix && targetPrefix.length > 6) {
+		console.error("\n❌ Error: Prefix too long (max 6 characters)")
+		process.exit(1)
+	}
 
 	console.log("\n🔑 Generating wallet...")
 	if (targetPrefix) {
