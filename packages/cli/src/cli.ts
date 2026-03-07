@@ -874,7 +874,7 @@ async function dev(useDocker: boolean) {
 
 	try {
 		execSync(
-			'npx concurrently --names "server,xmtp" --prefix-colors "cyan,magenta" "npx tsx watch --clear-screen=false src/server/simple.ts" "npx tsx watch --clear-screen=false src/xmtp.ts"',
+			'npx concurrently --names "server,xmtp" --prefix-colors "cyan,magenta" "npx tsx watch --clear-screen=false src/server/index.ts" "npx tsx watch --clear-screen=false src/xmtp.ts"',
 			{
 				cwd: agentDir,
 				stdio: "inherit",
