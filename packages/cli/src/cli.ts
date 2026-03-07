@@ -47,6 +47,10 @@ async function main() {
 		return init(args[1])
 	}
 
+	if (command === "keygen") {
+		return keygen(args[1])
+	}
+
 	if (command === "register") {
 		return register()
 	}
@@ -116,11 +120,12 @@ async function main() {
 	console.log("")
 	console.log("Commands:")
 	console.log("  init <name>        Initialize a new agent from template")
-	console.log("  build [--target]   Build agent bundle (.hybrid/)")
-	console.log("  dev                Start development server")
-	console.log("  dev --docker       Start development server with Docker")
-	console.log("  start              Run built agent from .hybrid/")
-	console.log("  register           Register wallet on XMTP network")
+	console.log("  keygen [prefix]   Generate a new wallet (optional hex prefix)")
+	console.log("  build [--target]  Build agent bundle (.hybrid/)")
+	console.log("  dev               Start development server")
+	console.log("  dev --docker      Start development server with Docker")
+	console.log("  start             Run built agent from .hybrid/")
+	console.log("  register          Register wallet on XMTP network")
 	console.log("  revoke <inboxId>   Revoke installations for an inbox ID")
 	console.log(
 		"  revoke-all         Revoke all XMTP installations (auto-detect)"
@@ -1343,6 +1348,32 @@ async function generateVanityWallet(
 	throw new Error(
 		`Could not find wallet with prefix ${targetPrefix} after ${maxAttempts} attempts`
 	)
+}
+
+async function keygen(prefix?: string) {
+	const { randomBytes } = await import("node:crypto")
+	const { privateKeyToAccount } = await import("viem/accounts")
+
+	const targetPrefix = prefix?.toLowerCase() || ""
+
+	console.log("\n🔑 Generating wallet...")
+	if (targetPrefix) {
+		console.log(`   Looking for address starting with 0x${targetPrefix}...`)
+	}
+
+	const walletKey = await generateVanityWallet(
+		targetPrefix,
+		privateKeyToAccount,
+		randomBytes
+	)
+
+	const account = privateKeyToAccount(walletKey as `0x${string}`)
+
+	console.log(`\n✅ Wallet generated!`)
+	console.log(`   Address: ${account.address}`)
+	console.log(`   Private key: ${walletKey}\n`)
+	console.log("⚠️  Save this private key securely!")
+	console.log(`   Add to .env: AGENT_WALLET_KEY=${walletKey}\n`)
 }
 
 async function init(name: string) {
