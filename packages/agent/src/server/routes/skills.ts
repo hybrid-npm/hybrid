@@ -22,18 +22,15 @@ interface InstalledSkill {
 }
 
 interface SkillsListResponse {
-	core: SkillInfo[]
-	installed: InstalledSkill[]
+	skills: SkillInfo[]
 	registry: SkillInfo[]
 }
 
 export async function handleListSkills(c: Context) {
-	const core = getCoreSkills()
-	const installed = getInstalledSkills()
+	const skills = getSkills()
 
 	const response: SkillsListResponse = {
-		core,
-		installed,
+		skills,
 		registry: SKILLS_REGISTRY
 	}
 
@@ -58,7 +55,6 @@ export async function handleAddSkill(c: Context) {
 			return c.json({ error: "FID required" }, 400)
 		}
 
-		// Verify owner
 		if (!isOwner(fid)) {
 			return c.json({ error: "Only owners can add skills" }, 403)
 		}
@@ -89,14 +85,8 @@ export async function handleRemoveSkill(c: Context) {
 			return c.json({ error: "FID required" }, 400)
 		}
 
-		// Verify owner
 		if (!isOwner(fid)) {
 			return c.json({ error: "Only owners can remove skills" }, 403)
-		}
-
-		// Prevent removing core skills
-		if (isCoreSkill(name)) {
-			return c.json({ error: "Cannot remove core skills" }, 400)
 		}
 
 		const result = await uninstallSkill(name)
@@ -107,52 +97,48 @@ export async function handleRemoveSkill(c: Context) {
 	}
 }
 
-function getCoreSkills(): SkillInfo[] {
-	const coreSkillsDir = resolve(PROJECT_ROOT, "packages/agent/skills")
-	if (!existsSync(coreSkillsDir)) return []
+function getSkills(): SkillInfo[] {
+	const skillsDir = resolve(PROJECT_ROOT, "skills")
+	if (!existsSync(skillsDir)) return []
 
 	const skills: SkillInfo[] = []
-	const entries = readdirSync(coreSkillsDir, { withFileTypes: true })
+	const lockfile = loadLockfile()
+
+	const entries = readdirSync(skillsDir, { withFileTypes: true })
 
 	for (const entry of entries) {
 		if (!entry.isDirectory()) continue
+		if (entry.name.startsWith(".")) continue
 
-		const skillPath = join(coreSkillsDir, entry.name, "SKILL.md")
-		if (!existsSync(skillPath)) continue
+		const skillMdPath = join(skillsDir, entry.name, "SKILL.md")
+		if (!existsSync(skillMdPath)) continue
 
-		const skillInfo = parseSkillMd(skillPath, entry.name)
+		const skillInfo = parseSkillMd(skillMdPath, entry.name)
 		if (skillInfo) {
-			skills.push({ ...skillInfo, source: "core" })
+			const lockEntry = lockfile[entry.name]
+			skills.push({
+				...skillInfo,
+				source: lockEntry?.source || "unknown"
+			})
 		}
 	}
 
 	return skills
 }
 
-function getInstalledSkills(): InstalledSkill[] {
+function loadLockfile(): Record<
+	string,
+	{ source: string; installedAt: string }
+> {
 	const lockfilePath = resolve(PROJECT_ROOT, "skills-lock.json")
-	if (!existsSync(lockfilePath)) return []
+	if (!existsSync(lockfilePath)) return {}
 
 	try {
 		const content = readFileSync(lockfilePath, "utf-8")
-		const lockfile = JSON.parse(content) as {
-			version: number
-			extensions: Record<string, { source: string; installedAt: string }>
-		}
-
-		return Object.entries(lockfile.extensions || {}).map(([name, data]) => ({
-			name,
-			source: data.source,
-			installedAt: data.installedAt
-		}))
+		return JSON.parse(content)
 	} catch {
-		return []
+		return {}
 	}
-}
-
-function isCoreSkill(name: string): boolean {
-	const coreSkills = getCoreSkills()
-	return coreSkills.some((s) => s.name === name)
 }
 
 function parseSkillMd(filePath: string, defaultName: string): SkillInfo | null {
@@ -168,7 +154,7 @@ function parseSkillMd(filePath: string, defaultName: string): SkillInfo | null {
 
 		return {
 			name: nameMatch?.[1]?.trim() || defaultName,
-			source: "core",
+			source: "",
 			description: descMatch?.[1]?.trim() || ""
 		}
 	} catch {
@@ -176,9 +162,7 @@ function parseSkillMd(filePath: string, defaultName: string): SkillInfo | null {
 	}
 }
 
-// Validate GitHub owner/repo format (alphanumeric, hyphens, underscores, dots)
 const GITHUB_REPO_RE = /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/
-// Validate npm package name (scoped or unscoped)
 const NPM_PACKAGE_RE = /^(@[a-zA-Z0-9._-]+\/)?[a-zA-Z0-9._-]+$/
 
 async function installSkill(
@@ -187,7 +171,6 @@ async function installSkill(
 	const projectSkillsDir = resolve(PROJECT_ROOT, "skills")
 	const lockfilePath = resolve(PROJECT_ROOT, "skills-lock.json")
 
-	// Ensure skills directory exists
 	if (!existsSync(projectSkillsDir)) {
 		mkdirSync(projectSkillsDir, { recursive: true })
 	}
@@ -195,9 +178,7 @@ async function installSkill(
 	let skillName: string
 	let skillDir: string | null = null
 
-	// Parse source type
 	if (source.startsWith("github:") || source.includes("/")) {
-		// GitHub source
 		const parts = source.replace("github:", "").split("/")
 		if (parts.length < 2) {
 			return { success: false, error: "Invalid GitHub source" }
@@ -209,20 +190,13 @@ async function installSkill(
 		}
 		skillName = parts[2] || parts[1]
 
-		// Clone to temp directory
 		const tempDir = resolve(projectSkillsDir, ".temp", "install")
 		rmSync(tempDir, { recursive: true, force: true })
 
 		try {
 			execFileSync(
 				"git",
-				[
-					"clone",
-					"--depth",
-					"1",
-					`https://github.com/${repo}.git`,
-					tempDir
-				],
+				["clone", "--depth", "1", `https://github.com/${repo}.git`, tempDir],
 				{
 					stdio: "pipe",
 					env: { ...process.env, DISABLE_TELEMETRY: "1", DO_NOT_TRACK: "1" }
@@ -232,19 +206,16 @@ async function installSkill(
 			return { success: false, error: "Failed to clone repository" }
 		}
 
-		// Find SKILL.md
 		skillDir = findSkillDir(tempDir, skillName)
 		if (!skillDir || !existsSync(resolve(skillDir, "SKILL.md"))) {
 			rmSync(tempDir, { recursive: true, force: true })
 			return { success: false, error: "No SKILL.md found in repository" }
 		}
 
-		// Copy to skills directory
 		const destPath = resolve(projectSkillsDir, skillName)
 		cpSync(skillDir, destPath, { recursive: true })
 		rmSync(tempDir, { recursive: true, force: true })
 	} else if (source.startsWith("./") || source.startsWith("../")) {
-		// Local path
 		const localPath = resolve(PROJECT_ROOT, source)
 		if (!existsSync(resolve(localPath, "SKILL.md"))) {
 			return { success: false, error: "No SKILL.md found at local path" }
@@ -254,7 +225,6 @@ async function installSkill(
 		const destPath = resolve(projectSkillsDir, skillName)
 		cpSync(localPath, destPath, { recursive: true })
 	} else {
-		// npm package
 		if (!NPM_PACKAGE_RE.test(source)) {
 			return { success: false, error: "Invalid npm package name" }
 		}
@@ -262,14 +232,10 @@ async function installSkill(
 		const tempDir = resolve(projectSkillsDir, ".temp", "npm-install")
 
 		try {
-			execFileSync(
-				"npm",
-				["install", source, "--prefix", tempDir],
-				{
-					stdio: "pipe",
-					env: { ...process.env, DISABLE_TELEMETRY: "1", DO_NOT_TRACK: "1" }
-				}
-			)
+			execFileSync("npm", ["install", source, "--prefix", tempDir], {
+				stdio: "pipe",
+				env: { ...process.env, DISABLE_TELEMETRY: "1", DO_NOT_TRACK: "1" }
+			})
 		} catch {
 			return { success: false, error: "Failed to install npm package" }
 		}
@@ -285,29 +251,11 @@ async function installSkill(
 		rmSync(tempDir, { recursive: true, force: true })
 	}
 
-	// Update lockfile
-	let lockfile: { version: number; extensions: Record<string, any> } = {
-		version: 2,
-		extensions: {}
-	}
-
-	if (existsSync(lockfilePath)) {
-		try {
-			const parsed = JSON.parse(readFileSync(lockfilePath, "utf-8"))
-			lockfile = {
-				version: parsed.version || 2,
-				extensions: parsed.extensions || {}
-			}
-		} catch {
-			// Use defaults
-		}
-	}
-
-	lockfile.extensions[skillName] = {
+	const lockfile = loadLockfile()
+	lockfile[skillName] = {
 		source,
 		installedAt: new Date().toISOString()
 	}
-
 	writeFileSync(lockfilePath, JSON.stringify(lockfile, null, 2))
 
 	return { success: true, skill: skillName }
@@ -324,14 +272,12 @@ async function uninstallSkill(
 		return { success: false, error: `Skill '${name}' not found` }
 	}
 
-	// Remove skill directory
 	rmSync(skillPath, { recursive: true, force: true })
 
-	// Update lockfile
 	if (existsSync(lockfilePath)) {
 		try {
 			const parsed = JSON.parse(readFileSync(lockfilePath, "utf-8"))
-			delete parsed.extensions?.[name]
+			delete parsed[name]
 			writeFileSync(lockfilePath, JSON.stringify(parsed, null, 2))
 		} catch {
 			// Ignore errors

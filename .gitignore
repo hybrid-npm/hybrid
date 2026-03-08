@@ -3,7 +3,6 @@
 # build
 dist
 gen
-.hybrid/
 
 # dependencies
 node_modules
