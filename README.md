@@ -169,6 +169,133 @@ hybrid dev
 
 ---
 
+## Project Structure
+
+Running `hybrid init <name>` generates this project structure:
+
+```
+my-agent/
+├── package.json                 # Project config (name replaced)
+├── .gitignore                   # Ignores credentials/, sessions/, memory/, etc.
+├── .env.example                 # Environment template
+│
+├── credentials/                 # Access control
+│   └── xmtp-allowFrom.json      # Created during init with owner wallet
+│
+├── skills/                      # Copied from core skills
+│   ├── memory/SKILL.md
+│   ├── xmtp/SKILL.md
+│   └── skills-manager/SKILL.md
+│
+├── skills-lock.json             # Locks installed skill versions
+│
+└── [Agent Configuration Files]
+    ├── SOUL.md                  # Agent personality & principles
+    ├── IDENTITY.md              # Name, creature, vibe, emoji
+    ├── USER.md                  # Human profile template
+    ├── AGENTS.md                # Workspace rules & memory system
+    ├── TOOLS.md                 # Local notes (cameras, SSH, etc.)
+    ├── BOOTSTRAP.md             # First-run setup guide
+    └── HEARTBEAT.md             # Periodic task checklist
+```
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `SOUL.md` | Agent personality, principles, and behavior style |
+| `IDENTITY.md` | Name, creature type, vibe, emoji, avatar |
+| `USER.md` | Human profile — name, preferences, context |
+| `AGENTS.md` | Workspace rules, memory system, group chat behavior |
+| `TOOLS.md` | Local notes — camera names, SSH aliases, TTS voices |
+| `BOOTSTRAP.md` | First-run onboarding guide (deleted after setup) |
+| `HEARTBEAT.md` | Periodic task checklist for proactive behavior |
+
+### Init Flow
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    hybrid init <name>                        │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  1. Copy templates/agent/ → <name>/                         │
+│     - package.json (with name replaced)                     │
+│     - SOUL.md, IDENTITY.md, USER.md, AGENTS.md             │
+│     - TOOLS.md, BOOTSTRAP.md, HEARTBEAT.md                 │
+│     - .gitignore, .env.example                              │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  2. Copy core skills/ → <name>/skills/                      │
+│     - memory/                                               │
+│     - xmtp/                                                 │
+│     - skills-manager/                                       │
+│                                                             │
+│     Create skills-lock.json with core skill references      │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  3. Prompt: "Enter your wallet address (owner):"           │
+│                                                             │
+│     Input: 0xAbC123...                                      │
+│                                                             │
+│     → Create credentials/xmtp-allowFrom.json               │
+│       { "version": 1, "allowFrom": ["0xabc123..."] }       │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Output:                                                    │
+│                                                             │
+│  ✅ Created agent at: my-agent/                             │
+│                                                             │
+│  Next steps:                                                │
+│    cd my-agent                                              │
+│    npm install  # or pnpm install                           │
+│    hybrid dev   # Start development                         │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Agent Runtime Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Agent Process                            │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐     │
+│  │   SOUL.md   │    │  IDENTITY.md│    │   USER.md   │     │
+│  │ Personality │    │ Who am I?   │    │ Human info  │     │
+│  └─────────────┘    └─────────────┘    └─────────────┘     │
+│         │                  │                  │              │
+│         └──────────────────┼──────────────────┘              │
+│                            ▼                                │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │                   System Prompt                       │   │
+│  │  [IDENTITY] + [SOUL] + [AGENTS] + [TOOLS] + [USER]   │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                            │                                │
+│                            ▼                                │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │              Claude Agent SDK                        │   │
+│  │  query({ prompt, options }) → conversation stream    │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                            │                                │
+│                            ▼                                │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │                   Skills Layer                       │   │
+│  │  ./skills/*/SKILL.md → Tool definitions              │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
 ## Memory
 
 Hybrid has a 3-layer memory system. All three layers are indexed together into SQLite for unified search.

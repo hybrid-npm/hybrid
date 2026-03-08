@@ -2,32 +2,35 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-// Mock child_process
 const mockExecSync = vi.fn()
 vi.mock("node:child_process", () => ({
 	execSync: mockExecSync
 }))
 
-// Mock node:url
 vi.mock("node:url", () => ({
 	fileURLToPath: (url: string) => url.replace("file://", "")
 }))
 
-// Mock prompts
 vi.mock("prompts", () => ({
 	default: vi.fn()
 }))
 
-// Mock viem/accounts
 vi.mock("viem/accounts", () => ({
 	privateKeyToAccount: vi.fn((key: `0x${string}`) => ({
 		address: "0x1234567890abcdef1234567890abcdef12345678"
 	}))
 }))
 
-// Mock node:crypto
 vi.mock("node:crypto", () => ({
 	randomBytes: vi.fn(() => Buffer.from("a".repeat(64), "hex"))
+}))
+
+const mockRlQuestion = vi.fn()
+vi.mock("node:readline", () => ({
+	createInterface: () => ({
+		question: mockRlQuestion,
+		close: vi.fn()
+	})
 }))
 
 describe("CLI", () => {
@@ -36,30 +39,24 @@ describe("CLI", () => {
 
 		beforeEach(() => {
 			vi.clearAllMocks()
-			// Create temp directory
 			if (!existsSync(tempDir)) {
 				mkdirSync(tempDir, { recursive: true })
 			}
 		})
 
 		afterEach(() => {
-			// Cleanup temp directory
 			if (existsSync(tempDir)) {
 				rmSync(tempDir, { recursive: true, force: true })
 			}
 		})
 
 		it("should find SKILL.md in root directory", async () => {
-			// Create a skill in root
 			const skillDir = resolve(tempDir, "test-skill")
 			mkdirSync(skillDir, { recursive: true })
 			writeFileSync(resolve(skillDir, "SKILL.md"), "description: Test skill\n")
 
-			// Dynamic import to get fresh module
 			const { execSync } = await import("node:child_process")
 
-			// The findSkillDir function is internal, so we test via install behavior
-			// For now, we'll test the skill installation paths
 			expect(existsSync(resolve(skillDir, "SKILL.md"))).toBe(true)
 		})
 
@@ -83,7 +80,6 @@ describe("CLI", () => {
 		})
 
 		it("should NOT search in .claude directory", () => {
-			// This verifies the fix - .claude should not be in search paths
 			const claudeSkillDir = resolve(
 				tempDir,
 				".claude",
@@ -96,18 +92,15 @@ describe("CLI", () => {
 				"description: Claude skill\n"
 			)
 
-			// The skill exists but shouldn't be found by findSkillDir
-			// We're testing that the search paths don't include .claude
 			const searchPaths = [
 				tempDir,
 				resolve(tempDir, "skills", "claude-skill"),
 				resolve(tempDir, "claude-skill"),
 				resolve(tempDir, ".agents", "skills", "claude-skill")
-				// Note: .claude/skills is NOT in this list
 			]
 
 			const found = searchPaths.some((p) => existsSync(resolve(p, "SKILL.md")))
-			expect(found).toBe(false) // Should NOT find it in search paths
+			expect(found).toBe(false)
 		})
 	})
 
@@ -146,7 +139,6 @@ describe("CLI", () => {
 		})
 
 		it("should allow user skills to override core skills", () => {
-			// Setup core skill
 			const coreSkillDir = resolve(tempDir, "core", "wrangler")
 			mkdirSync(coreSkillDir, { recursive: true })
 			writeFileSync(
@@ -154,7 +146,6 @@ describe("CLI", () => {
 				"description: Core wrangler\n"
 			)
 
-			// Setup user skill with same name
 			const userSkillDir = resolve(tempDir, "ext", "wrangler")
 			mkdirSync(userSkillDir, { recursive: true })
 			writeFileSync(
@@ -162,19 +153,13 @@ describe("CLI", () => {
 				"description: Custom wrangler\n"
 			)
 
-			// Verify both exist
 			expect(existsSync(resolve(coreSkillDir, "SKILL.md"))).toBe(true)
 			expect(existsSync(resolve(userSkillDir, "SKILL.md"))).toBe(true)
-
-			// In build, ext skills are copied after core, so user's version wins
-			// This is tested by the order of operations in cli.ts
 		})
 	})
 
 	describe("Dockerfile generation", () => {
 		it("should generate correct fly Dockerfile", async () => {
-			// Import the CLI module to test generateDockerfile
-			// Since it's not exported, we test via build behavior
 			const flyDockerfile = `FROM node:20
 
 WORKDIR /app
@@ -297,7 +282,6 @@ primary_region = "iad"
 				"description: Core skill\n"
 			)
 
-			// Simulate copy
 			const { cpSync } = require("node:fs")
 			cpSync(resolve(coreDir, "wrangler"), resolve(hybridDir, "wrangler"), {
 				recursive: true
@@ -317,7 +301,6 @@ primary_region = "iad"
 				"description: User skill\n"
 			)
 
-			// Simulate copy
 			const { cpSync } = require("node:fs")
 			cpSync(resolve(userDir, "my-skill"), resolve(hybridDir, "my-skill"), {
 				recursive: true
@@ -342,7 +325,6 @@ primary_region = "iad"
 		const tempDir = resolve(process.cwd(), `.test-ensure-${Date.now()}`)
 
 		beforeEach(() => {
-			// Clean up before each test
 			if (existsSync(tempDir)) {
 				rmSync(tempDir, { recursive: true, force: true })
 			}
@@ -356,7 +338,6 @@ primary_region = "iad"
 		})
 
 		it("should not overwrite existing skills in .hybrid", () => {
-			// This tests that ensureSkills only copies if not already present
 			const hybridCore = resolve(
 				tempDir,
 				".hybrid",
@@ -370,21 +351,16 @@ primary_region = "iad"
 				"description: Existing skill\n"
 			)
 
-			// If skill already exists, it should NOT be overwritten
 			expect(existsSync(resolve(hybridCore, "SKILL.md"))).toBe(true)
-
-			// The ensureSkills function checks `if (!existsSync(destPath))`
 		})
 
 		it("should create skills directories if they don't exist", () => {
 			const hybridSkillsCore = resolve(tempDir, ".hybrid", "skills", "core")
 			const hybridSkillsExt = resolve(tempDir, ".hybrid", "skills", "ext")
 
-			// Before mkdirSync - directories should not exist
 			expect(existsSync(hybridSkillsCore)).toBe(false)
 			expect(existsSync(hybridSkillsExt)).toBe(false)
 
-			// Create them
 			mkdirSync(hybridSkillsCore, { recursive: true })
 			mkdirSync(hybridSkillsExt, { recursive: true })
 
@@ -442,7 +418,6 @@ primary_region = "iad"
 			const baseDir = "/project"
 			const skillName = "my-skill"
 
-			// These are the search paths used in findSkillDir
 			const expectedPaths = [
 				baseDir,
 				resolve(baseDir, "skills", skillName),
@@ -450,9 +425,160 @@ primary_region = "iad"
 				resolve(baseDir, ".agents", "skills", skillName)
 			]
 
-			// .claude/skills should NOT be in this list
 			const claudePath = resolve(baseDir, ".claude", "skills", skillName)
 			expect(expectedPaths).not.toContain(claudePath)
+		})
+	})
+
+	describe("hybrid init", () => {
+		const writtenFiles: Map<string, string> = new Map()
+		const copiedDirs: Array<{ src: string; dest: string }> = []
+		const createdDirs: string[] = []
+
+		beforeEach(() => {
+			vi.clearAllMocks()
+			writtenFiles.clear()
+			copiedDirs.length = 0
+			createdDirs.length = 0
+
+			mockRlQuestion.mockImplementation(
+				(_prompt: string, callback: (answer: string) => void) => {
+					callback("0xABC12345678901234567890123456789012345678")
+				}
+			)
+
+			vi.doMock("node:fs", () => ({
+				existsSync: vi.fn((path: string) => {
+					if (path.includes("my-agent")) return false
+					if (path.includes("existing-agent")) return true
+					if (path.includes("skills")) return true
+					return true
+				}),
+				cpSync: vi.fn((src: string, dest: string) => {
+					copiedDirs.push({ src, dest })
+				}),
+				mkdirSync: vi.fn((path: string) => {
+					createdDirs.push(path)
+				}),
+				writeFileSync: vi.fn((path: string, content: string) => {
+					writtenFiles.set(path, content)
+				}),
+				readFileSync: vi.fn((path: string) => {
+					if (path.includes("package.json")) {
+						return JSON.stringify({ name: "{{name}}", private: true })
+					}
+					return ""
+				}),
+				readdirSync: vi.fn(() => [
+					{ name: "memory", isDirectory: () => true },
+					{ name: "xmtp", isDirectory: () => true },
+					{ name: "skills-manager", isDirectory: () => true }
+				])
+			}))
+		})
+
+		afterEach(() => {
+			vi.restoreAllMocks()
+			vi.doUnmock("node:fs")
+		})
+
+		it("should exit with error when no name provided", async () => {
+			vi.spyOn(process, "exit").mockImplementation(((code: number) => {
+				throw new Error(`process.exit(${code})`)
+			}) as never)
+
+			const mod = await import("./cli")
+			await expect(mod.init()).rejects.toThrow("process.exit(1)")
+		})
+
+		it("should exit with error when directory already exists", async () => {
+			vi.spyOn(process, "exit").mockImplementation(((code: number) => {
+				throw new Error(`process.exit(${code})`)
+			}) as never)
+
+			const mod = await import("./cli")
+			await expect(mod.init("existing-agent")).rejects.toThrow(
+				"process.exit(1)"
+			)
+		})
+
+		it("should copy template directory to target", async () => {
+			const mod = await import("./cli")
+			await mod.init("my-agent")
+
+			expect(copiedDirs.some((c) => c.dest.includes("my-agent"))).toBe(true)
+		})
+
+		it("should update package.json with agent name", async () => {
+			const mod = await import("./cli")
+			await mod.init("my-agent")
+
+			const pkgWrite = Array.from(writtenFiles.entries()).find(
+				([p]) => p.includes("my-agent") && p.includes("package.json")
+			)
+			expect(pkgWrite).toBeDefined()
+			if (pkgWrite) {
+				const pkg = JSON.parse(pkgWrite[1])
+				expect(pkg.name).toBe("my-agent")
+			}
+		})
+
+		it("should copy core skills to target skills directory", async () => {
+			const mod = await import("./cli")
+			await mod.init("my-agent")
+
+			const skillCopies = copiedDirs.filter(
+				(c) => c.dest.includes("my-agent") && c.dest.includes("skills")
+			)
+			expect(skillCopies.length).toBeGreaterThanOrEqual(3)
+		})
+
+		it("should create skills-lock.json with core skills", async () => {
+			const mod = await import("./cli")
+			await mod.init("my-agent")
+
+			const lockWrite = Array.from(writtenFiles.entries()).find(
+				([p]) => p.includes("my-agent") && p.includes("skills-lock.json")
+			)
+			expect(lockWrite).toBeDefined()
+			if (lockWrite) {
+				const lockfile = JSON.parse(lockWrite[1])
+				expect(lockfile).toHaveProperty("memory")
+				expect(lockfile).toHaveProperty("xmtp")
+				expect(lockfile).toHaveProperty("skills-manager")
+				expect(lockfile.memory.source).toBe("core")
+				expect(lockfile.memory).toHaveProperty("installedAt")
+			}
+		})
+
+		it("should create credentials/xmtp-allowFrom.json with owner address", async () => {
+			const mod = await import("./cli")
+			await mod.init("my-agent")
+
+			const aclWrite = Array.from(writtenFiles.entries()).find(
+				([p]) => p.includes("my-agent") && p.includes("xmtp-allowFrom.json")
+			)
+			expect(aclWrite).toBeDefined()
+			if (aclWrite) {
+				const acl = JSON.parse(aclWrite[1])
+				expect(acl.version).toBe(1)
+				expect(Array.isArray(acl.allowFrom)).toBe(true)
+			}
+		})
+
+		it("should normalize owner address to lowercase", async () => {
+			const mod = await import("./cli")
+			await mod.init("my-agent")
+
+			const aclWrite = Array.from(writtenFiles.entries()).find(
+				([p]) => p.includes("my-agent") && p.includes("xmtp-allowFrom.json")
+			)
+			if (aclWrite) {
+				const acl = JSON.parse(aclWrite[1])
+				if (acl.allowFrom.length > 0) {
+					expect(acl.allowFrom[0]).toBe(acl.allowFrom[0].toLowerCase())
+				}
+			}
 		})
 	})
 })

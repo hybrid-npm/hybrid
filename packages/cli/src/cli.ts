@@ -1002,6 +1002,9 @@ async function ownerList() {
 // Run
 // ============================================================================
 
+// Export for testing
+export { init }
+
 main().catch((error) => {
 	console.error("CLI error:", error)
 	process.exit(1)
