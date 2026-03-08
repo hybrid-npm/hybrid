@@ -329,12 +329,25 @@ async function installSkill(
 	return { success: true, skill: skillName }
 }
 
+// Validate skill name: only alphanumeric, hyphens, underscores, dots (no path separators)
+const SKILL_NAME_RE = /^[a-zA-Z0-9._-]+$/
+
 async function uninstallSkill(
 	name: string
 ): Promise<{ success: boolean; error?: string }> {
+	// Validate name to prevent path traversal
+	if (!SKILL_NAME_RE.test(name)) {
+		return { success: false, error: "Invalid skill name" }
+	}
+
 	const projectSkillsDir = resolve(PROJECT_ROOT, "skills")
 	const lockfilePath = resolve(PROJECT_ROOT, "skills-lock.json")
 	const skillPath = resolve(projectSkillsDir, name)
+
+	// Double-check: ensure resolved path is inside skills directory
+	if (!skillPath.startsWith(resolve(projectSkillsDir) + "/")) {
+		return { success: false, error: "Invalid skill name" }
+	}
 
 	if (!existsSync(skillPath)) {
 		return { success: false, error: `Skill '${name}' not found` }
