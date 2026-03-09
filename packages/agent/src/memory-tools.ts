@@ -28,7 +28,8 @@ export function createMemoryMcpServer(
 	workspaceDir: string,
 	userId: string,
 	role: Role,
-	acl: ACL | null
+	acl: ACL | null,
+	projectRoot: string
 ) {
 	const memorySaveTool = tool(
 		"MemorySave",
@@ -717,7 +718,8 @@ Decay Tiers:
 			...createFileTools({
 				workspaceDir,
 				userId,
-				role
+				role,
+				projectRoot
 			})
 		]
 	})

@@ -1,3 +1,5 @@
+import { existsSync, writeFileSync } from "node:fs"
+import { join } from "node:path"
 import { tool } from "@anthropic-ai/claude-agent-sdk"
 import type { Role } from "@hybrid/memory"
 import { z } from "zod"
@@ -8,20 +10,32 @@ import { writeFileToWorkspace } from "../file-operations/write"
 import { validatePathInWorkspace } from "../lib/workspace"
 import { getUserWorkspacePath } from "../lib/workspace"
 
+const PROJECT_CONFIG_FILES = [
+	"IDENTITY.md",
+	"AGENTS.md",
+	"SOUL.md",
+	"TOOLS.md",
+	"BOOT.md",
+	"BOOTSTRAP.md",
+	"HEARTBEAT.md"
+]
+
 /**
  * Create file operation tools for the MCP server.
  *
  * Security:
  * - Only owners can access file operations
- * - All paths are validated to be within user's workspace
+ * - Project config files (IDENTITY.md, etc.) are written to project root
+ * - All other paths are validated to be within user's workspace
  * - Path traversal and symlink escapes are prevented
  */
 export function createFileTools(params: {
 	workspaceDir: string
 	userId: string
 	role: Role
+	projectRoot: string
 }) {
-	const { workspaceDir, userId, role } = params
+	const { workspaceDir, userId, role, projectRoot } = params
 
 	// Read tool
 	const readTool = tool(
@@ -117,6 +131,33 @@ export function createFileTools(params: {
 				}
 			}
 
+			// Handle project-level config files - write to project root
+			const baseName = args.path.split("/").pop()
+			if (baseName && PROJECT_CONFIG_FILES.includes(baseName)) {
+				try {
+					const configPath = join(projectRoot, baseName)
+					writeFileSync(configPath, args.content, "utf-8")
+					return {
+						content: [
+							{
+								type: "text",
+								text: `Wrote ${args.content.length} bytes to ${baseName} (project root)`
+							}
+						]
+					}
+				} catch (err) {
+					return {
+						content: [
+							{
+								type: "text",
+								text: `Error writing config file: ${(err as Error).message}`
+							}
+						],
+						isError: true
+					}
+				}
+			}
+
 			// Validate path
 			const validation = validatePathInWorkspace({
 				workspaceRoot: workspaceDir,
@@ -191,6 +232,73 @@ export function createFileTools(params: {
 						}
 					],
 					isError: true
+				}
+			}
+
+			// Handle project-level config files - edit at project root
+			const baseName = args.path.split("/").pop()
+			if (baseName && PROJECT_CONFIG_FILES.includes(baseName)) {
+				try {
+					const configPath = join(projectRoot, baseName)
+					if (!existsSync(configPath)) {
+						return {
+							content: [
+								{
+									type: "text",
+									text: `${baseName} does not exist at project root`
+								}
+							],
+							isError: true
+						}
+					}
+
+					let content = await import("node:fs/promises").then((fs) =>
+						fs.readFile(configPath, "utf-8")
+					)
+					let applied = 0
+					const failed: Array<{ oldText: string; reason: string }> = []
+
+					for (const edit of args.edits) {
+						if (content.includes(edit.oldText)) {
+							content = content.replace(edit.oldText, edit.newText)
+							applied++
+						} else {
+							failed.push({ oldText: edit.oldText, reason: "Text not found" })
+						}
+					}
+
+					writeFileSync(configPath, content, "utf-8")
+
+					if (failed.length > 0) {
+						return {
+							content: [
+								{
+									type: "text",
+									text: `Applied ${applied} edits to ${baseName}, failed ${failed.length}`
+								}
+							],
+							isError: true
+						}
+					}
+
+					return {
+						content: [
+							{
+								type: "text",
+								text: `Applied ${applied} edits to ${baseName} (project root)`
+							}
+						]
+					}
+				} catch (err) {
+					return {
+						content: [
+							{
+								type: "text",
+								text: `Error editing config file: ${(err as Error).message}`
+							}
+						],
+						isError: true
+					}
 				}
 			}
 

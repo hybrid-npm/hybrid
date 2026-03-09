@@ -73,6 +73,30 @@ async function main() {
 		process.exit(1)
 	}
 
+	if (command === "clawhub" || command === "ch") {
+		const subcommand = args[1]
+		const passThroughArgs = args.slice(2).join(" ")
+		if (subcommand === "install") return clawhubInstall(passThroughArgs)
+		if (subcommand === "search") return clawhubSearch(passThroughArgs)
+		if (subcommand === "publish") return clawhubPublish(passThroughArgs)
+		if (subcommand === "update") return clawhubUpdate(passThroughArgs)
+		if (subcommand === "list") return clawhubList()
+		if (subcommand === "login") return clawhubLogin()
+		if (subcommand === "logout") return clawhubLogout()
+		if (subcommand === "whoami") return clawhubWhoami()
+		console.log("\nUsage: hybrid clawhub <command>")
+		console.log("\nCommands:")
+		console.log("  install <slug>    Install a skill from ClawHub")
+		console.log("  search <query>    Search for skills")
+		console.log("  publish <path>    Publish a skill")
+		console.log("  update [slug]     Update installed skills")
+		console.log("  list              List installed skills")
+		console.log("  login             Authenticate with ClawHub")
+		console.log("  logout            Remove stored credentials")
+		console.log("  whoami            Check authentication status")
+		process.exit(1)
+	}
+
 	// Show help
 	console.log("Usage: hybrid <command>")
 	console.log("")
@@ -107,6 +131,14 @@ async function main() {
 	console.log("  owner/repo/skill    GitHub skill path")
 	console.log("  @scope/package     npm package")
 	console.log("  ./local-path       Local directory")
+	console.log("")
+	console.log("ClawHub:")
+	console.log("  clawhub install <slug>   Install from ClawHub registry")
+	console.log("  clawhub search <query>   Search ClawHub skills")
+	console.log("  clawhub publish <path>   Publish a skill")
+	console.log("  clawhub update [slug]    Update installed skills")
+	console.log("  clawhub list             List ClawHub skills")
+	console.log("  clawhub login            Authenticate with ClawHub")
 	console.log("")
 
 	if (command) process.exit(1)
@@ -151,6 +183,54 @@ async function skillsRemove(name?: string, isGlobal = false) {
 async function skillsList() {
 	const { execSync } = await import("node:child_process")
 	execSync("npx skills list -a openclaw", { stdio: "inherit" })
+}
+
+// ============================================================================
+// ClawHub - Wrapper around clawhub CLI
+// ============================================================================
+
+async function clawhubInstall(extraArgs: string) {
+	const { execSync } = await import("node:child_process")
+	console.log("\n📥 Installing from ClawHub...\n")
+	execSync(`npx clawhub install ${extraArgs}`, { stdio: "inherit" })
+}
+
+async function clawhubSearch(query: string) {
+	const { execSync } = await import("node:child_process")
+	execSync(`npx clawhub search ${query}`, { stdio: "inherit" })
+}
+
+async function clawhubPublish(extraArgs: string) {
+	const { execSync } = await import("node:child_process")
+	console.log("\n📤 Publishing to ClawHub...\n")
+	execSync(`npx clawhub publish ${extraArgs}`, { stdio: "inherit" })
+}
+
+async function clawhubUpdate(extraArgs: string) {
+	const { execSync } = await import("node:child_process")
+	console.log("\n🔄 Updating skills from ClawHub...\n")
+	execSync(`npx clawhub update ${extraArgs}`, { stdio: "inherit" })
+}
+
+async function clawhubList() {
+	const { execSync } = await import("node:child_process")
+	execSync("npx clawhub list", { stdio: "inherit" })
+}
+
+async function clawhubLogin() {
+	const { execSync } = await import("node:child_process")
+	console.log("\n🔐 Logging into ClawHub...\n")
+	execSync("npx clawhub login", { stdio: "inherit" })
+}
+
+async function clawhubLogout() {
+	const { execSync } = await import("node:child_process")
+	execSync("npx clawhub logout", { stdio: "inherit" })
+}
+
+async function clawhubWhoami() {
+	const { execSync } = await import("node:child_process")
+	execSync("npx clawhub whoami", { stdio: "inherit" })
 }
 
 // ============================================================================

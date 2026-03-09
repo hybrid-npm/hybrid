@@ -707,7 +707,8 @@ When scheduling reminders, include delivery info to send the message back to thi
 		PROJECT_ROOT,
 		req.userId || "anonymous",
 		role,
-		acl
+		acl,
+		PROJECT_ROOT
 	)
 
 	const mcpServers: Options["mcpServers"] = {

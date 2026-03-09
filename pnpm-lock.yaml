@@ -241,6 +241,9 @@ importers:
       rimraf:
         specifier: ^5.0.10
         version: 5.0.10
+      sql.js:
+        specifier: ^1.11.0
+        version: 1.14.0
       tsx:
         specifier: ^4.20.5
         version: 4.20.5

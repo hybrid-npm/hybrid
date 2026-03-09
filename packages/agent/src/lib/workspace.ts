@@ -2,9 +2,12 @@
  * Workspace Isolation Module
  *
  * Creates per-user isolated workspaces with symlinks to:
- * - Read-only code/resources (dist/, AGENTS.md, SOUL.md)
+ * - Read-only code (dist/)
  * - User's own memory directory (read-write)
  * - User's own file workspace (read-write)
+ *
+ * Config files (AGENTS.md, SOUL.md, IDENTITY.md) are loaded from project root,
+ * NOT symlinked into user workspaces.
  *
  * This prevents Claude from accessing other users' data.
  *
@@ -117,7 +120,7 @@ export async function getOrCreateUserWorkspace(
 	// Create user memory directory
 	await createDirIfNotExists(userMemoryDir)
 
-	// Symlink read-only resources (code)
+	// Symlink read-only code
 	const readOnlyLinks: Array<{
 		target: string
 		link: string
@@ -127,16 +130,6 @@ export async function getOrCreateUserWorkspace(
 			target: join(projectRoot, "dist"),
 			link: join(workspaceDir, "dist"),
 			type: "dir"
-		},
-		{
-			target: join(projectRoot, "AGENTS.md"),
-			link: join(workspaceDir, "AGENTS.md"),
-			type: "file"
-		},
-		{
-			target: join(projectRoot, "SOUL.md"),
-			link: join(workspaceDir, "SOUL.md"),
-			type: "file"
 		}
 	]
 
