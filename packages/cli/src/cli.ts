@@ -304,18 +304,77 @@ async function init(name?: string) {
 		)
 	}
 
-	// Ask for owner wallet address
+	// Copy .env.example to .env
+	const envExamplePath = resolve(targetDir, ".env.example")
+	const envPath = resolve(targetDir, ".env")
+	if (existsSync(envExamplePath)) {
+		cpSync(envExamplePath, envPath)
+	}
+
+	// Collect configuration via prompts
 	const rl = createInterface({
 		input: process.stdin,
 		output: process.stdout
 	})
 
-	const ownerAddress = await new Promise<string>((resolve) => {
-		rl.question("\nEnter your wallet address (owner): ", (answer: string) => {
-			rl.close()
-			resolve(answer.trim())
+	const question = (prompt: string): Promise<string> => {
+		return new Promise((resolve) => {
+			rl.question(prompt, (answer: string) => {
+				resolve(answer.trim())
+			})
 		})
+	}
+
+	// Owner wallet address
+	const ownerAddress = await question("\nEnter your wallet address (owner): ")
+
+	// Wallet key - generate using keygen flow
+	console.log("\n🔑 Generating wallet key...")
+	const { privateKeyToAccount } = await import("viem/accounts")
+	const { randomBytes } = await import("node:crypto")
+	const walletKey = `0x${randomBytes(32).toString("hex")}` as `0x${string}`
+	const account = privateKeyToAccount(walletKey)
+	console.log(`   Address: ${account.address}`)
+	console.log(`   Key: ${walletKey.slice(0, 10)}...${walletKey.slice(-8)}`)
+
+	rl.close()
+
+	// Provider picker using prompts
+	const prompts = (await import("prompts")).default
+	const providerResponse = await prompts({
+		type: "select",
+		name: "provider",
+		message: "LLM Provider",
+		choices: [
+			{ title: "Anthropic", value: "anthropic" },
+			{ title: "OpenRouter", value: "openrouter" }
+		],
+		initial: 0
 	})
+
+	if (providerResponse.provider === undefined) {
+		console.log("\nCancelled.")
+		process.exit(0)
+	}
+
+	let anthropicKey = ""
+	let openrouterKey = ""
+
+	if (providerResponse.provider === "anthropic") {
+		const keyResponse = await prompts({
+			type: "password",
+			name: "key",
+			message: "Anthropic API key"
+		})
+		anthropicKey = keyResponse.key || ""
+	} else if (providerResponse.provider === "openrouter") {
+		const keyResponse = await prompts({
+			type: "password",
+			name: "key",
+			message: "OpenRouter API key"
+		})
+		openrouterKey = keyResponse.key || ""
+	}
 
 	// Create ACL file with owner
 	if (ownerAddress) {
@@ -328,6 +387,61 @@ async function init(name?: string) {
 		)
 		console.log(`\n✅ Added owner: ${normalized}`)
 	}
+
+	// Update .env file with generated key and API keys
+	let envContent = readFileSync(envPath, "utf-8")
+
+	// Update wallet key
+	envContent = envContent.replace(
+		/AGENT_WALLET_KEY=.*/,
+		`AGENT_WALLET_KEY=${walletKey}`
+	)
+
+	// Update API keys based on provider choice
+	if (anthropicKey) {
+		envContent = envContent.replace(
+			/ANTHROPIC_API_KEY=.*/,
+			`ANTHROPIC_API_KEY=${anthropicKey}`
+		)
+		// Comment out OpenRouter lines if present
+		envContent = envContent.replace(
+			/^ANTHROPIC_BASE_URL=https:\/\/openrouter\.ai\/api/m,
+			"# ANTHROPIC_BASE_URL=https://openrouter.ai/api"
+		)
+		envContent = envContent.replace(
+			/^ANTHROPIC_AUTH_TOKEN=(?!your_openrouter_key)/m,
+			"# ANTHROPIC_AUTH_TOKEN="
+		)
+	}
+
+	if (openrouterKey) {
+		envContent = envContent.replace(
+			/ANTHROPIC_AUTH_TOKEN=.*/,
+			`ANTHROPIC_AUTH_TOKEN=${openrouterKey}`
+		)
+		// Uncomment/set OpenRouter lines
+		envContent = envContent.replace(
+			/# ANTHROPIC_BASE_URL=https:\/\/openrouter\.ai\/api/,
+			"ANTHROPIC_BASE_URL=https://openrouter.ai/api"
+		)
+		envContent = envContent.replace(
+			/# ANTHROPIC_AUTH_TOKEN=your_openrouter_key/,
+			`ANTHROPIC_AUTH_TOKEN=${openrouterKey}`
+		)
+		// Ensure the value is set
+		envContent = envContent.replace(
+			/ANTHROPIC_AUTH_TOKEN=your_openrouter_key/,
+			`ANTHROPIC_AUTH_TOKEN=${openrouterKey}`
+		)
+		// Comment out direct Anthropic key if OpenRouter is used
+		envContent = envContent.replace(
+			/^ANTHROPIC_API_KEY=(?!your_api_key_here)/m,
+			(match) => `# ${match}`
+		)
+	}
+
+	writeFileSync(envPath, envContent)
+	console.log("✅ Updated .env file")
 
 	console.log(`\n✅ Created agent at: ${name}/`)
 	console.log("\nNext steps:")

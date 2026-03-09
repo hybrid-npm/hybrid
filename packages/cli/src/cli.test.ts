@@ -11,26 +11,30 @@ vi.mock("node:url", () => ({
 	fileURLToPath: (url: string) => url.replace("file://", "")
 }))
 
-vi.mock("prompts", () => ({
-	default: vi.fn()
-}))
-
-vi.mock("viem/accounts", () => ({
-	privateKeyToAccount: vi.fn((key: `0x${string}`) => ({
-		address: "0x1234567890abcdef1234567890abcdef12345678"
-	}))
-}))
-
-vi.mock("node:crypto", () => ({
-	randomBytes: vi.fn(() => Buffer.from("a".repeat(64), "hex"))
-}))
-
 const mockRlQuestion = vi.fn()
 vi.mock("node:readline", () => ({
 	createInterface: () => ({
 		question: mockRlQuestion,
 		close: vi.fn()
 	})
+}))
+
+const mockPrompts = vi.fn()
+vi.mock("prompts", () => ({
+	default: mockPrompts
+}))
+
+vi.mock("viem/accounts", () => ({
+	privateKeyToAccount: vi.fn((key: `0x${string}`) => ({
+		address: "0x1234567890abcdef1234567890abcdef12345678"
+	})),
+	generatePrivateKey: vi.fn(
+		() => "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+	)
+}))
+
+vi.mock("node:crypto", () => ({
+	randomBytes: vi.fn(() => Buffer.from("a".repeat(64), "hex"))
 }))
 
 describe("CLI", () => {
@@ -447,11 +451,24 @@ primary_region = "iad"
 				}
 			)
 
+			// Default: OpenRouter selected
+			mockPrompts.mockImplementation(async (config: { name: string }) => {
+				if (config.name === "provider") {
+					return { provider: "openrouter" }
+				}
+				if (config.name === "key") {
+					return { key: "sk-or-test123" }
+				}
+				return {}
+			})
+
 			vi.doMock("node:fs", () => ({
 				existsSync: vi.fn((path: string) => {
-					if (path.includes("my-agent")) return false
+					if (path.includes("my-agent") && !path.includes(".env.example"))
+						return false
 					if (path.includes("existing-agent")) return true
 					if (path.includes("skills")) return true
+					if (path.includes(".env.example")) return true
 					return true
 				}),
 				cpSync: vi.fn((src: string, dest: string) => {
@@ -466,6 +483,19 @@ primary_region = "iad"
 				readFileSync: vi.fn((path: string) => {
 					if (path.includes("package.json")) {
 						return JSON.stringify({ name: "{{name}}", private: true })
+					}
+					if (path.includes(".env") && !path.includes(".example")) {
+						return `# Anthropic API (or use OpenRouter below)
+ANTHROPIC_API_KEY=your_api_key_here
+
+# OpenRouter proxy (optional)
+# ANTHROPIC_BASE_URL=https://openrouter.ai/api
+# ANTHROPIC_AUTH_TOKEN=your_openrouter_key
+
+# Agent configuration
+AGENT_WALLET_KEY=your_private_key_here
+XMTP_ENV=dev
+`
 					}
 					return ""
 				}),
@@ -578,6 +608,54 @@ primary_region = "iad"
 				if (acl.allowFrom.length > 0) {
 					expect(acl.allowFrom[0]).toBe(acl.allowFrom[0].toLowerCase())
 				}
+			}
+		})
+
+		it("should create .env file with wallet key and API keys", async () => {
+			const mod = await import("./cli")
+			await mod.init("my-agent")
+
+			const envWrite = Array.from(writtenFiles.entries()).find(
+				([p]) => p.includes("my-agent") && p.endsWith(".env")
+			)
+			expect(envWrite).toBeDefined()
+			if (envWrite) {
+				const content = envWrite[1]
+				// Wallet key should be generated (0x + 64 hex chars)
+				expect(content).toMatch(/AGENT_WALLET_KEY=0x[a-f0-9]{64}/)
+				expect(content).toContain("XMTP_ENV=dev")
+				expect(content).toContain("ANTHROPIC_AUTH_TOKEN=sk-or-test123")
+				expect(content).toContain(
+					"ANTHROPIC_BASE_URL=https://openrouter.ai/api"
+				)
+			}
+		})
+
+		it("should set Anthropic key when provider 1 selected", async () => {
+			mockPrompts.mockImplementation(async (config: { name: string }) => {
+				if (config.name === "provider") {
+					return { provider: "anthropic" }
+				}
+				if (config.name === "key") {
+					return { key: "sk-ant-test456" }
+				}
+				return {}
+			})
+
+			const mod = await import("./cli")
+			await mod.init("my-agent")
+
+			const envWrite = Array.from(writtenFiles.entries()).find(
+				([p]) => p.includes("my-agent") && p.endsWith(".env")
+			)
+			expect(envWrite).toBeDefined()
+			if (envWrite) {
+				const content = envWrite[1]
+				expect(content).toContain("ANTHROPIC_API_KEY=sk-ant-test456")
+				// OpenRouter should remain commented
+				expect(content).toContain(
+					"# ANTHROPIC_BASE_URL=https://openrouter.ai/api"
+				)
 			}
 		})
 	})
