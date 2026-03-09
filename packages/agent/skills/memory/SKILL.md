@@ -1,65 +1,144 @@
 ---
 name: memory
-description: Task scheduling and reminders for persistent follow-ups.
+description: Multi-layer memory system for persistent storage and semantic search.
 ---
 
-# Task Scheduling
+# Memory Storage
 
-Schedule tasks to run at specific times or intervals.
+Persistent memory system with semantic search, PARA organization, and multi-user isolation.
 
-## scheduleTask
+## searchMemory
 
-Schedule a task to run later. Use this for reminders, follow-ups, or recurring actions.
+Search across all memory sources using hybrid vector + keyword search.
 
 **Parameters:**
-- `name` (string): Descriptive name for the task
-- `scheduleType` ("cron" | "interval" | "once"): Type of schedule
-- `scheduleValue` (string): When to run
-- `prompt` (string): What to do when the task runs
-- `context` (object, optional): Additional context data
-
-**Schedule Types:**
-
-| Type | Value Format | Example |
-|------|-------------|---------|
-| `cron` | Cron expression | `0 9 * * 1-5` (weekdays at 9am) |
-| `interval` | Milliseconds | `300000` (every 5 minutes) |
-| `once` | ISO timestamp | `2026-03-01T10:00:00Z` |
+- `query` (string, required): Search query
+- `maxResults` (number, optional, default: 10): Maximum results to return
+- `minScore` (number, optional, default: 0.3): Minimum relevance score
 
 **Example:**
 ```json
 {
-  "name": "Daily summary reminder",
-  "scheduleType": "cron",
-  "scheduleValue": "0 18 * * *",
-  "prompt": "Send a summary of today's conversations"
+  "query": "project deadline",
+  "maxResults": 5
 }
 ```
 
-## listScheduledTasks
+## readMemoryFile
 
-View all scheduled tasks.
-
-**Parameters:**
-- `status` (optional): Filter by "active", "paused", "completed", or "failed"
-
-## cancelScheduledTask
-
-Remove a scheduled task.
+Read a specific memory file or section.
 
 **Parameters:**
-- `taskId` (string): The task ID to cancel
+- `relPath` (string, required): Relative path to the memory file
+- `from` (number, optional): Start line number
+- `lines` (number, optional): Number of lines to read
 
-## pauseScheduledTask / resumeScheduledTask
+**Example:**
+```json
+{
+  "relPath": "MEMORY.md",
+  "from": 1,
+  "lines": 50
+}
+```
 
-Temporarily stop or restart a task.
+## logFact
+
+Log a fact to the daily log for future reference.
 
 **Parameters:**
-- `taskId` (string): The task ID to pause/resume
+- `content` (string, required): The fact to log
+
+**Example:**
+```json
+{
+  "content": "User prefers morning meetings"
+}
+```
+
+## addMemory
+
+Add information to the auto-memory system.
+
+**Parameters:**
+- `category` (string, required): Memory category
+  - `preferences` - User preferences
+  - `learnings` - Learned information
+  - `decisions` - Decisions made
+  - `context` - Context about current situation
+  - `notes` - General notes
+- `content` (string, required): Content to add
+- `userId` (string, optional): User-specific memory
+
+**Example:**
+```json
+{
+  "category": "preferences",
+  "content": "Timezone: America/Chicago"
+}
+```
+
+## createEntity
+
+Create a structured entity in PARA organization.
+
+**Parameters:**
+- `name` (string, required): Entity name
+- `bucket` (string, required): PARA bucket
+  - `projects` - Active projects
+  - `areas` - Ongoing areas
+  - `resources` - Reference resources
+  - `archives` - Inactive items
+
+**Example:**
+```json
+{
+  "name": "Q1 Roadmap",
+  "bucket": "projects"
+}
+```
+
+## addFact
+
+Add an atomic fact to a PARA entity.
+
+**Parameters:**
+- `entityPath` (string, required): Path to the entity
+- `fact` (string, required): The fact to add
+- `category` (string, required): Fact category
+  - `milestone` - Key milestones
+  - `status` - Current status
+  - `relationship` - Relationships
+  - `preference` - Preferences
+  - `user-signal` - User signals
+
+**Example:**
+```json
+{
+  "entityPath": "projects/Q1 Roadmap",
+  "fact": "Launch target: March 30",
+  "category": "milestone"
+}
+```
+
+## Memory Sources
+
+| Source | Description |
+|--------|-------------|
+| `memory` | Shared MEMORY.md and memory/*.md files |
+| `user` | Per-user isolated memory |
+| `conversation` | Conversation history |
+
+## PARA Buckets
+
+- **Projects**: Active work with defined outcomes
+- **Areas**: Ongoing responsibilities
+- **Resources**: Reference material
+- **Archives**: Inactive items
 
 ## Best Practices
 
-- Use descriptive task names that explain what will happen
-- Include relevant context (conversation IDs, user preferences) in the task context
-- Set appropriate intervals - avoid overly frequent tasks
-- Clean up completed or unnecessary tasks
+- Log important facts using `logFact` for chronological tracking
+- Use `addMemory` to store user preferences and context
+- Organize long-term information in PARA entities
+- Search memory before asking users for information already known
