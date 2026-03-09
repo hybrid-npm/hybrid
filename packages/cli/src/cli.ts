@@ -349,7 +349,7 @@ async function init(name?: string) {
 	const { privateKeyToAccount } = await import("viem/accounts")
 	const { randomBytes } = await import("node:crypto")
 	const walletKey = `0x${randomBytes(32).toString("hex")}` as `0x${string}`
-	const account = privateKeyToAccount(walletKey)
+	const account = privateKeyToAccount(walletKey as `0x${string}`)
 	console.log(`   Address: ${account.address}`)
 	console.log(`   Key: ${walletKey.slice(0, 10)}...${walletKey.slice(-8)}`)
 
@@ -431,11 +431,7 @@ async function init(name?: string) {
 	}
 
 	if (openrouterKey) {
-		envContent = envContent.replace(
-			/ANTHROPIC_AUTH_TOKEN=.*/,
-			`ANTHROPIC_AUTH_TOKEN=${openrouterKey}`
-		)
-		// Uncomment/set OpenRouter lines
+		// Uncomment/set OpenRouter lines FIRST (before any other replacements)
 		envContent = envContent.replace(
 			/# ANTHROPIC_BASE_URL=https:\/\/openrouter\.ai\/api/,
 			"ANTHROPIC_BASE_URL=https://openrouter.ai/api"
@@ -444,14 +440,14 @@ async function init(name?: string) {
 			/# ANTHROPIC_AUTH_TOKEN=your_openrouter_key/,
 			`ANTHROPIC_AUTH_TOKEN=${openrouterKey}`
 		)
-		// Ensure the value is set
+		// Then replace any remaining (uncommented) AUTH_TOKEN
 		envContent = envContent.replace(
-			/ANTHROPIC_AUTH_TOKEN=your_openrouter_key/,
+			/ANTHROPIC_AUTH_TOKEN=.*/,
 			`ANTHROPIC_AUTH_TOKEN=${openrouterKey}`
 		)
 		// Comment out direct Anthropic key if OpenRouter is used
 		envContent = envContent.replace(
-			/^ANTHROPIC_API_KEY=(?!your_api_key_here)/m,
+			/^ANTHROPIC_API_KEY=/m,
 			(match) => `# ${match}`
 		)
 	}
@@ -713,6 +709,8 @@ primary_region = "iad"
 
 async function dev(useDocker: boolean) {
 	const { execSync } = await import("node:child_process")
+	const { existsSync, readFileSync } = await import("node:fs")
+	const { privateKeyToAccount } = await import("viem/accounts")
 
 	if (useDocker) {
 		console.log("\n🐳 Docker dev not yet implemented for new structure")
@@ -721,6 +719,56 @@ async function dev(useDocker: boolean) {
 	}
 
 	const projectDir = projectRoot
+
+	// Check if agent is registered
+	const walletKey = process.env.AGENT_WALLET_KEY || process.env.WALLET_KEY
+	if (walletKey) {
+		const walletKeyFormatted = walletKey.startsWith("0x")
+			? walletKey
+			: `0x${walletKey}`
+		const account = privateKeyToAccount(walletKeyFormatted as `0x${string}`)
+		console.log(`\n🔍 Checking XMTP registration for ${account.address}...`)
+
+		try {
+			const result = execSync(
+				`npx tsx -e "
+import { createSigner, createXMTPClient } from './src/client';
+const signer = createSigner('${walletKeyFormatted}');
+const client = await createXMTPClient(signer, { env: 'production' });
+console.log('REGISTERED:', client.inboxId);
+process.exit(0);
+"`,
+				{
+					cwd: resolve(packageDir, "..", "xmtp"),
+					encoding: "utf-8",
+					stdio: ["pipe", "pipe", "pipe"]
+				}
+			)
+			if (result.includes("REGISTERED:")) {
+				const inboxId = result.match(/REGISTERED: (.+)/)?.[1]
+				console.log(`   ✅ Already registered (inbox: ${inboxId})`)
+			}
+		} catch (err: any) {
+			const output = err.stdout || err.stderr || ""
+			if (
+				output.includes("not registered") ||
+				output.includes("No inbox found") ||
+				output.includes("incomplete identity") ||
+				err.exitCode
+			) {
+				console.log("   ❌ Not registered")
+				console.log("\n📝 Registering agent on XMTP...")
+
+				execSync("npx pnpm --filter @hybrd/xmtp register", {
+					cwd: resolve(packageDir, "..", ".."),
+					stdio: "inherit",
+					env: { ...process.env, AGENT_WALLET_KEY: walletKey }
+				})
+			}
+		}
+	}
+
+	// Remove duplicate projectDir declaration
 	const agentServer = resolve(packageDir, "dist", "server", "index.cjs")
 	const agentXmtp = resolve(packageDir, "dist", "xmtp.cjs")
 
@@ -1033,26 +1081,31 @@ async function register() {
 	)
 	console.log(`\n📍 Wallet: ${account.address}`)
 
-	// Update ACL
+	// ACL is already configured during init - just verify it exists
 	const projectDir = projectRoot
 	const aclPath = join(projectDir, "credentials", "xmtp-allowFrom.json")
 
-	let acl: { version: number; allowFrom: string[] } = {
-		version: 1,
-		allowFrom: []
-	}
-	if (existsSync(aclPath)) {
-		try {
-			acl = JSON.parse(readFileSync(aclPath, "utf-8"))
-		} catch {}
+	if (!existsSync(aclPath)) {
+		console.error("\n❌ No credentials/xmtp-allowFrom.json found")
+		console.error("Run 'hybrid init' first to set up the owner")
+		process.exit(1)
 	}
 
-	if (!acl.allowFrom.includes(account.address.toLowerCase())) {
-		acl.allowFrom.push(account.address.toLowerCase())
-		mkdirSync(join(projectDir, "credentials"), { recursive: true })
-		writeFileSync(aclPath, JSON.stringify(acl, null, "\t"))
-		console.log(`\n✅ Added owner to ACL`)
+	let acl: { version: number; allowFrom: string[] }
+	try {
+		acl = JSON.parse(readFileSync(aclPath, "utf-8"))
+	} catch {
+		console.error("\n❌ Invalid credentials/xmtp-allowFrom.json")
+		process.exit(1)
 	}
+
+	if (!acl.allowFrom.length) {
+		console.error("\n❌ No owners configured in ACL")
+		process.exit(1)
+	}
+
+	console.log(`\n📍 Agent wallet: ${account.address}`)
+	console.log(`   Owner: ${acl.allowFrom[0]}`)
 
 	console.log("\n🔐 Registering on XMTP...")
 	try {

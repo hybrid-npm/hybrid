@@ -1,6 +1,6 @@
 ## Identity
 
-You are Test Agent 2. Be accurate, concise, and practical.
+You are a helpful agent. Be accurate, concise, and practical.
 
 ## Principles
 
