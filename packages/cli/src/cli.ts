@@ -5,8 +5,24 @@ import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { config } from "dotenv"
 
-// Load .env files
-const projectRoot = process.cwd()
+function findProjectRoot(startDir: string): string {
+	const markers = ["package.json", "hybrid.config.ts", "SOUL.md"]
+	let current = startDir
+	while (current !== "/") {
+		for (const marker of markers) {
+			if (existsSync(resolve(current, marker))) {
+				return current
+			}
+		}
+		const parent = resolve(current, "..")
+		if (parent === current) break
+		current = parent
+	}
+	return startDir
+}
+
+const projectRoot = findProjectRoot(process.cwd())
+
 for (const envFile of [".env", ".env.local"]) {
 	const path = resolve(projectRoot, envFile)
 	if (existsSync(path)) {
@@ -466,7 +482,7 @@ async function build(target?: string) {
 		readFileSync
 	} = await import("node:fs")
 
-	const projectDir = process.cwd()
+	const projectDir = projectRoot
 	const distDir = resolve(projectDir, "dist")
 	const buildTarget = target || "fly"
 
@@ -695,7 +711,7 @@ async function dev(useDocker: boolean) {
 		return
 	}
 
-	const projectDir = process.cwd()
+	const projectDir = projectRoot
 	const agentServer = resolve(packageDir, "dist", "server", "index.cjs")
 	const agentXmtp = resolve(packageDir, "dist", "xmtp.cjs")
 
@@ -729,7 +745,7 @@ async function start() {
 	const { spawn } = await import("node:child_process")
 	const { existsSync } = await import("node:fs")
 
-	const projectDir = process.cwd()
+	const projectDir = projectRoot
 	const distDir = resolve(projectDir, "dist")
 
 	if (!existsSync(resolve(distDir, "server", "simple.cjs"))) {
@@ -776,7 +792,7 @@ async function deploy(platform = "fly") {
 	const { privateKeyToAccount } = await import("viem/accounts")
 	const { randomBytes } = await import("node:crypto")
 
-	const projectDir = process.cwd()
+	const projectDir = projectRoot
 	const distDir = resolve(projectDir, "dist")
 
 	// Read app name from fly.toml
@@ -1009,7 +1025,7 @@ async function register() {
 	console.log(`\n📍 Wallet: ${account.address}`)
 
 	// Update ACL
-	const projectDir = process.cwd()
+	const projectDir = projectRoot
 	const aclPath = join(projectDir, "credentials", "xmtp-allowFrom.json")
 
 	let acl: { version: number; allowFrom: string[] } = {
@@ -1098,7 +1114,7 @@ async function ownerAdd(address?: string) {
 		process.exit(1)
 	}
 
-	const projectDir = process.cwd()
+	const projectDir = projectRoot
 	const aclPath = join(projectDir, "credentials", "xmtp-allowFrom.json")
 	const normalized = address.toLowerCase().trim()
 
@@ -1135,7 +1151,7 @@ async function ownerRemove(address?: string) {
 		process.exit(1)
 	}
 
-	const projectDir = process.cwd()
+	const projectDir = projectRoot
 	const aclPath = join(projectDir, "credentials", "xmtp-allowFrom.json")
 
 	if (!existsSync(aclPath)) {
@@ -1170,7 +1186,7 @@ async function ownerList() {
 	const { join } = await import("node:path")
 	const { existsSync, readFileSync } = await import("node:fs")
 
-	const projectDir = process.cwd()
+	const projectDir = projectRoot
 	const aclPath = join(projectDir, "credentials", "xmtp-allowFrom.json")
 
 	if (!existsSync(aclPath)) {
