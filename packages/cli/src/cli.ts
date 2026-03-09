@@ -1064,9 +1064,7 @@ async function generateVanityWallet(
 
 async function register() {
 	const { execSync } = await import("node:child_process")
-	const { existsSync, mkdirSync, writeFileSync, readFileSync } = await import(
-		"node:fs"
-	)
+	const { existsSync, readFileSync } = await import("node:fs")
 	const { join } = await import("node:path")
 	const { privateKeyToAccount } = await import("viem/accounts")
 
@@ -1079,44 +1077,37 @@ async function register() {
 	const account = privateKeyToAccount(
 		(walletKey.startsWith("0x") ? walletKey : `0x${walletKey}`) as `0x${string}`
 	)
-	console.log(`\n📍 Wallet: ${account.address}`)
 
-	// ACL is already configured during init - just verify it exists
+	// Verify ACL exists
 	const projectDir = projectRoot
 	const aclPath = join(projectDir, "credentials", "xmtp-allowFrom.json")
 
 	if (!existsSync(aclPath)) {
-		console.error("\n❌ No credentials/xmtp-allowFrom.json found")
-		console.error("Run 'hybrid init' first to set up the owner")
+		console.error("\n❌ No credentials/xmtp-allowFrom.json")
+		console.error("Run 'hybrid init' first")
 		process.exit(1)
 	}
 
-	let acl: { version: number; allowFrom: string[] }
 	try {
-		acl = JSON.parse(readFileSync(aclPath, "utf-8"))
+		const acl = JSON.parse(readFileSync(aclPath, "utf-8"))
+		if (!acl.allowFrom?.length) {
+			console.error("\n❌ No owners in ACL")
+			process.exit(1)
+		}
 	} catch {
 		console.error("\n❌ Invalid credentials/xmtp-allowFrom.json")
 		process.exit(1)
 	}
 
-	if (!acl.allowFrom.length) {
-		console.error("\n❌ No owners configured in ACL")
-		process.exit(1)
-	}
-
-	console.log(`\n📍 Agent wallet: ${account.address}`)
-	console.log(`   Owner: ${acl.allowFrom[0]}`)
-
-	console.log("\n🔐 Registering on XMTP...")
+	console.log(`\n🔐 Registering ${account.address} on XMTP...`)
 	try {
 		execSync("npx pnpm --filter @hybrd/xmtp register", {
 			cwd: resolve(packageDir, "..", ".."),
 			stdio: "inherit",
 			env: { ...process.env, AGENT_WALLET_KEY: walletKey }
 		})
-		console.log("\n✅ Registered")
 	} catch {
-		console.log("\n❌ Registration failed. Check AGENT_WALLET_KEY")
+		console.error("\n❌ Registration failed")
 		process.exit(1)
 	}
 }
