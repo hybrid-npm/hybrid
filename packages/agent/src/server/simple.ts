@@ -27,9 +27,6 @@ config({ path: envPath })
 // Load secrets from persistent volume (must be after dotenv for DATA_ROOT)
 loadSecrets()
 
-// Set DATA_ROOT for memory package
-process.env.DATA_ROOT = process.env.DATA_ROOT || path.join(projectDir, "data")
-
 // Debug output AFTER loading env
 if (process.env.DEBUG) {
 	console.log(`[server] Project dir: ${projectDir}`)

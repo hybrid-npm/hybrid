@@ -37,9 +37,6 @@ const _dirname =
 // ============================================================================
 loadSecrets()
 
-// Set DATA_ROOT for memory package (where runtime data is stored)
-process.env.DATA_ROOT = process.env.DATA_ROOT || join(_dirname, "../../../data")
-
 const PROJECT_ROOT = process.env.AGENT_PROJECT_ROOT || process.cwd()
 
 // Auto-configure OpenRouter if OPENROUTER_API_KEY is present

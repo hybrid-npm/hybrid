@@ -20,7 +20,8 @@ export type SecretName = "AGENT_WALLET_KEY"
 const secrets = new Map<SecretName, string>()
 
 function getSecretsDir(): string {
-	const dataRoot = process.env.DATA_ROOT || "/app/data"
+	const dataRoot = process.env.DATA_ROOT
+	if (!dataRoot) return ""
 	return join(dataRoot, "secrets")
 }
 

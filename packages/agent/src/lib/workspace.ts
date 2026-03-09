@@ -24,9 +24,12 @@ import { isAbsolute, join, resolve } from "node:path"
 /**
  * Get DATA_ROOT for secrets and credentials only.
  * Memory and workspace are now in project root.
+ *
+ * In production (Fly.io): DATA_ROOT=/app/data is set
+ * In development: DATA_ROOT is not set, secrets come from .env files
  */
 function getDataRoot(): string {
-	return process.env.DATA_ROOT || "/app/data"
+	return process.env.DATA_ROOT || ""
 }
 
 /**
