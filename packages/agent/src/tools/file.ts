@@ -1,4 +1,4 @@
-import { existsSync, writeFileSync } from "node:fs"
+import { existsSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { tool } from "@anthropic-ai/claude-agent-sdk"
 import type { Role } from "@hybrid/memory"
@@ -445,5 +445,120 @@ export function createFileTools(params: {
 		}
 	)
 
-	return [readTool, writeTool, editTool, applyPatchTool]
+	// Delete tool
+	const deleteTool = tool(
+		"delete",
+		"Delete a file from the workspace. Use to remove files that are no longer needed. " +
+			"Cannot be undone - use with caution.",
+		{
+			path: z.string().describe("Relative path within workspace to delete")
+		},
+		async (args) => {
+			// ACL check
+			if (role !== "owner") {
+				return {
+					content: [
+						{
+							type: "text",
+							text: "Permission denied: Only owners can delete files"
+						}
+					],
+					isError: true
+				}
+			}
+
+			// Handle project-level config files - delete from project root
+			const baseName = args.path.split("/").pop()
+			if (baseName && PROJECT_CONFIG_FILES.includes(baseName)) {
+				try {
+					const configPath = join(projectRoot, baseName)
+					if (!existsSync(configPath)) {
+						return {
+							content: [
+								{
+									type: "text",
+									text: `${baseName} does not exist at project root`
+								}
+							],
+							isError: true
+						}
+					}
+
+					rmSync(configPath)
+					return {
+						content: [
+							{
+								type: "text",
+								text: `Deleted ${baseName} from project root`
+							}
+						]
+					}
+				} catch (err) {
+					return {
+						content: [
+							{
+								type: "text",
+								text: `Error deleting config file: ${(err as Error).message}`
+							}
+						],
+						isError: true
+					}
+				}
+			}
+
+			// Validate path
+			const validation = validatePathInWorkspace({
+				workspaceRoot: workspaceDir,
+				userId,
+				requestedPath: args.path
+			})
+
+			if (!validation.valid) {
+				return {
+					content: [{ type: "text", text: `Error: ${validation.error}` }],
+					isError: true
+				}
+			}
+
+			// Get user's workspace path
+			const userWorkspacePath = getUserWorkspacePath(userId)
+			const fullPath = join(userWorkspacePath, args.path)
+
+			try {
+				if (!existsSync(fullPath)) {
+					return {
+						content: [
+							{
+								type: "text",
+								text: `File ${args.path} does not exist`
+							}
+						],
+						isError: true
+					}
+				}
+
+				rmSync(fullPath)
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Deleted ${args.path}`
+						}
+					]
+				}
+			} catch (err) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Error deleting file: ${(err as Error).message}`
+						}
+					],
+					isError: true
+				}
+			}
+		}
+	)
+
+	return [readTool, writeTool, editTool, applyPatchTool, deleteTool]
 }
