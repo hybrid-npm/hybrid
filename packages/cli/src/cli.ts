@@ -516,8 +516,17 @@ async function build(target?: string) {
 	}
 
 	// Copy config files
-	console.log("📋 Copying config...")
-	for (const file of ["SOUL.md", "AGENTS.md", "IDENTITY.md"]) {
+	console.log("📋 Copying agent config...")
+	for (const file of [
+		"SOUL.md",
+		"AGENTS.md",
+		"IDENTITY.md",
+		"TOOLS.md",
+		"BOOT.md",
+		"BOOTSTRAP.md",
+		"HEARTBEAT.md",
+		"USER.md"
+	]) {
 		const src = resolve(projectDir, file)
 		if (existsSync(src)) {
 			cpSync(src, resolve(distDir, file))
