@@ -237,7 +237,7 @@ export function createFileTools(params: {
 
 			// Handle project-level config files - edit at project root
 			const baseName = args.path.split("/").pop()
-			if (baseName && PROJECT_CONFIG_FILES.includes(baseName)) {
+			if (baseName && args.path === baseName && PROJECT_CONFIG_FILES.includes(baseName)) {
 				try {
 					const configPath = join(projectRoot, baseName)
 					if (!existsSync(configPath)) {
