@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs"
 import { readFile, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { getCredentialsPath } from "./paths.js"
-import { normalizeWalletAddress } from "./validate.js"
+import { isValidWalletAddress, normalizeWalletAddress } from "./validate.js"
 
 export type Role = "owner" | "guest"
 
@@ -202,7 +202,12 @@ export function getRole(acl: ACL | null, userId: string): Role {
 		return "guest"
 	}
 
+	// Validate that userId is a wallet address format
+	// Non-wallet identifiers (e.g., XMTP inbox IDs) are not allowed in ACL
 	const normalizedUserId = normalizeWalletAddress(userId)
+	if (!isValidWalletAddress(normalizedUserId)) {
+		return "guest"
+	}
 
 	if (acl.allowFrom.includes(normalizedUserId)) {
 		return "owner"

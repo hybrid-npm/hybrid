@@ -70,15 +70,27 @@ describe("ACL JSON", () => {
 		})
 
 		it("returns owner for known user", () => {
-			expect(getRole({ version: 1, allowFrom: ["0xaaa"] }, "0xaaa")).toBe(
-				"owner"
-			)
+			expect(
+				getRole(
+					{
+						version: 1,
+						allowFrom: ["0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]
+					},
+					"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+				)
+			).toBe("owner")
 		})
 
 		it("normalizes addresses (case-insensitive)", () => {
-			expect(getRole({ version: 1, allowFrom: ["0xaaa"] }, "0xAAA")).toBe(
-				"owner"
-			)
+			expect(
+				getRole(
+					{
+						version: 1,
+						allowFrom: ["0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]
+					},
+					"0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+				)
+			).toBe("owner")
 		})
 	})
 
