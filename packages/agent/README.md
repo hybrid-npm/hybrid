@@ -195,9 +195,10 @@ Hybrid uses the **OpenClaw** standard for agent template files. This is an open 
 | `BOOT.md` | Startup instructions (executed on agent start) | When you need setup steps on every restart |
 | `BOOTSTRAP.md` | First-run setup wizard (deleted after completion) | When onboarding new agents |
 | `HEARTBEAT.md` | Periodic check tasks | When defining recurring background tasks |
-| `MEMORY.md` | Long-term curated memory | When storing important context to remember |
 
 All templates follow OpenClaw's format exactly. See [OpenClaw documentation](https://github.com/anomalyco/opencode) for the full specification.
+
+**Note:** `MEMORY.md` is a runtime file stored in user workspaces, not a template. See [Multi-Tenant User Profiles](#multi-tenant-user-profiles) below. `USER.md` is a template that gets populated per-user at runtime.
 
 ## MCP Tool Servers
 
