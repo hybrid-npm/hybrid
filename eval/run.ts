@@ -65,7 +65,7 @@ async function startAgent(): Promise<void> {
 		envFiles.some((f) => existsSync(f)) ? ".env file" : "environment"
 	)
 
-	agentProcess = spawn("pnpm", ["tsx", "src/server/simple.ts"], {
+	agentProcess = spawn("pnpm", ["tsx", "src/server/index.ts"], {
 		cwd: agentDir,
 		env,
 		stdio: "pipe",

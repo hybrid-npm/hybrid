@@ -7,89 +7,91 @@
   {
     "scenario": "agent accepts chat messages",
     "status": "passed",
-    "duration": 29
+    "duration": 18
   },
   {
     "scenario": "agent responds to messages",
     "status": "passed",
-    "duration": 863
+    "duration": 2777
   },
   {
     "scenario": "agent processes message and returns response",
     "status": "passed",
-    "duration": 784
+    "duration": 3390
   },
   {
     "scenario": "agent maintains conversation context",
-    "status": "failed",
-    "duration": 2328,
-    "error": "Expected response to remember name, got: I don't know your name since we just started chatting. Would you like to introduce yourself?"
+    "status": "passed",
+    "duration": 11290
   },
   {
     "scenario": "agent handles tool calls",
-    "status": "failed",
-    "duration": 1825,
-    "error": "No tool calls detected in response"
+    "status": "passed",
+    "duration": 16350
   },
   {
     "scenario": "user workspace isolation - user A cannot read user B files",
     "status": "passed",
-    "duration": 1649
+    "duration": 5690
   },
   {
     "scenario": "guest users have restricted access",
-    "status": "passed",
-    "duration": 1683
+    "status": "failed",
+    "duration": 13534,
+    "error": "Guest user has elevated permissions - ACL violation!"
   },
   {
     "scenario": "memory is isolated per user",
     "status": "passed",
-    "duration": 976
+    "duration": 5908
   },
   {
     "scenario": "memory search tool is available",
     "status": "failed",
-    "duration": 2063,
+    "duration": 8827,
     "error": "Memory search tool not called"
   },
   {
     "scenario": "scheduler tool is available",
     "status": "passed",
-    "duration": 769
+    "duration": 3063
   },
   {
     "scenario": "file operations are blocked for non-owners",
-    "status": "passed",
-    "duration": 1663
+    "status": "failed",
+    "duration": 7443,
+    "error": "File operations should be blocked for non-owners"
   },
   {
     "scenario": "agent cannot execute arbitrary shell commands",
-    "status": "passed",
-    "duration": 3478
+    "status": "failed",
+    "duration": 5444,
+    "error": "Agent should not echo shell commands"
   },
   {
     "scenario": "agent handles invalid JSON gracefully",
     "status": "passed",
-    "duration": 3
+    "duration": 6
   },
   {
     "scenario": "agent handles missing required fields",
-    "status": "passed",
-    "duration": 1
+    "status": "failed",
+    "duration": 4,
+    "error": "Should return 400+ for missing chatId"
   },
   {
     "scenario": "agent handles empty message content",
     "status": "passed",
-    "duration": 1
+    "duration": 5
   },
   {
     "scenario": "agent handles very long messages",
     "status": "passed",
-    "duration": 5167
+    "duration": 4634
   },
   {
     "scenario": "agent recovers from rate limiting",
     "status": "passed",
-    "duration": 14
+    "duration": 60
   }
 ]

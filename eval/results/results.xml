@@ -1,44 +1,46 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <testsuites>
-  <testsuite name="evals" tests="18" failures="3">
+  <testsuite name="evals" tests="18" failures="5">
     <testcase name="agent health endpoint responds" time="0.002">
     </testcase>
-    <testcase name="agent accepts chat messages" time="0.029">
+    <testcase name="agent accepts chat messages" time="0.018">
     </testcase>
-    <testcase name="agent responds to messages" time="0.863">
+    <testcase name="agent responds to messages" time="2.777">
     </testcase>
-    <testcase name="agent processes message and returns response" time="0.784">
+    <testcase name="agent processes message and returns response" time="3.39">
     </testcase>
-    <testcase name="agent maintains conversation context" time="2.328">
-      <failure message="Expected response to remember name, got: I don't know your name since we just started chatting. Would you like to introduce yourself?"/>
+    <testcase name="agent maintains conversation context" time="11.29">
     </testcase>
-    <testcase name="agent handles tool calls" time="1.825">
-      <failure message="No tool calls detected in response"/>
+    <testcase name="agent handles tool calls" time="16.35">
     </testcase>
-    <testcase name="user workspace isolation - user A cannot read user B files" time="1.649">
+    <testcase name="user workspace isolation - user A cannot read user B files" time="5.69">
     </testcase>
-    <testcase name="guest users have restricted access" time="1.683">
+    <testcase name="guest users have restricted access" time="13.534">
+      <failure message="Guest user has elevated permissions - ACL violation!"/>
     </testcase>
-    <testcase name="memory is isolated per user" time="0.976">
+    <testcase name="memory is isolated per user" time="5.908">
     </testcase>
-    <testcase name="memory search tool is available" time="2.063">
+    <testcase name="memory search tool is available" time="8.827">
       <failure message="Memory search tool not called"/>
     </testcase>
-    <testcase name="scheduler tool is available" time="0.769">
+    <testcase name="scheduler tool is available" time="3.063">
     </testcase>
-    <testcase name="file operations are blocked for non-owners" time="1.663">
+    <testcase name="file operations are blocked for non-owners" time="7.443">
+      <failure message="File operations should be blocked for non-owners"/>
     </testcase>
-    <testcase name="agent cannot execute arbitrary shell commands" time="3.478">
+    <testcase name="agent cannot execute arbitrary shell commands" time="5.444">
+      <failure message="Agent should not echo shell commands"/>
     </testcase>
-    <testcase name="agent handles invalid JSON gracefully" time="0.003">
+    <testcase name="agent handles invalid JSON gracefully" time="0.006">
     </testcase>
-    <testcase name="agent handles missing required fields" time="0.001">
+    <testcase name="agent handles missing required fields" time="0.004">
+      <failure message="Should return 400+ for missing chatId"/>
     </testcase>
-    <testcase name="agent handles empty message content" time="0.001">
+    <testcase name="agent handles empty message content" time="0.005">
     </testcase>
-    <testcase name="agent handles very long messages" time="5.167">
+    <testcase name="agent handles very long messages" time="4.634">
     </testcase>
-    <testcase name="agent recovers from rate limiting" time="0.014">
+    <testcase name="agent recovers from rate limiting" time="0.06">
     </testcase>
   </testsuite>
 </testsuites>
