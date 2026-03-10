@@ -276,7 +276,7 @@ export function validatePathInWorkspace(params: {
 			const realPath = realpathSync(resolvedPath)
 			const realWorkspace = realpathSync(userWorkspace)
 
-			if (!realPath.startsWith(realWorkspace)) {
+			if (!realPath.startsWith(`${realWorkspace}/`) && realPath !== realWorkspace) {
 				return { valid: false, error: "Symlink escapes workspace" }
 			}
 		} catch {
