@@ -8,7 +8,6 @@ import { applyPatchToWorkspace } from "../file-operations/patch"
 import { readFileFromWorkspace } from "../file-operations/read"
 import { writeFileToWorkspace } from "../file-operations/write"
 import { validatePathInWorkspace } from "../lib/workspace"
-import { getUserWorkspacePath } from "../lib/workspace"
 
 const PROJECT_CONFIG_FILES = [
 	"IDENTITY.md",
@@ -17,7 +16,8 @@ const PROJECT_CONFIG_FILES = [
 	"TOOLS.md",
 	"BOOT.md",
 	"BOOTSTRAP.md",
-	"HEARTBEAT.md"
+	"HEARTBEAT.md",
+	"USER.md"
 ]
 
 /**
@@ -65,7 +65,8 @@ export function createFileTools(params: {
 				}
 			}
 
-			// Validate path
+			// Validate path — use projectRoot for both validation and file operations
+			// to ensure the same base directory is used throughout
 			const validation = validatePathInWorkspace({
 				workspaceRoot: projectRoot,
 				userId,
@@ -79,8 +80,8 @@ export function createFileTools(params: {
 				}
 			}
 
-			// Get user's workspace path
-			const userWorkspacePath = getUserWorkspacePath(userId)
+			// Compute user workspace from the same root used for validation
+			const userWorkspacePath = join(projectRoot, "workspace", userId.replace(/[^a-zA-Z0-9_-]/g, "_"))
 
 			try {
 				const result = await readFileFromWorkspace({
@@ -141,7 +142,7 @@ export function createFileTools(params: {
 						content: [
 							{
 								type: "text",
-								text: `Wrote ${args.content.length} bytes to ${baseName} (project root)`
+								text: `Wrote ${Buffer.byteLength(args.content, "utf-8")} bytes to ${baseName} (project root)`
 							}
 						]
 					}
@@ -172,8 +173,8 @@ export function createFileTools(params: {
 				}
 			}
 
-			// Get user's workspace path
-			const userWorkspacePath = getUserWorkspacePath(userId)
+			// Compute user workspace from the same root used for validation
+			const userWorkspacePath = join(projectRoot, "workspace", userId.replace(/[^a-zA-Z0-9_-]/g, "_"))
 
 			try {
 				const result = await writeFileToWorkspace({
@@ -316,8 +317,8 @@ export function createFileTools(params: {
 				}
 			}
 
-			// Get user's workspace path
-			const userWorkspacePath = getUserWorkspacePath(userId)
+			// Compute user workspace from the same root used for validation
+			const userWorkspacePath = join(projectRoot, "workspace", userId.replace(/[^a-zA-Z0-9_-]/g, "_"))
 
 			try {
 				const result = await editFileInWorkspace({
@@ -401,8 +402,8 @@ export function createFileTools(params: {
 				}
 			}
 
-			// Get user's workspace path
-			const userWorkspacePath = getUserWorkspacePath(userId)
+			// Compute user workspace from the same root used for validation
+			const userWorkspacePath = join(projectRoot, "workspace", userId.replace(/[^a-zA-Z0-9_-]/g, "_"))
 
 			try {
 				const result = await applyPatchToWorkspace({
@@ -484,7 +485,7 @@ export function createFileTools(params: {
 						}
 					}
 
-					rmSync(configPath)
+					rmSync(configPath, { force: true })
 					return {
 						content: [
 							{
@@ -520,8 +521,8 @@ export function createFileTools(params: {
 				}
 			}
 
-			// Get user's workspace path
-			const userWorkspacePath = getUserWorkspacePath(userId)
+			// Compute user workspace from the same root used for validation
+			const userWorkspacePath = join(projectRoot, "workspace", userId.replace(/[^a-zA-Z0-9_-]/g, "_"))
 			const fullPath = join(userWorkspacePath, args.path)
 
 			try {
@@ -531,6 +532,20 @@ export function createFileTools(params: {
 							{
 								type: "text",
 								text: `File ${args.path} does not exist`
+							}
+						],
+						isError: true
+					}
+				}
+
+				const { statSync } = await import("node:fs")
+				const stat = statSync(fullPath)
+				if (stat.isDirectory()) {
+					return {
+						content: [
+							{
+								type: "text",
+								text: `Cannot delete directory: ${args.path}. Only files can be deleted.`
 							}
 						],
 						isError: true

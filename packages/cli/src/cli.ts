@@ -431,18 +431,14 @@ async function init(name?: string) {
 	}
 
 	if (openrouterKey) {
-		// Uncomment/set OpenRouter lines FIRST (before any other replacements)
+		// Uncomment/set OpenRouter lines
 		envContent = envContent.replace(
 			/# ANTHROPIC_BASE_URL=https:\/\/openrouter\.ai\/api/,
 			"ANTHROPIC_BASE_URL=https://openrouter.ai/api"
 		)
+		// Replace commented placeholder OR existing AUTH_TOKEN in one pass
 		envContent = envContent.replace(
-			/# ANTHROPIC_AUTH_TOKEN=your_openrouter_key/,
-			`ANTHROPIC_AUTH_TOKEN=${openrouterKey}`
-		)
-		// Then replace any remaining (uncommented) AUTH_TOKEN
-		envContent = envContent.replace(
-			/ANTHROPIC_AUTH_TOKEN=.*/,
+			/^#?\s*ANTHROPIC_AUTH_TOKEN=.*/m,
 			`ANTHROPIC_AUTH_TOKEN=${openrouterKey}`
 		)
 		// Comment out direct Anthropic key if OpenRouter is used

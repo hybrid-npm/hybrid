@@ -66,7 +66,7 @@ export async function waitForAgent(baseUrl, timeout = 60000) {
     const startTime = Date.now();
     while (Date.now() - startTime < timeout) {
         try {
-            const response = await fetch(`${baseUrl}/api/health`);
+            const response = await fetch(`${baseUrl}/health`);
             if (response.ok) {
                 return true;
             }

@@ -10,5 +10,4 @@ This file stores persistent memory across conversations.
 
 ## Context
 
-- User's name is TestUser. (2026-03-10)
 ## Notes

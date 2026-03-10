@@ -22,7 +22,7 @@ services:
     volumes:
       - agent-data:/app/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8454/api/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8454/health"]
       interval: 5s
       timeout: 3s
       retries: 10

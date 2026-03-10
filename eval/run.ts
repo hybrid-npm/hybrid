@@ -134,7 +134,7 @@ async function main() {
 
 	const runner = createTestRunner()
 
-	// Check if agent is already running
+	// Check if agent is already running (agent server exposes /health, not /api/health)
 	const existingAgent = await fetch(`${agentUrl}/health`)
 		.then((r) => r.ok)
 		.catch(() => false)
