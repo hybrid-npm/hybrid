@@ -936,6 +936,12 @@ app.post(AGENT_ENDPOINT, async (c) => {
 	const requestId = c.req.header("X-Request-ID") || "unknown"
 	const source = c.req.header("X-Source") || "unknown"
 	const req = await c.req.json<ContainerRequest>()
+
+	// Validate request structure
+	if (!Array.isArray(req.messages)) {
+		return c.json({ error: "messages must be an array" }, 400)
+	}
+
 	const preview = req.messages.at(-1)?.content?.slice(0, 50) || ""
 	console.log()
 	console.log(
