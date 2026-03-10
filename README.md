@@ -352,7 +352,7 @@ Access control is defined in `ACL.md` at the project root:
 - 0xabc123...    # Added 2026-03-01
 ```
 
-Owners can read all memory — shared, per-user, and the `memory/` directory. Guests only read and write their own slice. If there's no `ACL.md`, everyone is a guest.
+Owners can read all memory — shared, per-user, and the `memory/` directory. Guests only read and write their own slice. If there's no ACL file, everyone is treated as an owner (to allow initial onboarding). Once you add your first owner to the ACL, all other users default to guest.
 
 ### Search
 
