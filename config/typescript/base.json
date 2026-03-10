@@ -26,5 +26,15 @@
 		{ "@hybrd/utils": "packages/utils" },
 		{ "@hybrd/xmtp": "packages/xmtp" }
 	],
-	"exclude": ["node_modules", "build", "dist", ".next", ".expo", "*.old"]
+	"exclude": [
+		"node_modules",
+		"build",
+		"dist",
+		".next",
+		".expo",
+		"*.old",
+		"src/**/*.test.ts",
+		"src/**/*.spec.ts",
+		"src/**/*.eval.ts"
+	]
 }
