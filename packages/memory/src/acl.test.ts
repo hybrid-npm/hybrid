@@ -39,7 +39,7 @@ describe("ACL JSON", () => {
 		it("reads ACL from JSON file", async () => {
 			const { writeFile } = await import("node:fs/promises")
 			const { join } = await import("node:path")
-			const credentialsDir = join(TEST_DIR, ".hybrid", "credentials")
+			const credentialsDir = join(TEST_DIR, "credentials")
 			mkdirSync(credentialsDir, { recursive: true })
 
 			await writeFile(

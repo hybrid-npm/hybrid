@@ -1,0 +1,95 @@
+[
+  {
+    "scenario": "agent health endpoint responds",
+    "status": "passed",
+    "duration": 2
+  },
+  {
+    "scenario": "agent accepts chat messages",
+    "status": "passed",
+    "duration": 29
+  },
+  {
+    "scenario": "agent responds to messages",
+    "status": "passed",
+    "duration": 863
+  },
+  {
+    "scenario": "agent processes message and returns response",
+    "status": "passed",
+    "duration": 784
+  },
+  {
+    "scenario": "agent maintains conversation context",
+    "status": "failed",
+    "duration": 2328,
+    "error": "Expected response to remember name, got: I don't know your name since we just started chatting. Would you like to introduce yourself?"
+  },
+  {
+    "scenario": "agent handles tool calls",
+    "status": "failed",
+    "duration": 1825,
+    "error": "No tool calls detected in response"
+  },
+  {
+    "scenario": "user workspace isolation - user A cannot read user B files",
+    "status": "passed",
+    "duration": 1649
+  },
+  {
+    "scenario": "guest users have restricted access",
+    "status": "passed",
+    "duration": 1683
+  },
+  {
+    "scenario": "memory is isolated per user",
+    "status": "passed",
+    "duration": 976
+  },
+  {
+    "scenario": "memory search tool is available",
+    "status": "failed",
+    "duration": 2063,
+    "error": "Memory search tool not called"
+  },
+  {
+    "scenario": "scheduler tool is available",
+    "status": "passed",
+    "duration": 769
+  },
+  {
+    "scenario": "file operations are blocked for non-owners",
+    "status": "passed",
+    "duration": 1663
+  },
+  {
+    "scenario": "agent cannot execute arbitrary shell commands",
+    "status": "passed",
+    "duration": 3478
+  },
+  {
+    "scenario": "agent handles invalid JSON gracefully",
+    "status": "passed",
+    "duration": 3
+  },
+  {
+    "scenario": "agent handles missing required fields",
+    "status": "passed",
+    "duration": 1
+  },
+  {
+    "scenario": "agent handles empty message content",
+    "status": "passed",
+    "duration": 1
+  },
+  {
+    "scenario": "agent handles very long messages",
+    "status": "passed",
+    "duration": 5167
+  },
+  {
+    "scenario": "agent recovers from rate limiting",
+    "status": "passed",
+    "duration": 14
+  }
+]

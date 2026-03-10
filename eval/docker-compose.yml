@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  agent:
+    build:
+      context: ..
+      dockerfile: eval/Dockerfile.agent
+    ports:
+      - "8454:8454"
+      - "8455:8455"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-test-key}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - XMTP_ENV=${XMTP_ENV:-dev}
+      - AGENT_WALLET_KEY=${TEST_AGENT_WALLET_KEY:-}
+      - AGENT_PORT=8454
+      - XMTP_SIDECAR_PORT=8455
+      - DATA_ROOT=/app/data
+      - MEMORY_ENABLED=true
+      - SCHEDULER_ENABLED=true
+      - NODE_ENV=test
+    volumes:
+      - agent-data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8454/api/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    networks:
+      - eval-network
+    restart: "no"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  agent-data:
+
+networks:
+  eval-network:
+    driver: bridge

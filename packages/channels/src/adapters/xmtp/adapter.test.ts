@@ -26,7 +26,7 @@ describe("ACL Filtering Logic", () => {
 		})
 
 		it("returns allowlist from file", async () => {
-			const credentialsDir = join(TEST_DIR, ".hybrid", "credentials")
+			const credentialsDir = join(TEST_DIR, "credentials")
 			mkdirSync(credentialsDir, { recursive: true })
 
 			writeFileSync(
@@ -45,7 +45,7 @@ describe("ACL Filtering Logic", () => {
 
 	describe("allowlist checking", () => {
 		it("allows all when allowlist is empty", async () => {
-			const credentialsDir = join(TEST_DIR, ".hybrid", "credentials")
+			const credentialsDir = join(TEST_DIR, "credentials")
 			mkdirSync(credentialsDir, { recursive: true })
 
 			writeFileSync(
@@ -61,7 +61,7 @@ describe("ACL Filtering Logic", () => {
 		})
 
 		it("allows addresses on the list", async () => {
-			const credentialsDir = join(TEST_DIR, ".hybrid", "credentials")
+			const credentialsDir = join(TEST_DIR, "credentials")
 			mkdirSync(credentialsDir, { recursive: true })
 
 			writeFileSync(
@@ -82,7 +82,7 @@ describe("ACL Filtering Logic", () => {
 		})
 
 		it("normalizes addresses to lowercase", async () => {
-			const credentialsDir = join(TEST_DIR, ".hybrid", "credentials")
+			const credentialsDir = join(TEST_DIR, "credentials")
 			mkdirSync(credentialsDir, { recursive: true })
 
 			writeFileSync(
@@ -105,7 +105,7 @@ describe("ACL Filtering Logic", () => {
 
 describe("XMTP Adapter Integration", () => {
 	it("blocks message from non-allowed sender", async () => {
-		const credentialsDir = join(TEST_DIR, ".hybrid", "credentials")
+		const credentialsDir = join(TEST_DIR, "credentials")
 		mkdirSync(credentialsDir, { recursive: true })
 
 		writeFileSync(
@@ -128,7 +128,7 @@ describe("XMTP Adapter Integration", () => {
 	})
 
 	it("allows message from allowed sender", async () => {
-		const credentialsDir = join(TEST_DIR, ".hybrid", "credentials")
+		const credentialsDir = join(TEST_DIR, "credentials")
 		mkdirSync(credentialsDir, { recursive: true })
 
 		writeFileSync(

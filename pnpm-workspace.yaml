@@ -4,6 +4,7 @@ packages:
   - "!agents/hybrid-agent"
   - config/*
   - packages/*
+  - eval
   - site
 
 catalog:

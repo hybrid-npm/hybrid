@@ -1,0 +1,36 @@
+FROM node:22-bookworm-slim
+
+RUN apt-get update && \
+    apt-get install -y curl sudo sqlite3 libsqlclient-dev pkg-config build-essential && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY package.json pnpm-lock.yaml ./
+RUN npm install -g pnpm@9.15.5 && \
+    pnpm install --frozen-lockfile
+
+COPY packages/agent/dist ./dist/agent/
+COPY packages/cli/templates/agent/AGENTS.md packages/cli/templates/agent/SOUL.md ./
+
+RUN mkdir -p /app/data/secrets \
+    /app/data/memory/users \
+    /app/data/memory/life/projects \
+    /app/data/memory/life/areas \
+    /app/data/memory/life/resources \
+    /app/data/memory/life/archives \
+    /app/data/memory/logs \
+    /app/data/credentials \
+    /app/data/xmtp \
+    /app/data/workspaces
+
+COPY deployments/flyio/entrypoint.sh /entrypoint.sh
+RUN chmod 755 /entrypoint.sh
+
+ENV AGENT_PORT=8454
+ENV XMTP_SIDECAR_PORT=8455
+ENV DATA_ROOT=/app/data
+
+EXPOSE 8454 8455
+
+CMD ["sh", "-c", "node dist/agent/server/index.cjs & node dist/agent/xmtp.cjs & wait"]

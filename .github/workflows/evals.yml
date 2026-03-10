@@ -1,0 +1,99 @@
+name: Evals
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/**'
+      - 'eval/**'
+      - '.github/workflows/evals.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'packages/**'
+      - 'eval/**'
+      - '.github/workflows/evals.yml'
+
+env:
+  OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  XMTP_ENV: dev
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.5
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build:packages
+
+      - name: Build eval package
+        working-directory: eval
+        run: |
+          pnpm install
+          pnpm build
+
+      - name: Start Docker environment
+        working-directory: eval
+        run: docker compose up -d
+
+      - name: Wait for agent to be ready
+        run: |
+          echo "Waiting for agent..."
+          for i in {1..60}; do
+            if curl -sf http://localhost:8454/api/health > /dev/null 2>&1; then
+              echo "Agent is ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Agent failed to start"
+          docker compose logs agent
+          exit 1
+
+      - name: Run evals
+        working-directory: eval
+        env:
+          AGENT_URL: http://localhost:8454
+          XMTP_SIDECAR_URL: http://localhost:8455
+          SKIP_DOCKER: "true"
+        run: node dist/run.js
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results
+          path: eval/results/
+          retention-days: 7
+
+      - name: Generate JUnit report
+        if: always()
+        run: |
+          if [ -f eval/results/results.xml ]; then
+            echo "::group::Eval Results"
+            cat eval/results/results.xml
+            echo "::endgroup::"
+          fi
+
+      - name: Stop Docker environment
+        if: always()
+        working-directory: eval
+        run: docker compose down
