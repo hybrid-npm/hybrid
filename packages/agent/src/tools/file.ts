@@ -67,7 +67,7 @@ export function createFileTools(params: {
 
 			// Validate path
 			const validation = validatePathInWorkspace({
-				workspaceRoot: workspaceDir,
+				workspaceRoot: projectRoot,
 				userId,
 				requestedPath: args.path
 			})
@@ -160,7 +160,7 @@ export function createFileTools(params: {
 
 			// Validate path
 			const validation = validatePathInWorkspace({
-				workspaceRoot: workspaceDir,
+				workspaceRoot: projectRoot,
 				userId,
 				requestedPath: args.path
 			})
@@ -304,7 +304,7 @@ export function createFileTools(params: {
 
 			// Validate path
 			const validation = validatePathInWorkspace({
-				workspaceRoot: workspaceDir,
+				workspaceRoot: projectRoot,
 				userId,
 				requestedPath: args.path
 			})
@@ -389,7 +389,7 @@ export function createFileTools(params: {
 
 			// Validate path
 			const validation = validatePathInWorkspace({
-				workspaceRoot: workspaceDir,
+				workspaceRoot: projectRoot,
 				userId,
 				requestedPath: args.path
 			})
@@ -508,7 +508,7 @@ export function createFileTools(params: {
 
 			// Validate path
 			const validation = validatePathInWorkspace({
-				workspaceRoot: workspaceDir,
+				workspaceRoot: projectRoot,
 				userId,
 				requestedPath: args.path
 			})

@@ -662,20 +662,31 @@ When scheduling reminders, include delivery info to send the message back to thi
 	const { executablePath, realCliPath, useWrapper } =
 		resolveClaudeCodeExecutable()
 
-	// Sensitive keys that should NEVER be passed to Claude child processes
-	const SENSITIVE_ENV_KEYS = [
-		"AGENT_WALLET_KEY",
+	// Sensitive key prefixes that should NEVER be passed to Claude child processes
+	// Using prefix matching to catch variants like *_KEY, *_SECRET, *_PASSWORD, etc.
+	const SENSITIVE_ENV_KEY_PREFIXES = [
+		"AGENT_WALLET",
+		"OPENROUTER_API_KEY",
 		"PRIVATE_KEY",
 		"SECRET",
 		"SECRETS_PATH",
-		"DATA_ROOT"
+		"DATA_ROOT",
+		"_KEY",
+		"_SECRET",
+		"_PASSWORD",
+		"_TOKEN",
+		"ANTHROPIC_API_KEY",
+		"ANTHROPIC_AUTH_TOKEN"
 	]
 
 	// Build filtered environment for Claude processes
 	const safeEnv = Object.fromEntries(
-		Object.entries(process.env).filter(
-			([key]) => !SENSITIVE_ENV_KEYS.includes(key)
-		)
+		Object.entries(process.env).filter(([key]) => {
+			// Filter out keys that start with any of the sensitive prefixes
+			return !SENSITIVE_ENV_KEY_PREFIXES.some((prefix) =>
+				key.startsWith(prefix)
+			)
+		})
 	)
 
 	// Build env object per OpenRouter docs

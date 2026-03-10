@@ -141,15 +141,17 @@ async function queryStun(stunServer: string): Promise<string | null> {
 }
 
 function createStunRequest(): Buffer {
-	// STUN binding request
+	// STUN binding request per RFC 5389
 	// Message type: 0x0001 (Binding Request)
 	// Message length: 0x0000 (no attributes)
+	// Magic cookie: 0x2112A442 (4 bytes)
 	// Transaction ID: 12 random bytes
 	const buf = Buffer.alloc(20)
 	buf.writeUInt16BE(0x0001, 0) // Message type
 	buf.writeUInt16BE(0x0000, 2) // Message length
+	buf.writeUInt32BE(0x2112a442, 4) // Magic cookie
 	// Transaction ID (12 bytes)
-	for (let i = 4; i < 20; i++) {
+	for (let i = 8; i < 20; i++) {
 		buf[i] = Math.floor(Math.random() * 256)
 	}
 	return buf
@@ -184,7 +186,8 @@ function parseStunResponse(msg: Buffer): string | null {
 			if (family === 0x01) {
 				// IPv4
 				const xoredPort = msg.readUInt16BE(offset + 4 + 2)
-				const port = xoredPort ^ 0x0001 // XOR with magic cookie
+				// XOR with top 16 bits of magic cookie per RFC 5389 Section 15.2
+				const port = xoredPort ^ 0x2112
 
 				const xoredIp = msg.slice(offset + 4 + 4, offset + 4 + 8)
 				const magicCookie = Buffer.from([0x21, 0x12, 0xa4, 0x42])

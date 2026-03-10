@@ -160,9 +160,8 @@ export function isPathInUserWorkspace(
 	path: string
 ): boolean {
 	const sanitizedUserId = sanitizeUserId(userId)
-	const projectRoot = getProjectRoot()
-	const expectedWorkspace = join(projectRoot, "workspace", sanitizedUserId)
-	const expectedMemory = join(projectRoot, "memory", "users", sanitizedUserId)
+	const expectedWorkspace = join(workspaceDir, "workspace", sanitizedUserId)
+	const expectedMemory = join(workspaceDir, "memory", "users", sanitizedUserId)
 
 	// Normalize paths to prevent traversal
 	const normalizedPath = resolve(workspaceDir, path)
@@ -251,7 +250,11 @@ export function validatePathInWorkspace(params: {
 	const resolvedPath = resolve(userWorkspace, requestedPath)
 
 	// Ensure resolved path is within workspace
-	if (!resolvedPath.startsWith(userWorkspace)) {
+	// Use trailing separator to prevent prefix collisions (e.g. alice vs alicebob)
+	if (
+		resolvedPath !== userWorkspace &&
+		!resolvedPath.startsWith(`${userWorkspace}/`)
+	) {
 		return { valid: false, error: "Path escapes workspace" }
 	}
 

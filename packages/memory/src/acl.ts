@@ -192,7 +192,13 @@ export function parseACL(workspaceDir: string): ACL | null {
 }
 
 export function getRole(acl: ACL | null, userId: string): Role {
-	if (!acl || !userId) {
+	// If no ACL is configured (null), allow access for initial onboarding
+	// Once ACL is set up, only allowFrom addresses become owners
+	if (!acl) {
+		return "owner"
+	}
+
+	if (!userId) {
 		return "guest"
 	}
 

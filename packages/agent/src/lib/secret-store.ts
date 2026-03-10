@@ -21,12 +21,21 @@ const secrets = new Map<SecretName, string>()
 
 function getSecretsDir(): string {
 	const dataRoot = process.env.DATA_ROOT
-	if (!dataRoot) return ""
+	if (!dataRoot) {
+		return ""
+	}
 	return join(dataRoot, "secrets")
 }
 
 function getSecretPaths(): Record<SecretName, string> {
 	const secretsDir = getSecretsDir()
+	// If no secrets directory (DATA_ROOT not set), return empty paths
+	// which will cause existsSync checks to fail safely
+	if (!secretsDir) {
+		return {
+			AGENT_WALLET_KEY: ""
+		}
+	}
 	return {
 		AGENT_WALLET_KEY: join(secretsDir, "wallet.key")
 	}

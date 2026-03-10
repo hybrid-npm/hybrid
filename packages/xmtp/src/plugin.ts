@@ -127,29 +127,57 @@ export function XMTPPlugin(): Plugin<PluginContext> {
 					const runtime = await agent.createRuntimeContext(baseRuntime)
 
 					// Execute pre-response behaviors
-					if (context.behaviors) {
-						const behaviorContext: BehaviorContext = {
-							runtime,
-							client: xmtpClient as unknown as XmtpClient,
-							conversation: conversation as unknown as XmtpConversation,
-							message: message as unknown as XmtpMessage
-						}
-						await context.behaviors.executeBefore(behaviorContext)
-					}
-
-					const { text: reply } = await agent.generate(messages, { runtime })
-
-					// Execute post-response behaviors
 					let behaviorContext: BehaviorContext | undefined
 					if (context.behaviors) {
 						behaviorContext = {
 							runtime,
 							client: xmtpClient as unknown as XmtpClient,
 							conversation: conversation as unknown as XmtpConversation,
-							message: message as unknown as XmtpMessage,
-							response: reply
+							message: message as unknown as XmtpMessage
+						}
+						await context.behaviors.executeBefore(behaviorContext)
+
+						// Check if behaviors were stopped early (e.g., due to filtering)
+						if (behaviorContext.stopped) {
+							logger.debug(
+								`🔇 [XMTP Plugin] Skipping reaction response due to behavior chain being stopped`
+							)
+							return
+						}
+
+						// Check if message was filtered out by filterMessages behavior
+						if (behaviorContext.sendOptions?.filtered) {
+							logger.debug(
+								`🔇 [XMTP Plugin] Skipping reaction response due to message being filtered`
+							)
+							return
+						}
+					}
+
+					const { text: reply } = await agent.generate(messages, { runtime })
+
+					// Execute post-response behaviors
+					if (context.behaviors) {
+						if (behaviorContext) {
+							behaviorContext.response = reply
+						} else {
+							behaviorContext = {
+								runtime,
+								client: xmtpClient as unknown as XmtpClient,
+								conversation: conversation as unknown as XmtpConversation,
+								message: message as unknown as XmtpMessage,
+								response: reply
+							}
 						}
 						await context.behaviors.executeAfter(behaviorContext)
+
+						// Check if post behaviors were stopped early
+						if (behaviorContext.stopped) {
+							logger.debug(
+								`🔇 [XMTP Plugin] Skipping reaction response due to post-behavior chain being stopped`
+							)
+							return
+						}
 					} else {
 						// Create minimal context for send options
 						behaviorContext = {
@@ -159,14 +187,6 @@ export function XMTPPlugin(): Plugin<PluginContext> {
 							message: message as unknown as XmtpMessage,
 							response: reply
 						}
-					}
-
-					// Check if message was filtered out by filterMessages behavior
-					if (behaviorContext?.sendOptions?.filtered) {
-						logger.debug(
-							`🔇 [XMTP Plugin] Skipping reaction response due to message being filtered`
-						)
-						return
 					}
 
 					await sendResponse(
@@ -385,10 +405,10 @@ export function XMTPPlugin(): Plugin<PluginContext> {
 				} catch (err) {
 					logger.error("❌ Error handling text:", err)
 				}
-			})(
-				// Store xmtpClient in context for scheduler and other components
-				context as any
-			).xmtpClient = xmtpClient
+			})
+
+			// Store xmtpClient in context for scheduler and other components
+			;(context as any).xmtpClient = xmtpClient
 
 			// Event handlers removed due to incompatibility with current XMTP agent SDK
 

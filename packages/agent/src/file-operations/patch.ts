@@ -40,7 +40,8 @@ function applyUnifiedDiff(
 		// Parse hunk header
 		const hunkMatch = line.match(/^@@ -(\d+),?\d* \+(\d+),?\d* @@/)
 		if (hunkMatch) {
-			const startLine = Number.parseInt(hunkMatch[2], 10) - 1 // Convert to 0-indexed
+			// Use old file line number (-a from @@ -a,b +c,d @@) for applying to original content
+			const startLine = Number.parseInt(hunkMatch[1], 10) - 1 // Convert to 0-indexed
 			currentLine = startLine
 			i++
 
