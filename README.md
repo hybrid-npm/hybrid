@@ -290,7 +290,7 @@ my-agent/
 │  │                   Skills Layer                       │   │
 │  │  ./skills/*/SKILL.md → Tool definitions              │   │
 │  └─────────────────────────────────────────────────────┘   │
-│                                                             │
+Owners can read all memory — shared, per-user, and the `memory/` directory. Guests only read and write their own slice. If there's no `ACL.md`, everyone is treated as an owner (to allow initial onboarding). Set up ACL immediately after first run to restrict access.
 └─────────────────────────────────────────────────────────────┘
 ```
 
