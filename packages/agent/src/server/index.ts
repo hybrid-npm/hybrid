@@ -601,7 +601,7 @@ When scheduling reminders, include delivery info to send the message back to thi
 	// OpenRouter uses different model names than Anthropic directly
 	// See: https://openrouter.ai/models
 	const model = isUsingOpenRouter
-		? "anthropic/claude-3.5-sonnet" // More stable model for testing
+		? "anthropic/claude-sonnet-4-20250514"
 		: "claude-sonnet-4-20250514"
 
 	// Validate API configuration
@@ -685,7 +685,7 @@ When scheduling reminders, include delivery info to send the message back to thi
 		ANTHROPIC_AUTH_TOKEN: authToken || undefined,
 		// Use OpenRouter's model selection env var
 		...(isUsingOpenRouter
-			? { ANTHROPIC_SMALL_FAST_MODEL: "anthropic/claude-3.5-sonnet" }
+			? { ANTHROPIC_SMALL_FAST_MODEL: "anthropic/claude-sonnet-4-20250514" }
 			: {}),
 		// Pass real CLI path so the wrapper knows what to execute
 		...(useWrapper ? { CLAUDE_REAL_CLI: realCliPath } : {})

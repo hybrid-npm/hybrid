@@ -230,7 +230,7 @@ app.post("/api/chat", async (c) => {
 						...(apiKey && { "anthropic-api-key": apiKey })
 					},
 					body: JSON.stringify({
-						model: "anthropic/claude-3.5-sonnet",
+						model: "anthropic/claude-sonnet-4-20250514",
 						messages: [{ role: "system", content: systemPrompt }, ...messages],
 						stream: true,
 						max_tokens: 4096

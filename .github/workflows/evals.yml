@@ -4,13 +4,19 @@ on:
   push:
     branches: [main]
     paths:
-      - 'packages/**'
+      - 'packages/agent/**'
+      - 'packages/memory/**'
+      - 'packages/scheduler/**'
+      - 'packages/channels/**'
       - 'eval/**'
       - '.github/workflows/evals.yml'
   pull_request:
     branches: [main]
     paths:
-      - 'packages/**'
+      - 'packages/agent/**'
+      - 'packages/memory/**'
+      - 'packages/scheduler/**'
+      - 'packages/channels/**'
       - 'eval/**'
       - '.github/workflows/evals.yml'
 
