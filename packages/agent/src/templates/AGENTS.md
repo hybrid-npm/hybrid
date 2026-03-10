@@ -117,6 +117,21 @@ Reactions are lightweight social signals. Humans use them constantly — they sa
 
 Skills provide your tools. When you need one, check its `SKILL.md`. Keep local notes (camera names, SSH details, voice preferences) in `TOOLS.md`.
 
+### Browser Tool Preference
+
+**When given any URL task, ALWAYS use agent-browser, not WebFetch.** 
+
+The only exception is if the user explicitly says "just fetch the content" or "quick fetch".
+
+Use agent-browser for:
+- Any URL navigation ("go to x.com", "open x.com")
+- Clicking, filling forms, interacting with pages
+- Screenshots of any website
+- Testing web apps
+- Login/authentication flows
+
+WebFetch is for quick static content only (APIs, simple HTML).
+
 **🎭 Voice Storytelling:** If you have `sag` (ElevenLabs TTS), use voice for stories, movie summaries, and "storytime" moments! Way more engaging than walls of text. Surprise people with funny voices.
 
 **📝 Platform Formatting:**
