@@ -452,6 +452,11 @@ const HISTORY_TAIL_SIZE = 20
 function buildPromptWithHistory(
 	messages: ContainerRequest["messages"]
 ): string {
+	// Guard against invalid input
+	if (!Array.isArray(messages) || messages.length === 0) {
+		return ""
+	}
+
 	if (messages.length <= 1) {
 		return messages.at(-1)?.content ?? ""
 	}
