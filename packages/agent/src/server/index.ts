@@ -662,29 +662,26 @@ When scheduling reminders, include delivery info to send the message back to thi
 	const { executablePath, realCliPath, useWrapper } =
 		resolveClaudeCodeExecutable()
 
-	// Sensitive key prefixes that should NEVER be passed to Claude child processes
-	// Using prefix matching to catch variants like *_KEY, *_SECRET, *_PASSWORD, etc.
-	const SENSITIVE_ENV_KEY_PREFIXES = [
+	// Sensitive key prefixes and suffixes that should NEVER be passed to Claude child processes
+	// Using prefix matching for specific keys and suffix matching for patterns like *_KEY, *_SECRET
+	const SENSITIVE_PREFIXES = [
 		"AGENT_WALLET",
 		"OPENROUTER_API_KEY",
 		"PRIVATE_KEY",
 		"SECRET",
 		"SECRETS_PATH",
 		"DATA_ROOT",
-		"_KEY",
-		"_SECRET",
-		"_PASSWORD",
-		"_TOKEN",
 		"ANTHROPIC_API_KEY",
 		"ANTHROPIC_AUTH_TOKEN"
 	]
+	const SENSITIVE_SUFFIXES = ["_KEY", "_SECRET", "_PASSWORD", "_TOKEN"]
 
 	// Build filtered environment for Claude processes
 	const safeEnv = Object.fromEntries(
 		Object.entries(process.env).filter(([key]) => {
-			// Filter out keys that start with any of the sensitive prefixes
-			return !SENSITIVE_ENV_KEY_PREFIXES.some((prefix) =>
-				key.startsWith(prefix)
+			return (
+				!SENSITIVE_PREFIXES.some((prefix) => key.startsWith(prefix)) &&
+				!SENSITIVE_SUFFIXES.some((suffix) => key.endsWith(suffix))
 			)
 		})
 	)
