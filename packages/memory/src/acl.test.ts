@@ -59,8 +59,8 @@ describe("ACL JSON", () => {
 	})
 
 	describe("getRole", () => {
-		it("returns guest for null ACL", () => {
-			expect(getRole(null, "0x1234")).toBe("guest")
+		it("returns owner for null ACL (allows initial onboarding)", () => {
+			expect(getRole(null, "0x1234")).toBe("owner")
 		})
 
 		it("returns guest for unknown user", () => {
