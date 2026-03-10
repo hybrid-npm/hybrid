@@ -182,20 +182,22 @@ When a request includes a `userId`, the agent loads `users/{userId}/USER.md`. Fa
 
 ### Template Files
 
-OpenCode-compatible template files (loaded from `PROJECT_ROOT`):
+Hybrid uses the **OpenClaw** standard for agent template files. This is an open specification — you can use the same templates across any OpenClaw-compatible agent runtime.
 
-| File | Purpose |
-|------|---------|
-| `IDENTITY.md` | Agent name, creature type, vibe, emoji, avatar |
-| `SOUL.md` | Personality, core truths, boundaries, vibe |
-| `AGENTS.md` | Behavioral guidelines, memory rules, safety, group chat behavior |
-| `USER.md` | Human's profile (name, timezone, preferences) |
-| `TOOLS.md` | Local environment notes (cameras, SSH, voices) |
-| `BOOT.md` | Startup instructions (executed on agent start) |
-| `BOOTSTRAP.md` | First-run setup wizard (deleted after completion) |
-| `HEARTBEAT.md` | Periodic check tasks |
+**Reference:** [OpenClaw Documentation](https://github.com/anomalyco/opencode)
+| File | Purpose | When to Edit |
+|------|---------|--------------|
+| `IDENTITY.md` | Agent name, creature type, vibe, emoji, avatar | When you want to change who the agent "is" |
+| `SOUL.md` | Personality, core truths, boundaries, vibe | When shaping the agent's character and values |
+| `AGENTS.md` | Behavioral guidelines, memory rules, safety, group chat behavior | When setting work rules and conventions |
+| `USER.md` | Human's profile (name, timezone, preferences) | When configuring user-specific settings |
+| `TOOLS.md` | Local environment notes (cameras, SSH, voices, tool specifics) | When adding environment-specific configuration |
+| `BOOT.md` | Startup instructions (executed on agent start) | When you need setup steps on every restart |
+| `BOOTSTRAP.md` | First-run setup wizard (deleted after completion) | When onboarding new agents |
+| `HEARTBEAT.md` | Periodic check tasks | When defining recurring background tasks |
+| `MEMORY.md` | Long-term curated memory | When storing important context to remember |
 
-All templates follow OpenCode's format exactly. See OpenCode documentation for details.
+All templates follow OpenClaw's format exactly. See [OpenClaw documentation](https://github.com/anomalyco/opencode) for the full specification.
 
 ## MCP Tool Servers
 
