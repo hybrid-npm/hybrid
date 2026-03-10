@@ -236,6 +236,18 @@ export function validatePathInWorkspace(params: {
 	// Get user's workspace directory
 	const userWorkspace = join(workspaceRoot, "workspace", sanitizeUserId(userId))
 
+	// Check if user workspace itself is a symlink (security concern)
+	if (existsSync(userWorkspace)) {
+		try {
+			const realUserWorkspace = realpathSync(userWorkspace)
+			if (realUserWorkspace !== userWorkspace) {
+				return { valid: false, error: "Workspace cannot be a symlink" }
+			}
+		} catch {
+			return { valid: false, error: "Cannot resolve workspace path" }
+		}
+	}
+
 	// Reject directory traversal attempts
 	if (requestedPath.includes("..")) {
 		return { valid: false, error: "Directory traversal not allowed" }
