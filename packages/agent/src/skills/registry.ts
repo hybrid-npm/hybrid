@@ -1,3 +1,5 @@
+import { execFileSync } from "node:child_process"
+
 export interface SkillInfo {
 	name: string
 	source: string
@@ -5,19 +7,84 @@ export interface SkillInfo {
 	category?: string
 }
 
-export const SKILLS_REGISTRY: SkillInfo[] = [
-	{
-		name: "wrangler",
-		source: "github:cloudflare/skills",
-		description:
-			"Cloudflare Workers CLI for deploying and managing Workers, KV, R2, D1, Vectorize, Hyperdrive, Workers AI, Containers, Queues, Workflows, Pipelines, and Secrets Store.",
-		category: "infrastructure"
-	},
-	{
-		name: "agent-browser",
-		source: "github:anomaly/agent-browser",
-		description:
-			"Browser automation for navigating the web. Use when you need to browse websites, fill forms, click elements, or extract content from live web pages.",
-		category: "automation"
+export interface ClawHubSkill {
+	slug: string
+	version?: string
+	updatedAt?: string
+	description: string
+}
+
+export function getInstalledSkills(): ClawHubSkill[] {
+	try {
+		const output = execFileSync("npx", ["clawhub", "list"], {
+			encoding: "utf-8",
+			stdio: ["pipe", "pipe", "pipe"],
+			env: { ...process.env, DISABLE_TELEMETRY: "1", DO_NOT_TRACK: "1" }
+		})
+		const skills: ClawHubSkill[] = []
+		for (const line of output.split("\n")) {
+			const match = line.match(/^(\S+)\s+v?(\S+)/)
+			if (match) {
+				skills.push({
+					slug: match[1],
+					version: match[2],
+					description: line.replace(/^(\S+)\s+v?(\S+)\s*/, "").trim()
+				})
+			}
+		}
+		return skills
+	} catch {
+		return []
 	}
-]
+}
+
+export function getAvailableSkills(): ClawHubSkill[] {
+	try {
+		const output = execFileSync("npx", ["clawhub", "explore"], {
+			encoding: "utf-8",
+			stdio: ["pipe", "pipe", "pipe"],
+			env: { ...process.env, DISABLE_TELEMETRY: "1", DO_NOT_TRACK: "1" }
+		})
+		const skills: ClawHubSkill[] = []
+		for (const line of output.split("\n")) {
+			const match = line.match(/^(\S+)\s+v?(\S+)\s+(\S+)\s+(.*)$/)
+			if (match) {
+				skills.push({
+					slug: match[1],
+					version: match[2],
+					updatedAt: match[3],
+					description: match[4]
+				})
+			}
+		}
+		return skills
+	} catch {
+		return []
+	}
+}
+
+export async function searchClawHub(query: string): Promise<ClawHubSkill[]> {
+	try {
+		const output = execFileSync("npx", ["clawhub", "search", query], {
+			encoding: "utf-8",
+			stdio: ["pipe", "pipe", "pipe"],
+			env: { ...process.env, DISABLE_TELEMETRY: "1", DO_NOT_TRACK: "1" }
+		})
+		const skills: ClawHubSkill[] = []
+		for (const line of output.split("\n")) {
+			const match = line.match(/^(\S+)\s+v?(\S+)\s+(.*)$/)
+			if (match) {
+				skills.push({
+					slug: match[1],
+					version: match[2],
+					description: match[3]
+				})
+			}
+		}
+		return skills
+	} catch {
+		return []
+	}
+}
+
+export const SKILLS_REGISTRY: SkillInfo[] = []

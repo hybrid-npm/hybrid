@@ -25,6 +25,7 @@ import {
 	recordOnboardingCompleted
 } from "../lib/workspace-state"
 import { createMemoryMcpServer, resolveUserRole } from "../memory-tools"
+import { createSkillMcpServer } from "../skills/tools"
 
 const _dirname =
 	typeof __dirname !== "undefined"
@@ -720,6 +721,9 @@ When scheduling reminders, include delivery info to send the message back to thi
 		})
 		mcpServers.scheduler = schedulerMcpServer
 	}
+
+	const skillMcpServer = createSkillMcpServer(req.userId || "anonymous")
+	mcpServers.skills = skillMcpServer
 
 	const options: Options = {
 		abortController,

@@ -97,7 +97,7 @@ export async function handleRemoveSkill(c: Context) {
 	}
 }
 
-function getSkills(): SkillInfo[] {
+export function getSkills(): SkillInfo[] {
 	const skillsDir = resolve(PROJECT_ROOT, "skills")
 	if (!existsSync(skillsDir)) return []
 
@@ -165,7 +165,7 @@ function parseSkillMd(filePath: string, defaultName: string): SkillInfo | null {
 const GITHUB_REPO_RE = /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/
 const NPM_PACKAGE_RE = /^(@[a-zA-Z0-9._-]+\/)?[a-zA-Z0-9._-]+$/
 
-async function installSkill(
+export async function installSkill(
 	source: string
 ): Promise<{ success: boolean; skill?: string; error?: string }> {
 	const projectSkillsDir = resolve(PROJECT_ROOT, "skills")
@@ -261,7 +261,7 @@ async function installSkill(
 	return { success: true, skill: skillName }
 }
 
-async function uninstallSkill(
+export async function uninstallSkill(
 	name: string
 ): Promise<{ success: boolean; error?: string }> {
 	const projectSkillsDir = resolve(PROJECT_ROOT, "skills")
