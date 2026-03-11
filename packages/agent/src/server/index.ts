@@ -192,10 +192,13 @@ function loadMarkdownFile(relativePath: string): string {
 function loadUserMarkdown(userId?: string): string {
 	if (!userId) return loadMarkdownFile("USER.md")
 
-	const userPath = join("users", userId, "USER.md")
+	// Sanitize userId to prevent path traversal
+	const sanitizedId = userId.replace(/[^a-zA-Z0-9_-]/g, "_")
+	const userPath = join("users", sanitizedId, "USER.md")
 	const userFile = loadMarkdownFile(userPath)
 
 	return userFile || loadMarkdownFile("USER.md")
+}
 }
 
 const IDENTITY_MD = loadMarkdownFile("IDENTITY.md")
