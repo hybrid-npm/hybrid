@@ -345,15 +345,21 @@ async function startSidecar() {
 			: senderAddress.slice(0, 8)
 		log.info(`${pc.cyan(displayId)}: ${message.content.slice(0, 50)}`)
 
-		// Check ACL - only respond to owners by default
-		const acl = parseACL(projectDir)
+		// Check ACL - only respond to owners by default.
+		// In Docker, AGENT_PROJECT_ROOT (code dir) may differ from where
+		// credentials actually live. Try projectDir first, then fall back
+		// to DATA_ROOT to handle volume-based credential layouts.
+		let acl = parseACL(projectDir)
+		if (!acl && process.env.DATA_ROOT) {
+			acl = parseACL(process.env.DATA_ROOT)
+		}
 		const role = getRole(acl, senderAddress)
 
 		if (role !== "owner") {
+			// Silently drop messages from non-owners. Sending a rejection
+			// message would reveal that the agent exists and leak architecture
+			// details. It also costs a send per rejected message.
 			log.warn(`ignoring message from non-owner: ${displayId}`)
-			await conversation.send(
-				"Sorry, I can only talk to my owners. If you think this is a mistake, ask an owner to add your address."
-			)
 			return
 		}
 

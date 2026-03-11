@@ -285,7 +285,32 @@ export class SqliteSchedulerStore {
 export async function createSqliteStore(
 	options?: SqliteSchedulerStoreOptions
 ): Promise<SqliteSchedulerStore> {
-	const store = new SqliteSchedulerStore(options)
+	const resolvedOptions = { ...options }
+
+	// If a real dbPath is provided but no onSave callback, add a default
+	// file-write callback so that changes are actually persisted to disk.
+	if (
+		resolvedOptions.dbPath &&
+		resolvedOptions.dbPath !== ":memory:" &&
+		!resolvedOptions.onSave
+	) {
+		const { writeFileSync } = await import("node:fs")
+		const { dirname } = await import("node:path")
+		const { mkdirSync, existsSync } = await import("node:fs")
+		const dbPath = resolvedOptions.dbPath
+
+		// Ensure the parent directory exists
+		const dir = dirname(dbPath)
+		if (!existsSync(dir)) {
+			mkdirSync(dir, { recursive: true })
+		}
+
+		resolvedOptions.onSave = (data: Uint8Array) => {
+			writeFileSync(dbPath, data)
+		}
+	}
+
+	const store = new SqliteSchedulerStore(resolvedOptions)
 	await store.init()
 	return store
 }
