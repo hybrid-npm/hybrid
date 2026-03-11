@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { join } from "node:path"
+import { join, resolve } from "node:path"
 
 /**
  * Get the credentials directory path.
@@ -25,11 +25,37 @@ export function getSharedMemoryPath(workspaceDir: string): string {
 	return getMemoryRoot(workspaceDir)
 }
 
+/**
+ * Sanitize a userId to prevent path traversal attacks.
+ * Strips path separators and '..' components so the resolved path
+ * can never escape the memory directory.
+ */
+function sanitizeUserId(userId: string): string {
+	// Replace any path separators and remove '..' components
+	const sanitized = userId
+		.replace(/[\/\\]/g, "_")
+		.replace(/\.\./g, "_")
+		.trim()
+	if (!sanitized) {
+		throw new Error("userId cannot be empty after sanitization")
+	}
+	return sanitized
+}
+
 export function getUserMemoryPath(
 	workspaceDir: string,
 	userId: string
 ): string {
-	return join(getMemoryRoot(workspaceDir), "users", userId)
+	const memoryRoot = getMemoryRoot(workspaceDir)
+	const usersDir = join(memoryRoot, "users")
+	const result = join(usersDir, sanitizeUserId(userId))
+	// Final safeguard: ensure the resolved path is still under usersDir
+	const resolved = resolve(result)
+	const resolvedUsersDir = resolve(usersDir)
+	if (!resolved.startsWith(resolvedUsersDir + "/") && resolved !== resolvedUsersDir) {
+		throw new Error("Invalid userId: path traversal detected")
+	}
+	return result
 }
 
 export function getProjectMemoryPath(workspaceDir: string): string {

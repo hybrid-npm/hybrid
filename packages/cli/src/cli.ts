@@ -949,12 +949,14 @@ async function deploy(platform = "fly") {
 			)
 		})
 
-		// Set secrets if new wallet
+		// Provision wallet key as a file-based secret on the persistent volume.
+		// The entrypoint.sh scrubs AGENT_WALLET_KEY from env vars, so we must
+		// write it to /app/data/secrets/wallet.key where loadSecrets() reads it.
 		if (walletKey) {
-			console.log("\n🔐 Setting AGENT_WALLET_KEY...")
+			console.log("\n🔐 Writing wallet key to persistent volume...")
 			try {
 				execSync(
-					`fly secrets set AGENT_WALLET_KEY=${walletKey} --app ${appName}`,
+					`fly ssh console --app ${appName} -C "mkdir -p /app/data/secrets && printf '%s' '${walletKey}' > /app/data/secrets/wallet.key && chmod 400 /app/data/secrets/wallet.key && chown app:app /app/data/secrets/wallet.key"`,
 					{
 						cwd: distDir,
 						stdio: "inherit"
@@ -965,7 +967,12 @@ async function deploy(platform = "fly") {
 					stdio: "inherit"
 				})
 			} catch {
-				console.log("⚠️  Could not set wallet key")
+				console.log(
+					"⚠️  Could not write wallet key to volume. After deploy, run:"
+				)
+				console.log(
+					`   fly ssh console --app ${appName} -C "mkdir -p /app/data/secrets && echo 'YOUR_KEY' > /app/data/secrets/wallet.key && chmod 400 /app/data/secrets/wallet.key"`
+				)
 			}
 		}
 

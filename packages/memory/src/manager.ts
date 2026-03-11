@@ -451,6 +451,23 @@ export class MemoryIndexManager implements MemorySearchManager {
 
 		const now = Date.now()
 
+		// Pre-compute all embeddings BEFORE opening the transaction.
+		// better-sqlite3 is synchronous and single-threaded, so holding a
+		// transaction open across async network calls (embedQuery) risks
+		// leaving the transaction in a bad state if embedding fails partway.
+		const embeddings: number[][] = []
+		for (const chunk of chunks) {
+			let embedding: number[] = []
+			if (this.provider) {
+				try {
+					embedding = await this.provider.embedQuery(chunk.text)
+				} catch {
+					embedding = []
+				}
+			}
+			embeddings.push(embedding)
+		}
+
 		this.db.exec("BEGIN TRANSACTION")
 
 		try {
@@ -469,17 +486,10 @@ export class MemoryIndexManager implements MemorySearchManager {
 					entry.conversationId || ""
 				)
 
-			for (const chunk of chunks) {
+			for (let i = 0; i < chunks.length; i++) {
+				const chunk = chunks[i]
+				const embedding = embeddings[i]
 				const chunkId = `${entry.path}:${chunk.startLine}-${chunk.endLine}`
-
-				let embedding: number[] = []
-				if (this.provider) {
-					try {
-						embedding = await this.provider.embedQuery(chunk.text)
-					} catch {
-						embedding = []
-					}
-				}
 
 				this.db
 					.prepare(

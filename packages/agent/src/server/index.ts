@@ -213,6 +213,10 @@ const AGENT_NAME = process.env.AGENT_NAME || "hybrid-agent"
 function shouldRunOnboarding(userId?: string): boolean {
 	if (!BOOTSTRAP_EXISTS) return false
 
+	// Check if onboarding has already been completed — prevents bootstrap
+	// context from being injected forever after recordOnboardingCompleted() is called
+	if (isOnboardingComplete(PROJECT_ROOT, BOOTSTRAP_EXISTS)) return false
+
 	const { role } = resolveUserRole(PROJECT_ROOT, userId || "anonymous")
 	return role === "owner"
 }
