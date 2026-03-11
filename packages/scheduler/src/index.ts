@@ -103,12 +103,16 @@ export class SchedulerService {
 		this.eventCallback?.(event)
 	}
 
-	private async locked<T>(fn: () => Promise<T>): Promise<T> {
-		this.state.op = this.state.op.then(
-			async () => fn(),
-			async () => fn()
-		)
-		return this.state.op as Promise<T>
+	private locked<T>(fn: () => Promise<T>): Promise<T> {
+		// Chain onto the previous operation. We use .then() with a no-op
+		// rejection handler so that a failure in a prior operation doesn't
+		// prevent subsequent operations from running. Each fn's own errors
+		// propagate to its caller via the returned promise.
+		const next = this.state.op.then(fn, () => fn())
+		// Keep the chain alive even if fn rejects — the next queued
+		// operation should still run after this one settles.
+		this.state.op = next.catch(() => {})
+		return next
 	}
 
 	private computeNextRunAtMs(
