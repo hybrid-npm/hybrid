@@ -42,7 +42,7 @@ const PROJECT_ROOT = process.env.AGENT_PROJECT_ROOT || process.cwd()
 
 // Auto-configure OpenRouter if OPENROUTER_API_KEY is present
 // See: https://openrouter.ai/docs/guides/guides/claude-code-integration
-if (process.env.OPENROUTER_API_KEY && !process.env.ANTHROPIC_API_KEY) {
+if (process.env.OPENROUTER_API_KEY && (!process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY === "" || process.env.ANTHROPIC_API_KEY.includes("your_"))) {
 	process.env.ANTHROPIC_BASE_URL = "https://openrouter.ai/api"
 	process.env.ANTHROPIC_AUTH_TOKEN = process.env.OPENROUTER_API_KEY
 	process.env.ANTHROPIC_API_KEY = "" // Must be explicitly empty to prevent conflicts
