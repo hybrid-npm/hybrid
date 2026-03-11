@@ -45,10 +45,15 @@ fi
 chmod o+rx /app
 chmod -R o+rX /app/node_modules /app/dist 2>/dev/null || true
 
+# Use env -u to guarantee secret vars are stripped from the child process
+# environment. Plain `unset` removes them from the shell, but Docker-injected
+# vars can survive through exec in some runtimes. env -u is belt-and-suspenders.
+ENV_STRIP="env -u AGENT_WALLET_KEY -u WALLET_KEY -u PRIVATE_KEY"
+
 # If running as root, drop to 'app' user and execute CMD
 if [ "$(id -u)" = "0" ]; then
-    exec gosu app "$@"
+    exec $ENV_STRIP gosu app "$@"
 fi
 
 # Already running as non-root user, just execute
-exec "$@"
+exec $ENV_STRIP "$@"
