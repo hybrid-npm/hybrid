@@ -352,7 +352,7 @@ async function startSidecar() {
 		if (role !== "owner") {
 			log.warn(`ignoring message from non-owner: ${displayId}`)
 			await conversation.send(
-				"Sorry, I can only talk to my owners. If you think this is a mistake, ask an owner to add your address to credentials/xmtp-allowFrom.json"
+				"Sorry, I can only talk to my owners. If you think this is a mistake, ask an owner to add your address."
 			)
 			return
 		}

@@ -2,3 +2,4 @@
 *.db3-shm
 *.db3-wal
 *.db3.sqlcipher_salt
+memory/users/

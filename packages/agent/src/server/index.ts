@@ -940,6 +940,10 @@ app.post(AGENT_ENDPOINT, async (c) => {
 		return c.json({ error: "messages must be an array" }, 400)
 	}
 
+	if (!req.chatId || typeof req.chatId !== "string") {
+		return c.json({ error: "chatId is required" }, 400)
+	}
+
 	const preview = req.messages.at(-1)?.content?.slice(0, 50) || ""
 	console.log()
 	console.log(
