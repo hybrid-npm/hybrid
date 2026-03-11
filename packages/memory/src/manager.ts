@@ -417,13 +417,13 @@ export class MemoryIndexManager implements MemorySearchManager {
 		for (const entry of validEntries) {
 			const record = this.db
 				.prepare(
-					`SELECT hash FROM files WHERE path = ? AND source = ? AND user_id IS ? AND conversation_id IS ?`
+					`SELECT hash FROM files WHERE path = ? AND source = ? AND user_id = ? AND conversation_id = ?`
 				)
 				.get(
 					entry.path,
 					"memory",
-					entry.userId || null,
-					entry.conversationId || null
+					entry.userId || "",
+					entry.conversationId || ""
 				) as { hash: string } | undefined
 
 			if (record?.hash === entry.hash) {
@@ -465,8 +465,8 @@ export class MemoryIndexManager implements MemorySearchManager {
 					entry.hash,
 					Date.now(),
 					content.length,
-					entry.userId || null,
-					entry.conversationId || null
+					entry.userId || "",
+					entry.conversationId || ""
 				)
 
 			for (const chunk of chunks) {
@@ -497,15 +497,18 @@ export class MemoryIndexManager implements MemorySearchManager {
 						chunk.text,
 						JSON.stringify(embedding),
 						now,
-						entry.userId || null,
-						entry.conversationId || null
+						entry.userId || "",
+						entry.conversationId || ""
 					)
 
-				// Also insert into FTS table for full-text search
+				// FTS5 does not support INSERT OR REPLACE — delete first, then insert
 				if (this.ftsAvailable) {
 					this.db
+						.prepare(`DELETE FROM ${FTS_TABLE} WHERE id = ?`)
+						.run(chunkId)
+					this.db
 						.prepare(
-							`INSERT OR REPLACE INTO ${FTS_TABLE} (text, id, path, source, model, start_line, end_line, user_id, conversation_id)
+							`INSERT INTO ${FTS_TABLE} (text, id, path, source, model, start_line, end_line, user_id, conversation_id)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
 						)
 						.run(
@@ -516,8 +519,8 @@ export class MemoryIndexManager implements MemorySearchManager {
 							this.provider?.model || "fts-only",
 							chunk.startLine,
 							chunk.endLine,
-							entry.userId || null,
-							entry.conversationId || null
+							entry.userId || "",
+							entry.conversationId || ""
 						)
 				}
 			}

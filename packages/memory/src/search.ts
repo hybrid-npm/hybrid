@@ -36,14 +36,14 @@ function buildScopeFilter(scope?: MemoryScope): {
 
 	if (scope.type === "global") {
 		return {
-			sql: " AND user_id IS NULL AND conversation_id IS NULL",
+			sql: " AND user_id = '' AND conversation_id = ''",
 			params: []
 		}
 	}
 
 	if (scope.type === "user") {
 		return {
-			sql: " AND user_id = ? AND conversation_id IS NULL",
+			sql: " AND user_id = ? AND conversation_id = ''",
 			params: [scope.userId]
 		}
 	}

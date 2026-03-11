@@ -21,8 +21,8 @@ export function ensureMemoryIndexSchema(params: {
       hash TEXT NOT NULL,
       mtime INTEGER NOT NULL,
       size INTEGER NOT NULL,
-      user_id TEXT,
-      conversation_id TEXT,
+      user_id TEXT NOT NULL DEFAULT '',
+      conversation_id TEXT NOT NULL DEFAULT '',
       PRIMARY KEY (path, source, user_id, conversation_id)
     );
   `)
@@ -39,8 +39,8 @@ export function ensureMemoryIndexSchema(params: {
       text TEXT NOT NULL,
       embedding TEXT NOT NULL,
       updated_at INTEGER NOT NULL,
-      user_id TEXT,
-      conversation_id TEXT,
+      user_id TEXT NOT NULL DEFAULT '',
+      conversation_id TEXT NOT NULL DEFAULT '',
       PRIMARY KEY (id, source, user_id, conversation_id)
     );
   `)
@@ -89,10 +89,10 @@ export function ensureMemoryIndexSchema(params: {
 
 	ensureColumn(params.db, "files", "source", "TEXT NOT NULL DEFAULT 'memory'")
 	ensureColumn(params.db, "chunks", "source", "TEXT NOT NULL DEFAULT 'memory'")
-	ensureColumn(params.db, "files", "user_id", "TEXT")
-	ensureColumn(params.db, "files", "conversation_id", "TEXT")
-	ensureColumn(params.db, "chunks", "user_id", "TEXT")
-	ensureColumn(params.db, "chunks", "conversation_id", "TEXT")
+	ensureColumn(params.db, "files", "user_id", "TEXT NOT NULL DEFAULT ''")
+	ensureColumn(params.db, "files", "conversation_id", "TEXT NOT NULL DEFAULT ''")
+	ensureColumn(params.db, "chunks", "user_id", "TEXT NOT NULL DEFAULT ''")
+	ensureColumn(params.db, "chunks", "conversation_id", "TEXT NOT NULL DEFAULT ''")
 
 	params.db.exec(`CREATE INDEX IF NOT EXISTS idx_chunks_path ON chunks(path);`)
 	params.db.exec(
