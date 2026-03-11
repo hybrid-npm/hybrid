@@ -77,15 +77,16 @@ export function getMemoryPaths(
 	userId: string,
 	role: "owner" | "guest"
 ): MemoryPaths {
-	const memoryRoot = getMemoryRoot(workspaceDir)
 	const userPath = getUserMemoryPath(workspaceDir, userId)
-	const projectMemoryPath = getProjectMemoryPath(workspaceDir)
-	const projectMemoryFile = join(workspaceDir, "MEMORY.md")
 
 	if (role === "owner") {
+		// Owners can read from:
+		// 1. workspaceDir — root-level MEMORY.md (join(workspaceDir, "MEMORY.md"))
+		// 2. userPath — per-user memory (join(userPath, "MEMORY.md"))
+		// Each entry must be a *directory* since readMemorySection does join(dir, "MEMORY.md")
 		return {
-			read: [memoryRoot, projectMemoryFile, projectMemoryPath, userPath],
-			write: workspaceDir
+			read: [workspaceDir, userPath],
+			write: userPath
 		}
 	}
 

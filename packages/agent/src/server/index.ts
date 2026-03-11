@@ -667,9 +667,10 @@ When scheduling reminders, include delivery info to send the message back to thi
 	const { executablePath, realCliPath, useWrapper } =
 		resolveClaudeCodeExecutable()
 
-	// Sensitive key prefixes that should NEVER be passed to Claude child processes.
-	// We use an explicit prefix list rather than broad suffix matching (_KEY, _TOKEN, etc.)
-	// to avoid stripping legitimate env vars tools may need (GITHUB_TOKEN, NPM_TOKEN, SSH_KEY).
+	// Sensitive key prefixes stripped from the Claude child process environment.
+	// ANTHROPIC_API_KEY/AUTH_TOKEN are NOT listed here — the Claude SDK subprocess
+	// needs them to authenticate with the LLM API. They pass through via safeEnv
+	// and are also explicitly set below for OpenRouter/Anthropic mode.
 	const SENSITIVE_PREFIXES = [
 		"AGENT_WALLET",
 		"OPENROUTER_API_KEY",
@@ -677,8 +678,6 @@ When scheduling reminders, include delivery info to send the message back to thi
 		"SECRET",
 		"SECRETS_PATH",
 		"DATA_ROOT",
-		"ANTHROPIC_API_KEY",
-		"ANTHROPIC_AUTH_TOKEN",
 		"WALLET_KEY",
 		"XMTP_DB_ENCRYPTION"
 	]

@@ -260,8 +260,14 @@ export function createFileTools(params: {
 					const failed: Array<{ oldText: string; reason: string }> = []
 
 					for (const edit of args.edits) {
-						if (content.includes(edit.oldText)) {
-							content = content.replace(edit.oldText, edit.newText)
+						const idx = content.indexOf(edit.oldText)
+						if (idx !== -1) {
+							// Use indexOf + slice instead of String.replace to avoid
+							// interpreting $ patterns ($&, $', $1, etc.) in newText
+							content =
+								content.slice(0, idx) +
+								edit.newText +
+								content.slice(idx + edit.oldText.length)
 							applied++
 						} else {
 							failed.push({ oldText: edit.oldText, reason: "Text not found" })
