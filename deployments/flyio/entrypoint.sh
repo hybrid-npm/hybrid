@@ -30,8 +30,11 @@ fi
 # Scrub any secret-related env vars that may have leaked in
 # NOTE: If you used `fly secrets set AGENT_WALLET_KEY=...`, it will be scrubbed here.
 # Use file-based secrets instead: fly ssh console, then write to /app/data/secrets/wallet.key
+# Log warning to file (not stdout/stderr) so it doesn't interfere with
+# commands run through the entrypoint while still leaving an audit trail.
 if [ -n "$AGENT_WALLET_KEY" ]; then
-    echo "[entrypoint] WARNING: AGENT_WALLET_KEY found in env — scrubbing. Use file-based secrets at $SECRETS_DIR/wallet.key instead."
+    mkdir -p /app/data/logs
+    echo "[$(date -Iseconds)] WARNING: AGENT_WALLET_KEY found in env — scrubbing. Use file-based secrets at $SECRETS_DIR/wallet.key instead." >> /app/data/logs/entrypoint.log 2>/dev/null || true
 fi
 unset AGENT_WALLET_KEY WALLET_KEY PRIVATE_KEY 2>/dev/null || true
 
