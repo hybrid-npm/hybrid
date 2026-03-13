@@ -104,9 +104,9 @@ async function main() {
 		__dirname,
 		"..",
 		"..",
-		"agent",
-		"src",
-		"templates"
+		"cli",
+		"templates",
+		"agent"
 	)
 
 	const templates = [
@@ -115,7 +115,6 @@ async function main() {
 		"IDENTITY.md",
 		"USER.md",
 		"TOOLS.md",
-		"BOOT.md",
 		"BOOTSTRAP.md",
 		"HEARTBEAT.md"
 	]

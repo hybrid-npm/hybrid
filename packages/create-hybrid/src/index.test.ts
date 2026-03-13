@@ -26,7 +26,7 @@ describe("create-hybrid CLI", () => {
 		}
 	})
 
-	it("should create all 8 OpenCode template files", () => {
+	it("should create all template files", () => {
 		execSync(
 			`npx tsx "${CLI_PATH}" --name ${PROJECT_NAME} --env dev --agent-name "Test Agent"`,
 			{ cwd: TEMP_DIR, timeout: 15000 }
@@ -38,7 +38,6 @@ describe("create-hybrid CLI", () => {
 			"IDENTITY.md",
 			"USER.md",
 			"TOOLS.md",
-			"BOOT.md",
 			"BOOTSTRAP.md",
 			"HEARTBEAT.md"
 		]
