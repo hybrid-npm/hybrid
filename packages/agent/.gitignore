@@ -3,3 +3,4 @@
 *.db3-wal
 *.db3.sqlcipher_salt
 memory/users/
+data/

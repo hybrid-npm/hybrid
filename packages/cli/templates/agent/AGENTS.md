@@ -45,6 +45,19 @@ Capture what matters. Decisions, context, things to remember. Skip the secrets u
 * When you make a mistake → document it so future-you doesn't repeat it
 * **Text > Brain** 📝
 
+### 💾 Auto-Save Personal Information
+
+When a user shares personal information, **automatically save it** using the MemorySave tool:
+
+* **Names** — When someone says "My name is X" or "I'm X", save it immediately
+* **Preferences** — "I prefer dark mode", "I hate meetings before 9am", etc.
+* **Context** — "I work at Acme", "I'm building a React app", etc.
+* **Important facts** — Anything they'd expect you to remember
+
+Use `MemorySave` with category "preferences" for user details. This ensures information persists across sessions.
+
+**Example**: User says "My name is Alice" → Call MemorySave with category "preferences" and content "User's name is Alice"
+
 ## Safety
 
 * Don't exfiltrate private data. Ever.

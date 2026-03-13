@@ -1,7 +1,15 @@
-import { spawn } from "child_process"
-import { existsSync, readFileSync } from "fs"
-import { join, resolve } from "path"
-import { fileURLToPath } from "url"
+import { spawn } from "node:child_process"
+import {
+	cpSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync
+} from "node:fs"
+import { tmpdir } from "node:os"
+import { join, resolve } from "node:path"
+import { fileURLToPath } from "node:url"
 import { createTestRunner } from "./harness/runner.js"
 import type { EvalConfig } from "./harness/types.js"
 import {
@@ -15,13 +23,38 @@ import {
 const __dirname = fileURLToPath(new URL(".", import.meta.url))
 
 let agentProcess: ReturnType<typeof spawn> | null = null
+let projectDir: string | null = null
 
-async function startAgent(): Promise<void> {
+function createTestProject(): string {
+	const templateDir = join(
+		__dirname,
+		"..",
+		"packages",
+		"cli",
+		"templates",
+		"agent"
+	)
+	const tempDir = mkdtempSync(join(tmpdir(), "hybrid-eval-"))
+
+	mkdirSync(tempDir, { recursive: true })
+	cpSync(templateDir, tempDir, { recursive: true })
+
+	console.log(`Created test project at: ${tempDir}`)
+	return tempDir
+}
+
+function cleanupTestProject() {
+	if (projectDir && existsSync(projectDir)) {
+		rmSync(projectDir, { recursive: true, force: true })
+		console.log(`Cleaned up test project: ${projectDir}`)
+	}
+}
+
+async function startAgent(projectPath: string): Promise<void> {
 	console.log("Starting agent...")
 
 	const agentDir = join(__dirname, "..", "packages", "agent")
 
-	// Load .env from agent directory or root if it exists
 	const rootDir = join(__dirname, "..")
 	const envFiles = [
 		join(agentDir, ".env"),
@@ -29,7 +62,10 @@ async function startAgent(): Promise<void> {
 		join(rootDir, ".env.local"),
 		join(rootDir, ".env")
 	]
-	const env = { ...process.env }
+	const env: Record<string, string | undefined> = {
+		...process.env,
+		AGENT_PROJECT_ROOT: projectPath
+	}
 
 	for (const envFile of envFiles) {
 		if (existsSync(envFile)) {
@@ -87,7 +123,6 @@ async function startAgent(): Promise<void> {
 		console.log("Agent exited with code:", code)
 	})
 
-	// Wait for agent to be ready
 	for (let i = 0; i < 60; i++) {
 		try {
 			const response = await fetch("http://localhost:8454/health")
@@ -95,9 +130,7 @@ async function startAgent(): Promise<void> {
 				console.log("Agent is ready!\n")
 				return
 			}
-		} catch {
-			// Not ready yet
-		}
+		} catch {}
 		await new Promise((resolve) => setTimeout(resolve, 1000))
 	}
 
@@ -134,13 +167,13 @@ async function main() {
 
 	const runner = createTestRunner()
 
-	// Check if agent is already running (agent server exposes /health, not /api/health)
 	const existingAgent = await fetch(`${agentUrl}/health`)
 		.then((r) => r.ok)
 		.catch(() => false)
 
 	if (!existingAgent) {
-		await startAgent()
+		projectDir = createTestProject()
+		await startAgent(projectDir)
 	} else {
 		console.log("Using existing agent at", agentUrl, "\n")
 	}
@@ -165,11 +198,13 @@ async function main() {
 		}
 	} finally {
 		await stopAgent()
+		cleanupTestProject()
 	}
 }
 
 main().catch((error) => {
 	console.error("Fatal error:", error)
 	stopAgent()
+	cleanupTestProject()
 	process.exit(1)
 })
