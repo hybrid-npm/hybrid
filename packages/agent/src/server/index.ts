@@ -571,10 +571,16 @@ The current date and time is: ${now.toISOString()}
 
 When scheduling tasks, calculate the target time relative to the current time above.`
 
-	const conversationContext = req.conversationId
+	// Sanitize conversationId to prevent prompt injection — only allow
+	// alphanumeric, hyphens, underscores, and colons (typical XMTP conversation IDs)
+	const sanitizedConversationId = req.conversationId
+		? req.conversationId.replace(/[^a-zA-Z0-9_:=-]/g, "")
+		: undefined
+
+	const conversationContext = sanitizedConversationId
 		? `## Conversation Context
 
-- Conversation ID: ${req.conversationId}
+- Conversation ID: ${sanitizedConversationId}
 - Channel: xmtp
 
 When scheduling reminders, include delivery info to send the message back to this conversation:
@@ -583,7 +589,7 @@ When scheduling reminders, include delivery info to send the message back to thi
   "name": "Reminder name",
   "schedule": { "kind": "at", "at": "<ISO timestamp>" },
   "payload": { "kind": "agentTurn", "message": "Your reminder message" },
-  "delivery": { "mode": "announce", "channel": "xmtp", "to": "${req.conversationId}" }
+  "delivery": { "mode": "announce", "channel": "xmtp", "to": "${sanitizedConversationId}" }
 }
 \`\`\`
 

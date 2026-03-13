@@ -449,9 +449,13 @@ export class SchedulerService {
 		console.log("[scheduler] started")
 	}
 
-	stop(): void {
+	async stop(): Promise<void> {
 		this.stopTimer()
 		this.state.running = false
+		// Flush any pending writes to disk before shutting down.
+		// The store uses a 1-second debounced save, so without this
+		// the last batch of job state updates could be lost on exit.
+		await this.store.close()
 	}
 
 	async status(): Promise<SchedulerStatus> {

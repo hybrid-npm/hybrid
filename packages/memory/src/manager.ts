@@ -87,7 +87,8 @@ export class MemoryIndexManager implements MemorySearchManager {
 
 			const manager = new MemoryIndexManager({
 				...options,
-				providerResult
+				providerResult,
+				cacheKey: key
 			})
 
 			INDEX_CACHE.set(key, manager)
@@ -112,8 +113,9 @@ export class MemoryIndexManager implements MemorySearchManager {
 		userId?: string
 		conversationId?: string
 		providerResult: Awaited<ReturnType<typeof createEmbeddingProvider>>
+		cacheKey: string
 	}) {
-		this.cacheKey = ""
+		this.cacheKey = options.cacheKey
 		this.agentId = options.agentId
 		this.workspaceDir = options.workspaceDir
 		this.settings = options.config

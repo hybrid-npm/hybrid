@@ -935,10 +935,18 @@ async function deploy(platform?: string, keygen = false) {
 	// Check for wallet key
 	let walletKey = process.env.AGENT_WALLET_KEY || process.env.WALLET_KEY
 
+	// Validate app name to prevent command injection
+	if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(appName)) {
+		console.error(`\n❌ Invalid app name: ${appName}`)
+		console.error("App name must start with a letter/digit and contain only letters, digits, hyphens, and underscores.")
+		process.exit(1)
+	}
+
 	// Check if app exists
+	const { execFileSync } = await import("node:child_process")
 	let appExists = false
 	try {
-		execSync(`fly status --app ${appName}`, { stdio: "pipe" })
+		execFileSync("fly", ["status", "--app", appName], { stdio: "pipe" })
 		appExists = true
 	} catch {
 		// App doesn't exist
@@ -1032,7 +1040,7 @@ async function deploy(platform?: string, keygen = false) {
 		if (!appExists) {
 			console.log(`📦 Creating Fly.io app: ${appName}`)
 			try {
-				execSync(`fly apps create ${appName}`, {
+				execFileSync("fly", ["apps", "create", appName], {
 					cwd: distDir,
 					stdio: "inherit"
 				})
@@ -1056,11 +1064,13 @@ async function deploy(platform?: string, keygen = false) {
 		})
 
 		// Set secrets via fly secrets (doesn't require VM to be running)
+		// Use execFileSync with array args to avoid leaking secrets in the process list
 		if (walletKey) {
 			console.log("\n🔐 Setting wallet key as secret...")
 			try {
-				execSync(
-					`fly secrets set AGENT_WALLET_KEY=${walletKey} --app ${appName}`,
+				execFileSync(
+					"fly",
+					["secrets", "set", `AGENT_WALLET_KEY=${walletKey}`, "--app", appName],
 					{
 						cwd: distDir,
 						stdio: "inherit"
@@ -1075,8 +1085,9 @@ async function deploy(platform?: string, keygen = false) {
 		if (openRouterKey) {
 			console.log("\n🔑 Setting OpenRouter key as secret...")
 			try {
-				execSync(
-					`fly secrets set OPENROUTER_API_KEY=${openRouterKey} --app ${appName}`,
+				execFileSync(
+					"fly",
+					["secrets", "set", `OPENROUTER_API_KEY=${openRouterKey}`, "--app", appName],
 					{
 						cwd: distDir,
 						stdio: "inherit"
