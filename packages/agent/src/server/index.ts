@@ -105,8 +105,18 @@ function resolveClaudeCodeCliPath(): string {
 	// _dirname is either:
 	// - /project/packages/agent/src/server (dev, tsx watch)
 	// - /project/packages/agent/dist/server (prod, bundled)
+	// - /app/server (Docker container)
 	// We need to go up to find node_modules at project root
 	const possiblePaths = [
+		// Docker container: /app/server -> /app/node_modules
+		join(
+			_dirname,
+			"..",
+			"node_modules",
+			"@anthropic-ai",
+			"claude-agent-sdk",
+			"cli.js"
+		),
 		// Dev/prod mode: from packages/agent/src/server or packages/agent/dist/server
 		// both need 4 levels up to reach monorepo root node_modules
 		join(

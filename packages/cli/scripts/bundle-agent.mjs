@@ -42,16 +42,6 @@ await esbuild.build({
 })
 
 await esbuild.build({
-	entryPoints: [resolve(agentDir, "src/server/simple.ts")],
-	bundle: true,
-	platform: "node",
-	target: "node20",
-	outfile: resolve(outDir, "server/simple.cjs"),
-	format: "cjs",
-	external
-})
-
-await esbuild.build({
 	entryPoints: [resolve(agentDir, "src/server/index.ts")],
 	bundle: true,
 	platform: "node",

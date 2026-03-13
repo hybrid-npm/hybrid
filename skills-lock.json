@@ -5,6 +5,11 @@
       "source": "vercel-labs/agent-browser",
       "sourceType": "github",
       "computedHash": "1c40cac8fc7b0f3e4187881b256525ffc6b19fa4859f5f7847c9a87448ccf56a"
+    },
+    "flyio-cli-public": {
+      "source": "thinkfleetai/thinkfleet-engine",
+      "sourceType": "github",
+      "computedHash": "2b3150581d46ff8b1ae3c918324a7c465090dccfd882e3cb1cf06b9eac940c24"
     }
   }
 }
