@@ -1,0 +1,50 @@
+{
+	"name": "@hybrd/channels",
+	"version": "0.0.1",
+	"keywords": ["channels", "xmtp", "telegram", "slack", "hybrid", "adapter"],
+	"type": "module",
+	"files": ["dist", "src"],
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
+			"require": "./dist/index.cjs"
+		},
+		"./adapters/xmtp": {
+			"types": "./dist/adapters/xmtp/index.d.ts",
+			"import": "./dist/adapters/xmtp/index.js",
+			"require": "./dist/adapters/xmtp/index.cjs"
+		}
+	},
+	"scripts": {
+		"build": "tsup",
+		"build:watch": "tsup --watch",
+		"clean": "rm -rf .turbo dist",
+		"typecheck": "tsc --noEmit",
+		"lint": "biome lint --unsafe",
+		"lint:fix": "biome lint --write --unsafe",
+		"format": "biome format --write",
+		"test": "vitest run",
+		"test:watch": "vitest"
+	},
+	"dependencies": {
+		"@hybrd/types": "workspace:*",
+		"@hybrd/xmtp": "workspace:*",
+		"@hybrid/memory": "workspace:*",
+		"@xmtp/agent-sdk": "0.0.14",
+		"@xmtp/node-bindings": "^1.9.1",
+		"@xmtp/node-sdk": "^4.1.0",
+		"express": "^5.0.0",
+		"hono": "^4.6.12",
+		"picocolors": "^1.1.1",
+		"viem": "^2.23.0"
+	},
+	"devDependencies": {
+		"@config/biome": "workspace:*",
+		"@config/tsconfig": "workspace:*",
+		"@types/express": "^5.0.0",
+		"@types/node": "catalog:stack",
+		"tsup": "^8.5.0",
+		"vitest": "^3.2.4"
+	}
+}

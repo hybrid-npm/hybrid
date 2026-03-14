@@ -1,414 +1,304 @@
-# Enhanced XMTP SDK with Robust Reliability 🚀
+# @hybrd/xmtp
 
-This package provides an enhanced XMTP client with robust connection management, retry logic, and health monitoring capabilities.
+XMTP integration library for Hybrid AI agents. Provides client creation with R2 database persistence, an `XMTPPlugin` for the agent framework, ENS/Basename/address resolvers, and JWT utilities.
 
-## Links
+## Overview
 
-- Main repo: [github.com/ian/hybrid](https://github.com/ian/hybrid)
-- Website & docs: [hybrid.dev](https://hybrid.dev)
+This package handles all XMTP network connectivity for Hybrid agents:
 
-### XMTP Plugin Filters
+- **Client creation** with installation revocation, retry logic, and Cloudflare R2 database sync
+- **XMTPPlugin** integrating XMTP into the `Agent` + `Plugin` framework architecture
+- **Resolvers** for XMTP inbox IDs, ENS names, and Base network Basenames
+- **JWT utilities** for securing XMTP tool API endpoints
+- **Scripts** for wallet registration and installation management
 
-You can scope which messages are processed by providing XMTP Agent SDK filters to the plugin. These are the same built-in filters and combinators documented in the Agent SDK.
+## OpenClaw Compatibility
+
+This package is a Hybrid-native XMTP integration, not derived from the OpenClaw SDK. It wraps `@xmtp/node-sdk` and `@xmtp/agent-sdk` with production-ready reliability features.
+
+## Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                        @hybrd/xmtp                                │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                    │
+│  ┌─────────────────────────────────────────────────────────────┐  │
+│  │                   XMTPPlugin (plugin.ts)                     │  │
+│  │  ┌────────────────────┐   ┌────────────────────────────┐    │  │
+│  │  │  XmtpAgent         │   │  XmtpClient (low-level)    │    │  │
+│  │  │  (event listener)  │   │  (resolvers, direct API)   │    │  │
+│  │  └────────────────────┘   └────────────────────────────┘    │  │
+│  │                                                               │  │
+│  │  Behavior chain: executeBefore → agent.generate → send       │  │
+│  └─────────────────────────────────────────────────────────────┘  │
+│                                                                    │
+│  ┌─────────────────────────────────────────────────────────────┐  │
+│  │                   Client (client.ts)                         │  │
+│  │  createXMTPClient() → retry loop:                           │  │
+│  │  1. Download .db3 from R2 (if XMTP_STORAGE bound)           │  │
+│  │  2. Create Client with codecs                                │  │
+│  │  3. On install limit: revoke old → retry                     │  │
+│  │  4. On identity error: refresh identity → retry              │  │
+│  │  5. Upload .db3 to R2 after connect                          │  │
+│  └─────────────────────────────────────────────────────────────┘  │
+│                                                                    │
+│  ┌─────────────────────────────────────────────────────────────┐  │
+│  │                   Resolvers (resolver/)                       │  │
+│  │  Resolver → AddressResolver, ENSResolver, BasenameResolver   │  │
+│  │              XmtpResolver (inbox IDs + message chains)       │  │
+│  └─────────────────────────────────────────────────────────────┘  │
+│                                                                    │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+## Features
+
+### Client Creation
 
 ```typescript
-import { XMTPPlugin } from "@hybrd/xmtp"
-import { filter } from "hybrid"
+import { createXMTPClient } from "@hybrd/xmtp"
 
-// As a standalone plugin instance
-const xmtp = XMTPPlugin({
-  filters: [
-    filter.isText,
-    filter.not(filter.isFromSelf),
-    filter.startsWith("@agent")
-  ]
+const client = await createXMTPClient(process.env.AGENT_WALLET_KEY!, {
+  persist: true,         // Persist conversations locally
+  maxRetries: 3,         // Installation revocation retry limit
+  storagePath: ".xmtp"  // Custom DB storage path
 })
 ```
 
-When using the Hybrid server `listen()` helper, pass `filters` directly (the helper wires them into `XMTPPlugin` under the hood):
+**Automatic resilience:**
+- If the installation limit is reached, revokes old installations and retries
+- If an identity association error occurs, refreshes identity and retries
+- If `XMTP_STORAGE` (Cloudflare R2) is in `globalThis`, downloads the `.db3` database before connecting and uploads it after — enabling stateless containers to persist XMTP state
+
+Registered content type codecs: `Text`, `Reply`, `Reaction`, `WalletSendCalls`, `TransactionReference`
+
+### User/Signer Creation
 
 ```typescript
-await agent.listen({
-  port: process.env.PORT || "8454",
-  filters: [filter.isText, filter.startsWith("@agent")] 
-})
+import { createUser, createSigner } from "@hybrd/xmtp"
+
+const user = createUser(process.env.AGENT_WALLET_KEY!)
+// { key, account, wallet }  — viem wallet client on Sepolia
+
+const signer = createSigner(process.env.AGENT_WALLET_KEY!)
+// XMTP Signer: { getIdentifier(), signMessage() }
 ```
 
-See the Agent SDK documentation for all available filters and the `withFilter` helper: https://github.com/xmtp/xmtp-js/tree/main/sdks/agent-sdk#3-builtin-filters
+### Connection Manager
 
-## 🆙 Upgraded Features
-
-- **XMTP Node SDK**: Upgraded to `^3.1.0` (latest version)
-- **Enhanced Connection Management**: Automatic reconnection and health monitoring
-- **Robust Retry Logic**: Exponential backoff and configurable retry strategies
-- **Health Monitoring**: Real-time connection health tracking with metrics
-- **Production Ready**: Built for scalable, reliable XMTP integrations
-
-## 🏗️ Architecture Overview
-
-Your system uses a **"Thin Listener + QStash Callbacks"** architecture that already provides excellent reliability:
-
-```
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│ XMTP Network│───▶│Thin Server  │───▶│   QStash    │
-│             │    │(Enhanced)   │    │ (Reliable)  │
-└─────────────┘    └─────────────┘    └─────────────┘
-                                              │
-                                              ▼
-                   ┌─────────────┐    ┌─────────────┐
-                   │   Agent     │◀───│App/Webhook  │
-                   │ Processing  │    │ (Scalable)  │
-                   └─────────────┘    └─────────────┘
-```
-
-### ✅ Built-in Reliability Features
-
-1. **QStash Automatic Retries**: Built-in exponential backoff
-2. **No Persistent Connections**: Eliminates connection drop issues
-3. **Horizontal Scalability**: Multiple instances supported
-4. **Dead Letter Queues**: Failed messages are preserved
-5. **At-least-once Delivery**: Messages guaranteed to be processed
-
-## 🔧 Enhanced Connection Management
-
-### Basic Usage
+For long-running services that need health monitoring and auto-reconnection:
 
 ```typescript
-import { 
-  createSigner, 
-  createXMTPConnectionManager,
-  type XMTPConnectionConfig 
-} from "@hybrd/xmtp"
+import { XMTPConnectionManager } from "@hybrd/xmtp"
 
-// Enhanced connection with reliability features
-const signer = createSigner(process.env.XMTP_WALLET_KEY!)
-
-const connectionConfig: XMTPConnectionConfig = {
-  maxRetries: 5,                    // Connection attempts
-  retryDelayMs: 1000,              // Base retry delay
-  healthCheckIntervalMs: 30000,     // Health check interval
-  connectionTimeoutMs: 15000,       // Connection timeout
-  reconnectOnFailure: true          // Auto-reconnect
-}
-
-const connectionManager = await createXMTPConnectionManager(
-  signer, 
-  connectionConfig
-)
-
-// Get health metrics
-const health = connectionManager.getHealth()
-console.log('Connection Health:', health)
-```
-
-### Advanced Production Usage
-
-```typescript
-import { RobustXMTPService } from "@hybrd/xmtp/scripts/enhanced-connection-example"
-
-const service = new RobustXMTPService()
-await service.start()
-
-// Process messages with automatic retry/reconnection
-await service.processMessage(conversationId, "Hello!")
-
-// Monitor health
-const health = service.getConnectionHealth()
-if (!health?.isConnected) {
-  console.warn("XMTP connection unhealthy")
-}
-```
-
-## 🔄 Connection Health Monitoring
-
-The enhanced client provides real-time health metrics:
-
-```typescript
-interface XMTPConnectionHealth {
-  isConnected: boolean          // Current connection status
-  lastHealthCheck: Date         // Last health check timestamp
-  consecutiveFailures: number   // Failed health checks in a row
-  totalReconnects: number       // Total reconnection attempts
-  avgResponseTime: number       // Average response time in ms
-}
-```
-
-## 🚀 Quick Start
-
-### 1. Install Dependencies
-
-```bash
-pnpm with-env pnpm --filter @hybrd/xmtp install
-```
-
-### 2. Run Enhanced Connection Demo
-
-```bash
-pnpm with-env pnpm --filter @hybrd/xmtp enhanced:demo
-```
-
-### 3. Integrate in Your Code
-
-```typescript
-// Replace basic XMTP client creation
-// OLD:
-const client = await createXMTPClient(signer)
-
-// NEW: With enhanced reliability
-const connectionManager = await createXMTPConnectionManager(signer, {
+const manager = new XMTPConnectionManager(process.env.AGENT_WALLET_KEY!, {
   maxRetries: 5,
+  retryDelayMs: 1000,
   healthCheckIntervalMs: 30000,
+  connectionTimeoutMs: 15000,
   reconnectOnFailure: true
 })
-const client = connectionManager.getClient()
-```
 
-## 📊 Why Your Current Architecture is Already Robust
+const client = await manager.connect()
 
-Your **QStash-based webhook system** already provides superior reliability compared to traditional streaming:
+const health = manager.getHealth()
+// { isConnected, lastHealthCheck, consecutiveFailures, totalReconnects, avgResponseTime }
 
-### Traditional Streaming Issues ❌
-- Connection drops require manual reconnection
-- Memory leaks from long-running connections  
-- Difficult to scale horizontally
-- Complex heartbeat/keepalive management
-- Single point of failure
-
-### Your QStash Architecture Benefits ✅
-- **Automatic Retries**: QStash handles exponential backoff
-- **No Connection Drops**: Stateless webhook calls
-- **Horizontal Scaling**: Multiple app instances supported
-- **Built-in Monitoring**: QStash provides delivery metrics
-- **Dead Letter Queues**: Failed messages preserved
-- **At-least-once Delivery**: Guaranteed message processing
-
-## 🔧 Configuration Options
-
-### Environment Variables
-
-| Variable                 | Description                              | Default                                 |
-| ------------------------ | ---------------------------------------- | --------------------------------------- |
-| `XMTP_STORAGE_PATH`      | Custom path for XMTP database storage    | `.data/xmtp` (relative to project root) |
-| `XMTP_WALLET_KEY`        | Private key for XMTP wallet              | Required                                |
-| `XMTP_DB_ENCRYPTION_KEY` | Encryption key for database              | Required for persistent mode            |
-| `XMTP_ENV`               | XMTP environment (`dev` or `production`) | `dev`                                   |
-| `PROJECT_ROOT`           | Override project root path               | Auto-detected                           |
-
-### Connection Configuration
-
-```typescript
-interface XMTPConnectionConfig {
-  maxRetries?: number              // Default: 5
-  retryDelayMs?: number           // Default: 1000ms
-  healthCheckIntervalMs?: number  // Default: 30000ms  
-  connectionTimeoutMs?: number    // Default: 10000ms
-  reconnectOnFailure?: boolean    // Default: true
-}
-```
-
-### Custom Storage Location
-
-You can specify a custom storage location for XMTP database files:
-
-```bash
-# Absolute path
-export XMTP_STORAGE_PATH=/custom/path/to/xmtp/storage
-
-# Relative path (relative to current working directory)
-export XMTP_STORAGE_PATH=./custom/xmtp/storage
-
-# Use with pnpm with-env
-pnpm with-env your-xmtp-command
-```
-
-### Testing Custom Storage
-
-Run the custom storage example to test your configuration:
-
-```bash
-# Test with default storage location
-pnpm with-env pnpm --filter @hybrd/xmtp custom:storage
-
-# Test with custom storage location
-export XMTP_STORAGE_PATH=/tmp/my-custom-xmtp-storage
-pnpm with-env pnpm --filter @hybrd/xmtp custom:storage
-
-# Test with relative path
-export XMTP_STORAGE_PATH=./my-xmtp-data
-pnpm with-env pnpm --filter @hybrd/xmtp custom:storage
-```
-
-## 🛠️ Available Scripts
-
-| Script             | Command                                      | Description                       |
-| ------------------ | -------------------------------------------- | --------------------------------- |
-| `keys`             | `pnpm --filter @hybrd/xmtp keys`             | Generate new XMTP wallet keys     |
-| `register`         | `pnpm --filter @hybrd/xmtp register`         | Register wallet on XMTP network   |
-| `revoke`           | `pnpm --filter @hybrd/xmtp revoke`           | Revoke old XMTP installations     |
-| `enhanced:demo`    | `pnpm --filter @hybrd/xmtp enhanced:demo`    | Demo enhanced connection features |
-| `test:messages`    | `pnpm --filter @hybrd/xmtp test:messages`    | Test message reception            |
-| `refresh:identity` | `pnpm --filter @hybrd/xmtp refresh:identity` | Refresh XMTP identity             |
-| `custom:storage`   | `pnpm --filter @hybrd/xmtp custom:storage`   | Test custom storage configuration |
-
-> **Note**: Always use `pnpm with-env` to ensure environment variables are loaded:
-> ```bash
-> pnpm with-env pnpm --filter @hybrd/xmtp <script-name>
-> ```
-
-## 🎯 Best Practices
-
-### 1. Use Connection Manager for Long-Running Services
-```typescript
-// For services that need persistent XMTP connections
-const manager = await createXMTPConnectionManager(signer, config)
-```
-
-### 2. Leverage Your Existing QStash Architecture  
-```typescript
-// For message processing, your webhook system is ideal
-// No changes needed - it's already robust!
-```
-
-### 3. Monitor Connection Health
-```typescript
-setInterval(() => {
-  const health = connectionManager.getHealth()
-  if (health.consecutiveFailures > 3) {
-    console.warn("XMTP connection degraded")
-  }
-}, 60000)
-```
-
-### 4. Use Environment Variables
-```typescript
-// Always use the project's environment wrapper
-pnpm with-env [your-command]
-```
-
-## 🧪 Testing
-
-Run the enhanced connection demo to see health monitoring in action:
-
-```bash
-# Start the demo (runs for 2 minutes showing health checks)
-pnpm with-env pnpm --filter @hybrd/xmtp enhanced:demo
-```
-
-## 🔍 Debugging
-
-Enable debug logging:
-
-```bash
-DEBUG=xmtp-sdk* pnpm with-env pnpm --filter @hybrd/xmtp enhanced:demo
-```
-
-## 📈 Metrics & Monitoring
-
-The enhanced client provides detailed metrics:
-
-- **Connection Status**: Real-time connection state
-- **Response Times**: Average XMTP response latency  
-- **Failure Counts**: Track connection reliability
-- **Reconnection Events**: Monitor stability over time
-
-## 🚨 Migration Guide
-
-### From Basic XMTP Client
-
-```typescript
-// Before
-const client = await createXMTPClient(signer)
-
-// After  
-const manager = await createXMTPConnectionManager(signer)
-const client = manager.getClient()
-
-// Remember to cleanup
 await manager.disconnect()
 ```
 
-### Keep Your Webhook Architecture
+### XMTPPlugin
 
-**No changes needed!** Your QStash webhook system is already providing:
-- ✅ Automatic retries with exponential backoff
-- ✅ Reliable message delivery guarantees  
-- ✅ Horizontal scalability
-- ✅ Built-in monitoring and alerting
-- ✅ Dead letter queue handling
-
-## 📚 Additional Resources
-
-- [XMTP Node SDK Documentation](https://xmtp.org/docs/build/get-started/overview)
-- [QStash Documentation](https://upstash.com/docs/qstash)
-- [Project Architecture](../../ARCHITECTURE.md)
-
----
-
-Your system is already built with production-grade reliability. The enhanced XMTP client provides additional connection management features for edge cases, but your webhook-based architecture is the recommended approach for scalable XMTP integrations! 🎉 
-
-# XMTP Package
-
-This package provides XMTP client functionality and various resolvers for address, ENS, and basename resolution.
-
-## Resolvers
-
-### Master Resolver
-
-The `Resolver` class provides a unified interface for all resolution types:
+Integrates XMTP into the agent framework's `Plugin` architecture:
 
 ```typescript
-import { Resolver } from '@hybrd/xmtp/resolver'
-import { createPublicClient, http } from 'viem'
-import { mainnet, base } from 'viem/chains'
+import { XMTPPlugin } from "@hybrd/xmtp"
 
-// Create clients
-const mainnetClient = createPublicClient({
-  chain: mainnet,
-  transport: http()
+// Applied via agent.use() or agent.listen()
+const plugin = XMTPPlugin()
+
+await agent.listen({
+  port: "8454",
+  plugins: [plugin],
+  behaviors: [myBehavior()]
 })
-
-const baseClient = createPublicClient({
-  chain: base,
-  transport: http()
-})
-
-// Initialize the master resolver
-const resolver = new Resolver({
-  xmtpClient: yourXmtpClient,
-  mainnetClient,
-  baseClient,
-  maxCacheSize: 1000,
-  cacheTtl: 3600000 // 1 hour
-})
-
-// Universal name resolution
-const address = await resolver.resolveName('vitalik.eth')
-const basenameAddress = await resolver.resolveName('myname.base.eth')
-
-// Universal reverse resolution  
-const name = await resolver.resolveAddressToName('0x...')
-
-// Get complete profile (ENS + basename data)
-const profile = await resolver.getCompleteProfile('0x...')
-
-// Individual resolver methods are also available
-const ensName = await resolver.resolveENSName('vitalik.eth')
-const basename = await resolver.getBasename('0x...')
-const message = await resolver.findMessage('messageId')
 ```
 
-### Individual Resolvers
+For each incoming message (text, reply, reaction), the plugin:
+1. Builds conversation history (up to 20 messages)
+2. Creates `AgentRuntime` with conversation, message, and xmtpClient
+3. Runs `behaviors.executeBefore(context)` — stops chain if `context.stopped = true`
+4. Calls `agent.generate(messages, { runtime })`
+5. Sets `context.response = reply`
+6. Runs `behaviors.executeAfter(context)` — stops chain if `context.stopped = true`
+7. Sends reply (plain text or threaded via `ContentTypeReply`)
 
-You can also use individual resolvers directly:
+### Resolver
 
-- `AddressResolver` - XMTP address resolution
-- `XmtpResolver` - XMTP message and address resolution with advanced features
-- `ENSResolver` - ENS name resolution
-- `BasenameResolver` - Basename resolution for Base network
+Universal name and address resolution across XMTP, ENS, and Basenames:
 
 ```typescript
-import { ENSResolver, BasenameResolver } from '@hybrd/xmtp/resolver'
+import { Resolver } from "@hybrd/xmtp"
+import { createPublicClient, http } from "viem"
+import { mainnet, base } from "viem/chains"
+
+const resolver = new Resolver({
+  xmtpClient,
+  mainnetClient: createPublicClient({ chain: mainnet, transport: http() }),
+  baseClient: createPublicClient({ chain: base, transport: http() }),
+  maxCacheSize: 1000,
+  cacheTtl: 3_600_000   // 1 hour
+})
+
+// Universal resolution (tries ENS then Basename)
+const address = await resolver.resolveName("vitalik.eth")
+const address2 = await resolver.resolveName("myname.base.eth")
+
+// Reverse resolution (tries Basename then ENS)
+const name = await resolver.resolveAddressToName("0x...")
+
+// Complete profile
+const profile = await resolver.getCompleteProfile("0x...")
+// { address, ensName, basename, ensProfile, basenameProfile }
+
+// XMTP-specific
+const address3 = await resolver.resolveAddress(inboxId, conversationId)
+const sender = await resolver.createXmtpSender(inboxId, conversationId)
+// { address, inboxId, name, basename? }
+
+// ENS
+const ensProfile = await resolver.getENSProfile("vitalik.eth")
+// { ensName, address, avatar, description, twitter, github, url }
+
+// Basenames (Base network)
+const basename = await resolver.getBasename("0x...")
+const basenameProfile = await resolver.resolveBasenameProfile("0x...")
+
+// Message resolution
+const message = await resolver.findMessage(messageId)
+const rootMessage = await resolver.findRootMessage(messageId)   // Traverses reply chain
+```
+
+#### Individual Resolvers
+
+```typescript
+import { AddressResolver, ENSResolver, BasenameResolver, XmtpResolver } from "@hybrd/xmtp/resolver"
 
 const ensResolver = new ENSResolver({ mainnetClient })
 const basenameResolver = new BasenameResolver({ publicClient: baseClient })
-```  
+const addressResolver = new AddressResolver({ xmtpClient })
+const xmtpResolver = new XmtpResolver({ xmtpClient })
+```
+
+### JWT Utilities
+
+Secure XMTP tool API endpoints with short-lived JWTs:
+
+```typescript
+import { generateXMTPToolsToken, validateXMTPToolsToken, getValidatedPayload } from "@hybrd/xmtp"
+
+// Generate a 5-minute token (signed with derived secret)
+const token = generateXMTPToolsToken({
+  action: "send",
+  conversationId: "conv-123",
+  content: "Hello!"
+})
+
+// Validate (returns null if invalid or expired)
+const payload = validateXMTPToolsToken(token)
+
+// Extract from Hono request context (Authorization: Bearer or ?token=)
+const payload = getValidatedPayload(honoContext)
+```
+
+`XMTP_API_KEY` env var is also accepted as a static alternative to JWT.
+
+### Mention Extraction
+
+```typescript
+import { extractSubjects } from "@hybrd/xmtp"
+
+// Extracts @basename.eth and @name.base.eth mentions and resolves to addresses
+const subjects = await extractSubjects(messageContent, basenameResolver, ensResolver)
+// { "vitalik": "0x...", "myname": "0x..." }
+```
+
+## Scripts
+
+```bash
+# Register wallet on XMTP network
+hybrid register
+
+# Revoke specific inbox installations
+hybrid revoke <inboxId>
+
+# Auto-detect inbox ID and revoke all installations
+hybrid revoke-all
+```
+
+Or run directly:
+
+```bash
+pnpm --filter @hybrd/xmtp register
+pnpm --filter @hybrd/xmtp revoke
+pnpm --filter @hybrd/xmtp revoke-all
+```
+
+## Re-exports
+
+This package re-exports the complete `@xmtp/node-sdk` surface and all content type codecs:
+
+```typescript
+import {
+  Client,
+  Signer,
+  type XmtpEnv,
+  // Content types:
+  ContentTypeReaction,
+  ContentTypeReply,
+  ContentTypeGroupUpdated,
+  ContentTypeTransactionReference,
+  ContentTypeWalletSendCalls,
+  ContentTypeText
+} from "@hybrd/xmtp"
+```
+
+## Database Path Resolution
+
+```typescript
+import { getDbPath } from "@hybrd/xmtp"
+
+const dbPath = await getDbPath("my-agent", "/custom/storage")
+// Priority: XMTP_STORAGE_PATH env → storagePath param → .hybrid/.xmtp/
+// If XMTP_STORAGE (R2) is in globalThis, downloads existing DB first
+```
+
+## Encryption Key Generation
+
+```typescript
+import { generateEncryptionKeyHex } from "@hybrd/xmtp"
+
+const key = generateEncryptionKeyHex()  // 32-byte random hex string
+```
+
+## Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `AGENT_WALLET_KEY` | Private key for the agent wallet (required) |
+| `XMTP_ENV` | XMTP environment: `dev` or `production` (default: `dev`) |
+| `XMTP_STORAGE_PATH` | Custom path for XMTP database files |
+| `XMTP_API_KEY` | Static API key for XMTP tool endpoints (alternative to JWT) |
+| `XMTP_DEBUG` | Enable debug logging |
+
+## Testing
+
+```bash
+cd packages/xmtp
+pnpm test
+```
+
+## License
+
+MIT

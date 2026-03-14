@@ -54,11 +54,11 @@ export async function revokeOldInstallations(signer: Signer, inboxId?: string) {
 
 // CLI script to revoke installations
 async function main() {
-	const { XMTP_WALLET_KEY } = process.env
+	const { AGENT_WALLET_KEY } = process.env
 	const inboxId = process.argv[2]
 
-	if (!XMTP_WALLET_KEY) {
-		console.error("❌ XMTP_WALLET_KEY is required")
+	if (!AGENT_WALLET_KEY) {
+		console.error("❌ AGENT_WALLET_KEY is required")
 		process.exit(1)
 	}
 
@@ -68,7 +68,7 @@ async function main() {
 		process.exit(1)
 	}
 
-	const signer = createSigner(XMTP_WALLET_KEY)
+	const signer = createSigner(AGENT_WALLET_KEY)
 	const identifier = await signer.getIdentifier()
 	const address = identifier.identifier
 
@@ -86,10 +86,14 @@ async function main() {
 	}
 }
 
-// Run if called directly
-if (import.meta.url === `file://${process.argv[1]}`) {
-	main().catch((error) => {
-		console.error("💥 Fatal error:", error)
-		process.exit(1)
-	})
+// Run if called directly (ESM only)
+try {
+	if (import.meta.url === `file://${process.argv[1]}`) {
+		main().catch((error) => {
+			console.error("💥 Fatal error:", error)
+			process.exit(1)
+		})
+	}
+} catch {
+	// import.meta not available in CJS - script not run directly
 }

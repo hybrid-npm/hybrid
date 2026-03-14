@@ -49,3 +49,34 @@ export type {
 	BehaviorObject,
 	BehaviorRegistry
 } from "./behavior"
+
+// Channel types
+export type {
+	ChannelId,
+	CronDeliveryMode,
+	CronDelivery,
+	TriggerRequest,
+	TriggerResponse,
+	ChannelAdapter,
+	ChannelDispatcher
+} from "./channel"
+
+// Schedule types
+export type {
+	CronSchedule,
+	CronRunStatus,
+	CronDeliveryStatus,
+	CronJobState,
+	SessionTarget,
+	WakeMode,
+	CronPayload,
+	CronJob,
+	CronJobCreate,
+	CronJobPatch,
+	CronRun,
+	SchedulerConfig,
+	SchedulerStatus,
+	ListPageOptions,
+	PaginatedResult,
+	SchedulerEvent
+} from "./schedule"

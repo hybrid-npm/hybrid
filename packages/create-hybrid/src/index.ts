@@ -1,513 +1,851 @@
-import { Command } from "commander"
-import degit from "degit"
-import { readFile, readdir, writeFile } from "node:fs/promises"
-import { join } from "node:path"
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
 import prompts from "prompts"
 
-interface Example {
-	name: string
-	description: string
-	path: string
-	available: boolean
-	message?: string
-}
+const __dirname = dirname(fileURLToPath(import.meta.url))
 
-// Default to main branch, but allow override via REPO env var for CI/testing
-const DEFAULT_REPO = "ian/hybrid"
-const REPO = process.env.REPO || DEFAULT_REPO
+const TEMPLATES_DIR = join(__dirname, "..", "templates")
 
-const EXAMPLES: Example[] = [
-	{
-		name: "basic",
-		description: "Basic XMTP agent with message filtering and AI responses",
-		path: "basic",
-		available: true
-	},
-	{
-		name: "miniapp",
-		description:
-			"Hybrid agent with miniapp integration for onchain interactions",
-		path: "miniapp",
-		available: true
-	},
-	{
-		name: "with-ponder",
-		description: "Agent with Ponder integration for indexing blockchain data",
-		path: "with-ponder",
-		available: false,
-		message: "Coming soon"
-	},
-	{
-		name: "with-foundry",
-		description:
-			"Agent with Foundry integration for smart contract development",
-		path: "with-foundry",
-		available: false,
-		message: "Coming soon"
+function parseArgs() {
+	const args = process.argv.slice(2)
+	const result: Record<string, string> = {}
+
+	for (let i = 0; i < args.length; i++) {
+		const arg = args[i]
+		if (arg?.startsWith("--")) {
+			const key = arg.slice(2)
+			const value = args[i + 1]
+			if (value && !value.startsWith("--")) {
+				result[key] = value
+				i++
+			} else {
+				result[key] = "true"
+			}
+		} else if (!result.name && arg) {
+			result.name = arg
+		}
 	}
-]
 
-function replaceTemplateVariables(
-	content: string,
-	variables: Record<string, string>
-): string {
-	return content.replace(
-		/\{\{(\w+)\}\}/g,
-		(match, key) => variables[key] || match
-	)
+	return result
 }
 
-async function updateTemplateFiles(
-	projectDir: string,
-	projectName: string
-): Promise<void> {
-	const variables = { projectName }
+async function main() {
+	console.log("\n  🤖 Create Hybrid Agent\n")
 
-	const filesToUpdate = [
-		join(projectDir, "package.json"),
-		join(projectDir, "README.md"),
-		join(projectDir, "src", "agent.ts")
+	const cliArgs = parseArgs()
+
+	const response = await prompts([
+		{
+			type: cliArgs.name ? null : "text",
+			name: "name",
+			message: "Project name",
+			initial: "my-agent"
+		},
+		{
+			type: cliArgs.env ? null : "select",
+			name: "env",
+			message: "XMTP environment",
+			choices: [
+				{ title: "production", value: "production" },
+				{ title: "dev", value: "dev" }
+			],
+			initial: 0
+		},
+		{
+			type: cliArgs["agent-name"] ? null : "text",
+			name: "agentName",
+			message: "Agent display name",
+			initial: "Hybrid Agent"
+		}
+	])
+
+	const name = cliArgs.name || response.name
+	const env = cliArgs.env || response.env
+	const agentName = cliArgs["agent-name"] || response.agentName
+
+	if (!name) {
+		console.log("\n  Cancelled.\n")
+		process.exit(0)
+	}
+
+	const projectDir = join(process.cwd(), name)
+
+	if (existsSync(projectDir)) {
+		console.log(`\n  Error: Directory "${name}" already exists.\n`)
+		process.exit(1)
+	}
+
+	mkdirSync(projectDir, { recursive: true })
+	mkdirSync(join(projectDir, "src", "gateway"), { recursive: true })
+	mkdirSync(join(projectDir, "src", "server"), { recursive: true })
+	mkdirSync(join(projectDir, "users"), { recursive: true })
+
+	const templateData = {
+		name,
+		agentName: agentName || "Hybrid Agent",
+		env: env || "production"
+	}
+
+	writeFileSync(join(projectDir, "package.json"), packageJson(templateData))
+	writeFileSync(join(projectDir, "tsconfig.json"), tsconfigJson())
+	writeFileSync(join(projectDir, "wrangler.jsonc"), wranglerJsonc(templateData))
+	writeFileSync(join(projectDir, "Dockerfile"), dockerfile())
+	writeFileSync(join(projectDir, "build.mjs"), buildMjs())
+	writeFileSync(join(projectDir, "start.sh"), startSh())
+	writeFileSync(join(projectDir, "src", "gateway", "index.ts"), gatewayIndex())
+	writeFileSync(
+		join(projectDir, "src", "server", "index.ts"),
+		serverIndex(templateData)
+	)
+	writeFileSync(join(projectDir, "src", "dev-gateway.ts"), devGateway())
+
+	const agentTemplatesDir = join(
+		__dirname,
+		"..",
+		"..",
+		"cli",
+		"templates",
+		"agent"
+	)
+
+	const templates = [
+		"AGENTS.md",
+		"SOUL.md",
+		"IDENTITY.md",
+		"USER.md",
+		"TOOLS.md",
+		"BOOTSTRAP.md",
+		"HEARTBEAT.md"
 	]
 
-	for (const filePath of filesToUpdate) {
-		try {
-			let content = await readFile(filePath, "utf-8")
+	for (const template of templates) {
+		const templatePath = join(agentTemplatesDir, template)
+		if (existsSync(templatePath)) {
+			const content = readFileSync(templatePath, "utf-8")
+			writeFileSync(join(projectDir, template), content)
+		}
+	}
 
-			// First try template variable replacement
-			content = replaceTemplateVariables(content, variables)
+	const aclContent = `## Owners
 
-			// Special handling for package.json if template variables weren't found
-			if (filePath.endsWith("package.json")) {
-				try {
-					const packageJson = JSON.parse(content)
-					let updated = false
+<!-- Add your wallet address here to become the owner -->
+<!-- Example: 0xabc123... -->
+- YOUR_WALLET_ADDRESS_HERE
+`
+	writeFileSync(join(projectDir, "ACL.md"), aclContent)
 
-					// If name is still a generic name, replace it
-					if (
-						packageJson.name === "agent" ||
-						packageJson.name === "hybrid-example-basic-agent"
-					) {
-						packageJson.name = projectName
-						updated = true
-					}
+	writeFileSync(join(projectDir, "SOUL.md"), soulMd(templateData))
+	writeFileSync(join(projectDir, ".env.example"), envExample(templateData))
+	writeFileSync(join(projectDir, ".gitignore"), gitignore())
 
-					// Ensure required scripts exist
-					if (!packageJson.scripts) {
-						packageJson.scripts = {}
-					}
+	console.log(`\n  ✓ Created ${name}\n`)
+	console.log("  Next steps:\n")
+	console.log(`    cd ${name}`)
+	console.log("    pnpm install")
+	console.log("    pnpm dev\n")
+	console.log("  Deploy:\n")
+	console.log("    wrangler secret put ANTHROPIC_AUTH_TOKEN")
+	console.log("    pnpm deploy\n")
+}
 
-					// Add missing scripts and update old scripts to use hybrid CLI
-					const requiredScripts = {
-						clean: "hybrid clean",
-						dev: "hybrid dev",
-						build: "hybrid build",
-						start: "hybrid start",
-						keys: "hybrid keys --write",
-						test: "vitest",
-						"test:watch": "vitest --watch",
-						"test:coverage": "vitest --coverage",
-						lint: "biome lint --write",
-						"lint:check": "biome lint",
-						format: "biome format --write",
-						"format:check": "biome format --check",
-						typecheck: "tsc --noEmit"
-					}
+function packageJson(data: { name: string }) {
+	return JSON.stringify(
+		{
+			name: data.name,
+			private: true,
+			type: "module",
+			scripts: {
+				build: "node build.mjs",
+				dev: "tsx src/server/index.ts & tsx src/dev-gateway.ts & wait",
+				"dev:container": "tsx src/server/index.ts",
+				"dev:gateway": "tsx src/dev-gateway.ts",
+				deploy: "wrangler deploy",
+				typecheck: "tsc --noEmit"
+			},
+			dependencies: {
+				"@anthropic-ai/claude-agent-sdk": "^0.2.38",
+				"@cloudflare/sandbox": "^0.7.1",
+				ai: "^6.0.0",
+				hono: "^4.10.8"
+			},
+			devDependencies: {
+				"@cloudflare/workers-types": "^4.20250214.0",
+				"@types/node": "^22.8.6",
+				"bun-types": "^1.2.0",
+				tsx: "^4.19.3",
+				typescript: "^5.9.2",
+				wrangler: "^4.0.0"
+			}
+		},
+		null,
+		2
+	)
+}
 
-					for (const [scriptName, scriptCommand] of Object.entries(
-						requiredScripts
-					)) {
-						// Always update scripts to use the correct hybrid CLI commands
-						packageJson.scripts[scriptName] = scriptCommand
-						updated = true
-					}
+function tsconfigJson() {
+	return JSON.stringify(
+		{
+			compilerOptions: {
+				lib: ["ES2022"],
+				types: ["@cloudflare/workers-types", "node", "bun-types"],
+				module: "ESNext",
+				moduleResolution: "bundler",
+				noEmit: true,
+				strict: true,
+				esModuleInterop: true,
+				skipLibCheck: true
+			},
+			include: ["src/**/*"],
+			exclude: ["node_modules", "dist"]
+		},
+		null,
+		2
+	)
+}
 
-					// Update dependencies to use independent packages
-					if (packageJson.dependencies) {
-						if (packageJson.dependencies.hybrid === "workspace:*") {
-							packageJson.dependencies.hybrid = "latest"
-							updated = true
-						}
-						if (
-							packageJson.dependencies["@openrouter/ai-sdk-provider"] ===
-							"catalog:ai"
-						) {
-							packageJson.dependencies["@openrouter/ai-sdk-provider"] = "^1.1.2"
-							updated = true
-						}
-						if (packageJson.dependencies.zod === "catalog:stack") {
-							packageJson.dependencies.zod = "^3.23.8"
-							updated = true
-						}
-						// Remove workspace dependencies
-						if (packageJson.dependencies["@hybrd/xmtp"]) {
-							packageJson.dependencies["@hybrd/xmtp"] = undefined
-							updated = true
-						}
-					}
-
-					// Update devDependencies to use independent packages
-					if (packageJson.devDependencies) {
-						const independentDevDeps = {
-							"@biomejs/biome": "^1.9.4",
-							"@types/node": "^22.0.0",
-							"@hybrd/cli": "latest",
-							tsx: "^4.20.5",
-							typescript: "^5.8.3",
-							vitest: "^3.2.4"
-						}
-
-						// Remove workspace dependencies
-						packageJson.devDependencies["@config/biome"] = undefined
-						packageJson.devDependencies["@config/tsconfig"] = undefined
-
-						// Add independent dependencies
-						for (const [depName, depVersion] of Object.entries(
-							independentDevDeps
-						)) {
-							packageJson.devDependencies[depName] = depVersion
-						}
-						updated = true
-					}
-
-					if (updated) {
-						content = `${JSON.stringify(packageJson, null, "\t")}\n`
-					}
-				} catch (parseError) {
-					console.log("⚠️  Could not parse package.json for name update")
+function wranglerJsonc(data: { name: string }) {
+	return JSON.stringify(
+		{
+			name: data.name,
+			main: "src/gateway/index.ts",
+			compatibility_date: "2025-05-06",
+			compatibility_flags: ["nodejs_compat"],
+			containers: [
+				{
+					class_name: "Sandbox",
+					image: "./Dockerfile",
+					instance_type: "standard-1",
+					max_instances: 50
 				}
+			],
+			durable_objects: {
+				bindings: [{ class_name: "Sandbox", name: "Sandbox" }]
+			},
+			migrations: [{ tag: "v1", new_sqlite_classes: ["Sandbox"] }],
+			vars: {
+				AGENT_PORT: "8454"
 			}
+		},
+		null,
+		2
+	)
+}
 
-			// Special handling for README.md if template variables weren't found
-			if (filePath.endsWith("README.md")) {
-				// Replace common README title patterns with project name
-				content = content.replace(/^# .*$/m, `# ${projectName}`)
-			}
+function dockerfile() {
+	return `FROM docker.io/cloudflare/sandbox:0.7.0
 
-			await writeFile(filePath, content, "utf-8")
-		} catch (error) {
-			console.log(
-				`⚠️  Could not update ${filePath.split("/").pop()}: file not found or error occurred`
-			)
-		}
-	}
+WORKDIR /app
 
-	// Ensure .env file exists - create it if missing
-	const envPath = join(projectDir, ".env")
-	try {
-		await readFile(envPath, "utf-8")
-	} catch {
-		// .env file doesn't exist, create it
-		const envContent = `# Required
-OPENROUTER_API_KEY=your_openrouter_api_key_here
-XMTP_WALLET_KEY=your_wallet_key_here
-XMTP_DB_ENCRYPTION_KEY=your_encryption_key_here
+COPY package.json ./
+RUN npm install --omit=dev --legacy-peer-deps
 
-# Optional
-XMTP_ENV=dev
-PORT=8454`
-		await writeFile(envPath, envContent, "utf-8")
-		console.log("📄 Created .env template file")
-	}
+COPY dist/server/ ./dist/server/
+COPY AGENTS.md SOUL.md IDENTITY.md USER.md TOOLS.md BOOT.md BOOTSTRAP.md HEARTBEAT.md ./
+COPY start.sh ./
+RUN chmod +x start.sh
 
-	// Ensure vitest.config.ts exists - create it if missing
-	const vitestConfigPath = join(projectDir, "vitest.config.ts")
-	try {
-		await readFile(vitestConfigPath, "utf-8")
-	} catch {
-		// vitest.config.ts doesn't exist, create it
-		const vitestConfigContent = `import { defineConfig } from "vitest/config"
+ENV AGENT_PORT=8454
+EXPOSE 8454
+`
+}
 
-export default defineConfig({
-	test: {
-		environment: "node",
-		globals: true,
-		setupFiles: []
-	},
-	resolve: {
-		alias: {
-			"@": "./src"
-		}
-	}
-})`
-		await writeFile(vitestConfigPath, vitestConfigContent, "utf-8")
-		console.log("📄 Created vitest.config.ts file")
-	}
+function startSh() {
+	return `#!/bin/bash
+exec node dist/server/index.js
+`
+}
 
-	// Ensure src/agent.test.ts exists - create it if missing
-	const agentTestPath = join(projectDir, "src", "agent.test.ts")
-	try {
-		await readFile(agentTestPath, "utf-8")
-	} catch {
-		// agent.test.ts doesn't exist, create it
-		const agentTestContent = `import { describe, expect, it } from "vitest"
+function gatewayIndex() {
+	return `import { Sandbox } from "@cloudflare/sandbox"
+import type { UIMessage } from "ai"
+import { Hono } from "hono"
+import { cors } from "hono/cors"
 
-// Example test file - replace with actual tests for your agent
+export interface GatewayEnv {
+	Sandbox: DurableObjectNamespace
+	ANTHROPIC_API_KEY?: string
+	ANTHROPIC_BASE_URL?: string
+	ANTHROPIC_AUTH_TOKEN?: string
+}
 
-describe("Agent", () => {
-	it("should be defined", () => {
-		// This is a placeholder test
-		// Add real tests for your agent functionality
-		expect(true).toBe(true)
+type SandboxStub = InstanceType<typeof Sandbox>
+
+const app = new Hono<{ Bindings: GatewayEnv }>()
+
+app.use("*", cors())
+
+app.get("/health", (c) => {
+	return c.json({
+		status: "healthy",
+		timestamp: new Date().toISOString()
 	})
-})`
-		await writeFile(agentTestPath, agentTestContent, "utf-8")
-		console.log("📄 Created src/agent.test.ts file")
-	}
+})
+
+function extractTextFromParts(parts: UIMessage["parts"]): string {
+	return parts
+		.filter((p): p is { type: "text"; text: string } => p.type === "text")
+		.map((p) => p.text)
+		.join("")
 }
 
-async function checkDirectoryEmpty(dirPath: string): Promise<boolean> {
+app.post("/api/chat", async (c) => {
+	const env = c.env
+	const body = await c.req.json<{
+		messages: UIMessage[]
+		chatId: string
+		teamId?: string
+		systemPrompt?: string
+	}>()
+
+	const sandbox = getSandbox(env, body.teamId || "default")
+	await ensureAgentServer(sandbox, env)
+
+	const messages = body.messages.map((m) => ({
+		id: m.id,
+		role: m.role,
+		content: extractTextFromParts(m.parts)
+	}))
+
+	const response = await sandbox.containerFetch(
+		"http://container/api/chat",
+		{
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				messages,
+				chatId: body.chatId,
+				teamId: body.teamId,
+				systemPrompt: body.systemPrompt
+			})
+		},
+		8454
+	)
+
+	return new Response(response.body, {
+		headers: {
+			"Content-Type": "text/event-stream",
+			"Cache-Control": "no-cache",
+			Connection: "keep-alive"
+		}
+	})
+})
+
+function getSandbox(env: GatewayEnv, teamId: string): SandboxStub {
+	const id = env.Sandbox.idFromName(teamId)
+	return env.Sandbox.get(id) as unknown as SandboxStub
+}
+
+async function ensureAgentServer(sandbox: SandboxStub, env: GatewayEnv) {
+	const AGENT_PORT = 8454
+
 	try {
-		const files = await readdir(dirPath)
-		const significantFiles = files.filter(
-			(file) =>
-				!file.startsWith(".") &&
-				file !== "node_modules" &&
-				file !== "package-lock.json" &&
-				file !== "yarn.lock" &&
-				file !== "pnpm-lock.yaml"
+		const health = await sandbox.containerFetch(
+			"http://container/health",
+			{},
+			AGENT_PORT
 		)
-		return significantFiles.length === 0
+		if (health.ok) return
 	} catch {
-		// Directory doesn't exist, so it's "empty"
-		return true
+		// Server not running, start it
+	}
+
+	const processes = await sandbox.listProcesses()
+	for (const p of processes) {
+		if (p.command?.includes("node")) {
+			await sandbox.killProcess(p.id)
+		}
+	}
+
+	await sandbox.startProcess("bash /app/start.sh", {
+		env: {
+			ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY ?? "",
+			ANTHROPIC_BASE_URL: env.ANTHROPIC_BASE_URL ?? "",
+			ANTHROPIC_AUTH_TOKEN: env.ANTHROPIC_AUTH_TOKEN ?? "",
+			AGENT_PORT: String(AGENT_PORT)
+		},
+		cwd: "/app"
+	})
+
+	for (let i = 0; i < 30; i++) {
+		try {
+			const health = await sandbox.containerFetch(
+				"http://container/health",
+				{},
+				AGENT_PORT
+			)
+			if (health.ok) return
+		} catch {
+			await new Promise((r) => setTimeout(r, 1000))
+		}
+	}
+
+	throw new Error("Agent server failed to start")
+}
+
+export default app
+`
+}
+
+function serverIndex(data: { agentName: string }) {
+	return `import { readFileSync } from "node:fs"
+import { createRequire } from "node:module"
+import { dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
+import { type Options, query } from "@anthropic-ai/claude-agent-sdk"
+import { Hono } from "hono"
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const require = createRequire(import.meta.url)
+
+const AGENT_PORT = Number.parseInt(process.env.AGENT_PORT || "8454")
+const AGENT_ENDPOINT = "/api/chat"
+const HEALTH_CHECK_PATH = "/health"
+
+function resolveClaudeCodeExecutable(): string {
+	if (process.env.CLAUDE_CODE_EXECUTABLE_PATH)
+		return process.env.CLAUDE_CODE_EXECUTABLE_PATH
+	const sdkDir = dirname(
+		require.resolve("@anthropic-ai/claude-agent-sdk/cli.js")
+	)
+	return join(sdkDir, "cli.js")
+}
+
+function resolveProjectRoot(): string {
+	if (process.env.AGENT_PROJECT_ROOT) return process.env.AGENT_PROJECT_ROOT
+	let dir = __dirname
+	for (let i = 0; i < 5; i++) {
+		try {
+			readFileSync(join(dir, "AGENTS.md"), "utf-8")
+			return dir
+		} catch {
+			dir = dirname(dir)
+		}
+	}
+	return join(__dirname, "..", "..")
+}
+
+const PROJECT_ROOT = resolveProjectRoot()
+
+function loadMarkdownFile(relativePath: string): string {
+	try {
+		return readFileSync(join(PROJECT_ROOT, relativePath), "utf-8").trim()
+	} catch {
+		return ""
 	}
 }
 
-async function createProject(
-	projectName: string,
-	exampleName?: string
-): Promise<void> {
-	console.log("🚀 Creating a new Hybrid project...")
+function loadUserMarkdown(userId?: string): string {
+	if (!userId) return loadMarkdownFile("USER.md")
+	
+	const userPath = join("users", userId, "USER.md")
+	const userFile = loadMarkdownFile(userPath)
+	
+	return userFile || loadMarkdownFile("USER.md")
+}
 
-	// Validate project name
-	if (!projectName || projectName.trim() === "") {
-		console.error("❌ Project name is required")
-		process.exit(1)
+const IDENTITY_MD = loadMarkdownFile("IDENTITY.md")
+const SOUL_MD = loadMarkdownFile("SOUL.md")
+const AGENTS_MD = loadMarkdownFile("AGENTS.md")
+const TOOLS_MD = loadMarkdownFile("TOOLS.md")
+const BOOT_MD = loadMarkdownFile("BOOT.md")
+const BOOTSTRAP_MD = loadMarkdownFile("BOOTSTRAP.md")
+const HEARTBEAT_MD = loadMarkdownFile("HEARTBEAT.md")
+
+interface ContainerRequest {
+	messages: Array<{
+		id: string
+		role: "system" | "user" | "assistant"
+		content: string
+	}>
+	chatId: string
+	teamId?: string
+	userId?: string
+	systemPrompt?: string
+}
+
+function encodeSSE(data: string): Uint8Array {
+	return new TextEncoder().encode(\`data: \${data}\\n\\n\`)
+}
+
+function encodeSSEJson(data: unknown): Uint8Array {
+	return encodeSSE(JSON.stringify(data))
+}
+
+function encodeDone(): Uint8Array {
+	return new TextEncoder().encode("data: [DONE]\\n\\n")
+}
+
+const HISTORY_TAIL_SIZE = 20
+
+function buildPromptWithHistory(
+	messages: ContainerRequest["messages"]
+): string {
+	if (messages.length <= 1) {
+		return messages.at(-1)?.content ?? ""
 	}
 
-	const sanitizedName = projectName
-		.toLowerCase()
-		.replace(/[^a-z0-9-]/g, "-")
-		.replace(/-+/g, "-")
-		.replace(/^-|-$/g, "")
+	const currentMessage = messages.at(-1)
+	if (!currentMessage) return ""
 
-	const currentDir = process.cwd()
-	const projectDir =
-		projectName === "." ? currentDir : join(currentDir, sanitizedName)
+	const priorMessages = messages.slice(0, -1)
 
-	// Check if directory is empty
-	const isEmpty = await checkDirectoryEmpty(projectDir)
-	if (!isEmpty) {
-		console.error(
-			`❌ Directory "${sanitizedName}" already exists and is not empty`
-		)
-		console.error(
-			"Please choose a different name or remove the existing directory"
-		)
-		process.exit(1)
-	}
-
-	// Select example if not provided
-	let selectedExample: Example
-	if (exampleName) {
-		const example = EXAMPLES.find((ex) => ex.name === exampleName)
-		if (!example) {
-			console.error(`❌ Example "${exampleName}" not found`)
-			console.error(
-				`Available examples: ${EXAMPLES.map((ex) => ex.name).join(", ")}`
-			)
-			process.exit(1)
-		}
-		selectedExample = example
-		console.log(`📋 Using example: ${selectedExample.name}`)
+	let historyMessages: ContainerRequest["messages"]
+	if (priorMessages.length <= HISTORY_TAIL_SIZE) {
+		historyMessages = priorMessages
 	} else {
-		// Check if we're running in a non-interactive environment (like CI)
-		if (!process.stdin.isTTY) {
-			console.error(
-				"❌ Example is required in non-interactive mode. Use --example <name>"
-			)
-			console.error(
-				`Available examples: ${EXAMPLES.map((ex) => ex.name).join(", ")}`
-			)
-			process.exit(1)
-		}
-
-		const { example } = await prompts({
-			type: "select",
-			name: "example",
-			message: "Which example would you like to use?",
-			choices: EXAMPLES.map((ex) => ({
-				title: ex.name,
-				description: ex.available
-					? ex.description
-					: `${ex.description} (${ex.message || "Coming soon"})`,
-				value: ex,
-				disabled: !ex.available
-			})),
-			initial: 0
-		})
-
-		if (!example) {
-			console.log("❌ No example selected. Exiting...")
-			process.exit(1)
-		}
-
-		// Check if the selected example is available
-		if (!example.available) {
-			console.log(
-				`❌ Example "${example.name}" is not yet available. ${example.message || "Coming soon"}`
-			)
-			process.exit(1)
-		}
-
-		selectedExample = example
+		const tail = priorMessages.slice(-HISTORY_TAIL_SIZE + 1)
+		const first = priorMessages.slice(0, 1)
+		const omitted: ContainerRequest["messages"] = [
+			{
+				id: "",
+				role: "system",
+				content: \`... \${priorMessages.length - HISTORY_TAIL_SIZE} earlier messages omitted ...\`
+			}
+		]
+		historyMessages = [...first, ...omitted, ...tail]
 	}
 
-	console.log(`📦 Cloning ${selectedExample.name} example...`)
+	const historyBlock = historyMessages
+		.map((m) => \`[\${m.role}]: \${m.content}\`)
+		.join("\\n\\n")
 
-	try {
-		// For degit, the correct syntax is: repo#branch/subdirectory
-		// But we need to be careful about the path construction
-		let degitSource: string
+	return \`<conversation_history>
+\${historyBlock}
+</conversation_history>
 
-		if (REPO.includes("#")) {
-			// REPO is in format "user/repo#branch"
-			// Correct degit syntax is: user/repo/subdirectory#branch
-			const [userRepo, branch] = REPO.split("#")
-			degitSource = `${userRepo}/examples/${selectedExample.name}#${branch}`
-		} else {
-			degitSource = `${REPO}/examples/${selectedExample.name}`
-		}
-
-		console.log(`🔍 Degit source: ${degitSource}`)
-		const emitter = degit(degitSource)
-		await emitter.clone(projectDir)
-		console.log(`✅ Template cloned to: ${sanitizedName}`)
-	} catch (error) {
-		console.error("❌ Failed to clone template:", error)
-		process.exit(1)
-	}
-
-	// Update template variables
-	console.log("🔧 Updating template variables...")
-	try {
-		await updateTemplateFiles(projectDir, sanitizedName)
-		console.log("✅ Template variables updated")
-	} catch (error) {
-		console.error("❌ Failed to update template variables:", error)
-	}
-
-	console.log("\n🎉 Hybrid project created successfully!")
-	console.log(`\n📂 Project created in: ${projectDir}`)
-	console.log("\n📋 Next steps:")
-	if (projectName !== ".") {
-		console.log(`1. cd ${sanitizedName}`)
-	}
-	console.log(
-		`${projectName !== "." ? "2" : "1"}. Install dependencies (npm install, yarn install, or pnpm install)`
-	)
-	console.log(
-		`${projectName !== "." ? "3" : "2"}. Get your OpenRouter API key from https://openrouter.ai/keys`
-	)
-	console.log(
-		`${projectName !== "." ? "4" : "3"}. Add your API key to the OPENROUTER_API_KEY in .env`
-	)
-	console.log(
-		`${projectName !== "." ? "5" : "4"}. Set XMTP_ENV in .env (dev or production)`
-	)
-	console.log(
-		`${projectName !== "." ? "6" : "5"}. Generate keys: npm run keys (or yarn/pnpm equivalent)`
-	)
-	console.log(
-		`${projectName !== "." ? "7" : "6"}. Start development: npm run dev (or yarn/pnpm equivalent)`
-	)
-
-	console.log(
-		"\n📖 For more information, see the README.md file in your project"
-	)
+\${currentMessage.content}\`
 }
 
-export async function initializeProject(): Promise<void> {
-	const program = new Command()
+function extractTextDelta(msg: any): string | null {
+	if (msg.type === "stream_event") {
+		const event = msg.event
+		if (
+			event?.type === "content_block_delta" &&
+			event.delta?.type === "text_delta"
+		) {
+			return event.delta.text ?? ""
+		}
+	} else if (msg.type === "assistant") {
+		const content = msg.message?.content
+		if (Array.isArray(content)) {
+			const textBlock = content.find((b: any) => b.type === "text")
+			return textBlock?.text ?? null
+		}
+	}
+	return null
+}
 
-	program
-		.name("create-hybrid")
-		.description("Create a new Hybrid XMTP agent project")
-		.version("1.2.3")
-		.argument("[project-name]", "Name of the project")
-		.option(
-			"-e, --example <example>",
-			"Example to use (basic, with-ponder, with-foundry)"
-		)
-		.action(async (projectName?: string, options?: { example?: string }) => {
-			let finalProjectName = projectName
+function runAgent(req: ContainerRequest): ReadableStream<Uint8Array> {
+	const USER_MD = loadUserMarkdown(req.userId)
+	
+	const systemPrompt = [
+		IDENTITY_MD,
+		SOUL_MD,
+		req.systemPrompt,
+		AGENTS_MD,
+		TOOLS_MD,
+		USER_MD
+	]
+		.filter(Boolean)
+		.join("\\n\\n")
+	const prompt = buildPromptWithHistory(req.messages)
 
-			// Debug logging for CI troubleshooting
-			if (process.env.CI) {
-				console.log(
-					`🔍 Debug: projectName="${projectName}", options.example="${options?.example}"`
-				)
-			}
+	const abortController = new AbortController()
 
-			// If no project name provided or empty string, prompt for it
-			if (!finalProjectName || finalProjectName.trim() === "") {
-				// Check if we're running in a non-interactive environment (like tests)
-				if (!process.stdin.isTTY) {
-					console.error("❌ Project name is required")
-					process.exit(1)
+	const options: Options = {
+		abortController,
+		systemPrompt,
+		model: "claude-sonnet-4-20250514",
+		cwd: PROJECT_ROOT,
+		pathToClaudeCodeExecutable: resolveClaudeCodeExecutable(),
+		settingSources: [],
+		permissionMode: "bypassPermissions",
+		allowDangerouslySkipPermissions: true,
+		tools: [],
+		maxTurns: 25,
+		includePartialMessages: true,
+		env: {
+			...process.env,
+			ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL,
+			ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN
+		}
+	}
+
+	console.log(\`[agent] calling query() with prompt="\${prompt.slice(0, 200)}"\`)
+
+	const conversation = query({ prompt, options })
+
+	let messageCount = 0
+
+	return new ReadableStream<Uint8Array>({
+		cancel() {
+			console.log("[agent] stream cancelled, aborting agent")
+			abortController.abort()
+		},
+		async pull(controller) {
+			try {
+				const { value: msg, done } = await conversation.next()
+				if (done) {
+					console.log(\`[agent] conversation done after \${messageCount} messages\`)
+					controller.enqueue(encodeDone())
+					controller.close()
+					return
 				}
 
-				const { name } = await prompts({
-					type: "text",
-					name: "name",
-					message: "What is your project name?",
-					validate: (value: string) => {
-						if (!value || !value.trim()) {
-							return "Project name is required"
-						}
-						return true
+				messageCount++
+
+				if (msg.type === "stream_event") {
+					const event = msg.event as { type: string }
+					if (event.type !== "content_block_delta") {
+						console.log(\`[agent] msg #\${messageCount} event.type="\${event.type}"\`)
 					}
-				})
 
-				if (!name) {
-					console.log("❌ Project name is required. Exiting...")
-					process.exit(1)
+					const text = extractTextDelta(msg)
+					if (text) {
+						controller.enqueue(encodeSSEJson({ type: "text", content: text }))
+						return
+					}
+
+					if (event.type === "content_block_start") {
+						const block = (event as any).content_block
+						if (block?.type === "tool_use") {
+							controller.enqueue(
+								encodeSSEJson({
+									type: "tool-call-start",
+									toolCallId: block.id,
+									toolName: block.name
+								})
+							)
+						}
+						return
+					}
+
+					if (event.type === "content_block_delta") {
+						const delta = (event as any).delta
+						if (delta?.type === "input_json_delta") {
+							controller.enqueue(
+								encodeSSEJson({
+									type: "tool-call-delta",
+									toolCallId: (event as any).index?.toString(),
+									argsTextDelta: delta.partial_json ?? ""
+								})
+							)
+						}
+						return
+					}
+
+					if (event.type === "content_block_stop") {
+						controller.enqueue(
+							encodeSSEJson({
+								type: "tool-call-end",
+								toolCallId: (event as any).index?.toString()
+							})
+						)
+						return
+					}
+				} else if (msg.type === "result") {
+					const usage = msg.usage
+					controller.enqueue(
+						encodeSSEJson({
+							type: "usage",
+							inputTokens: usage?.input_tokens ?? 0,
+							outputTokens: usage?.output_tokens ?? 0,
+							totalCostUsd: msg.total_cost_usd ?? 0,
+							numTurns: msg.num_turns ?? 1
+						})
+					)
+				} else if (msg.type === "assistant") {
+					const text = extractTextDelta(msg)
+					if (text) {
+						controller.enqueue(encodeSSEJson({ type: "text", content: text }))
+					}
 				}
-
-				finalProjectName = name
+			} catch (err) {
+				const errorMessage = err instanceof Error ? err.message : "Agent error"
+				console.error("[agent] error:", err)
+				try {
+					controller.enqueue(encodeSSEJson({ type: "error", content: errorMessage }))
+					controller.enqueue(encodeDone())
+					controller.close()
+				} catch {
+					// Stream already cancelled
+				}
 			}
+		}
+	})
+}
 
-			await createProject(finalProjectName as string, options?.example)
+const app = new Hono()
+
+app.get(HEALTH_CHECK_PATH, (c) => {
+	return c.json({ ok: true, service: "${data.agentName}" })
+})
+
+app.post(AGENT_ENDPOINT, async (c) => {
+	const req = await c.req.json<ContainerRequest>()
+	const stream = runAgent(req)
+
+	return new Response(stream, {
+		headers: {
+			"Content-Type": "text/event-stream",
+			"Cache-Control": "no-cache",
+			Connection: "keep-alive"
+		}
+	})
+})
+
+process.on("uncaughtException", (err) => {
+	console.error("[agent] uncaughtException:", err)
+	process.exit(1)
+})
+
+process.on("unhandledRejection", (reason) => {
+	console.error("[agent] unhandledRejection:", reason)
+	process.exit(1)
+})
+
+console.log(\`${data.agentName} listening on http://localhost:\${AGENT_PORT}\`)
+console.log(\`  Templates loaded:\`)
+console.log(\`    IDENTITY.md      \${IDENTITY_MD ? "✓" : "✗"}\`)
+console.log(\`    SOUL.md          \${SOUL_MD ? "✓" : "✗"}\`)
+console.log(\`    AGENTS.md        \${AGENTS_MD ? "✓" : "✗"}\`)
+console.log(\`    TOOLS.md         \${TOOLS_MD ? "✓" : "✗"}\`)
+console.log(\`    USER.md          \${loadMarkdownFile("USER.md") ? "✓" : "✗"}\`)
+console.log(\`    BOOT.md          \${BOOT_MD ? "✓" : "✗"}\`)
+console.log(\`    BOOTSTRAP.md     \${BOOTSTRAP_MD ? "✓" : "✗"}\`)
+console.log(\`    HEARTBEAT.md     \${HEARTBEAT_MD ? "✓" : "✗"}\`)
+
+Bun.serve({
+	port: AGENT_PORT,
+	fetch: app.fetch
+})
+
+export default app
+`
+}
+
+function soulMd(data: { agentName: string }) {
+	return `## Identity
+
+You are ${data.agentName}. Be accurate, concise, and practical.
+
+## Principles
+
+- Verify before asserting. If unsure, say so.
+- Use available tools to find information.
+- Never claim actions you haven't completed.
+- Ask for clarification when needed.
+
+## Style
+
+- Be direct and brief.
+- Use bullet points over numbered lists.
+- Anticipate follow-up questions.
+`
+}
+
+function envExample(data: { env: string }) {
+	return `# Anthropic API (or use OpenRouter below)
+ANTHROPIC_API_KEY=your_api_key_here
+
+# OpenRouter proxy (optional)
+# ANTHROPIC_BASE_URL=https://openrouter.ai/api
+# ANTHROPIC_AUTH_TOKEN=your_openrouter_key
+
+# Agent configuration
+AGENT_WALLET_KEY=your_private_key_here
+XMTP_ENV=${data.env}
+`
+}
+
+function gitignore() {
+	return `node_modules/
+dist/
+.wrangler/
+.dev.vars
+.env
+*.log
+`
+}
+
+function buildMjs() {
+	return `import { build } from "esbuild"
+
+await build({
+	entryPoints: ["src/server/index.ts"],
+	bundle: true,
+	platform: "node",
+	target: "node22",
+	format: "esm",
+	outfile: "dist/server/index.js",
+	minify: true
+})
+
+console.log("Build complete")
+`
+}
+
+function devGateway() {
+	return `import type { UIMessage } from "ai"
+import { Hono } from "hono"
+import { cors } from "hono/cors"
+
+const app = new Hono()
+
+app.use("*", cors())
+
+app.get("/health", (c) => {
+	return c.json({ status: "healthy", mode: "dev-gateway" })
+})
+
+function extractTextFromParts(parts: UIMessage["parts"]): string {
+	return parts
+		.filter((p): p is { type: "text"; text: string } => p.type === "text")
+		.map((p) => p.text)
+		.join("")
+}
+
+app.post("/api/chat", async (c) => {
+	const body = await c.req.json<{
+		messages: UIMessage[]
+		chatId: string
+		teamId?: string
+		systemPrompt?: string
+	}>()
+
+	const messages = body.messages.map((m) => ({
+		id: m.id,
+		role: m.role,
+		content: extractTextFromParts(m.parts)
+	}))
+
+	const containerRes = await fetch("http://localhost:8454/api/chat", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			messages,
+			chatId: body.chatId,
+			teamId: body.teamId,
+			systemPrompt: body.systemPrompt
 		})
+	})
 
-	await program.parseAsync()
+	return new Response(containerRes.body, {
+		headers: {
+			"Content-Type": "text/event-stream",
+			"Cache-Control": "no-cache",
+			Connection: "keep-alive"
+		}
+	})
+})
+
+console.log("Dev gateway running on http://localhost:8787")
+Bun.serve({ port: 8787, fetch: app.fetch })
+`
 }
 
-async function main(): Promise<void> {
-	const nodeVersion = process.versions.node
-	const [major] = nodeVersion.split(".").map(Number)
-	if (!major || major < 20) {
-		console.error("Error: Node.js version 20 or higher is required")
-		process.exit(1)
-	}
-
-	try {
-		await initializeProject()
-	} catch (error) {
-		console.error("Failed to initialize project:", error)
-		console.error(
-			"Error details:",
-			error instanceof Error ? error.stack : String(error)
-		)
-		process.exit(1)
-	}
-}
-
-main().catch((error) => {
-	console.error("CLI error:", error)
-	console.error(
-		"Error details:",
-		error instanceof Error ? error.stack : String(error)
-	)
+main().catch((err) => {
+	console.error(err)
 	process.exit(1)
 })

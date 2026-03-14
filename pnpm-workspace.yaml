@@ -1,8 +1,10 @@
 packages:
-  - apps/*
+  - agent
+  - agents/*
+  - "!agents/hybrid-agent"
   - config/*
   - packages/*
-  - sandbox/*
+  - eval
   - site
 
 catalog:

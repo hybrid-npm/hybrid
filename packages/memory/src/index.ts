@@ -1,0 +1,114 @@
+export { MemoryIndexManager } from "./manager.js"
+export { listMemoryFiles, chunkMarkdown, hashText } from "./internal.js"
+export type {
+	MemorySearchManager,
+	MemorySearchResult,
+	MemoryProviderStatus,
+	MemorySource,
+	MemoryScope,
+	MemoryEmbeddingProbeResult,
+	MemorySyncProgressUpdate,
+	ResolvedMemoryConfig,
+	MemoryIndexManagerOptions
+} from "./types.js"
+export type { EmbeddingProvider } from "./providers/types.js"
+export { createEmbeddingProvider } from "./providers/index.js"
+export {
+	createMemoryWatcher,
+	closeWatcher,
+	createWatcherHandle,
+	type WatcherHandle
+} from "./watcher.js"
+export {
+	saveConversation,
+	loadConversation,
+	listConversations,
+	normalizeConversationText,
+	extractConversationContent,
+	conversationToMemoryChunks,
+	buildConversationEntry,
+	conversationPathForFile,
+	listConversationFiles,
+	type ConversationEntry,
+	type ConversationMessage
+} from "./conversations.js"
+export {
+	resolveMemoryConfig,
+	getDefaultMemoryConfig,
+	type MemoryConfigInput
+} from "./config.js"
+export {
+	appendToMemory,
+	readMemorySection,
+	clearMemorySection,
+	type MemoryCategory,
+	type AutoMemoryEntry
+} from "./auto-memory.js"
+export {
+	isValidWalletAddress,
+	normalizeWalletAddress,
+	validateWalletAddress
+} from "./validate.js"
+export {
+	getProjectHash,
+	getMemoryRoot,
+	getSharedMemoryPath,
+	getUserMemoryPath,
+	getProjectMemoryPath,
+	getParaRoot,
+	getProjectsPath,
+	getAreasPath,
+	getResourcesPath,
+	getArchivesPath,
+	getLogsPath,
+	getDailyLogPath,
+	getMemoryPaths,
+	type MemoryPaths
+} from "./paths.js"
+export {
+	parseACL,
+	getRole,
+	addOwner,
+	removeOwner,
+	listOwners,
+	readACLAllowFrom,
+	addACLAllowFromEntry,
+	removeACLAllowFromEntry,
+	listACLPendingRequests,
+	upsertACLPendingRequest,
+	approveACLPairingCode,
+	rejectACLPairingCode,
+	type Role,
+	type ACL,
+	type PairingRequest,
+	type PairingStore
+} from "./acl.js"
+export {
+	createEntity,
+	addFact,
+	supersedeFact,
+	accessFact,
+	computeDecayTier,
+	generateSummary,
+	rewriteSummaries,
+	searchFacts,
+	type ParaBucket,
+	type EntityCategory,
+	type FactCategory,
+	type FactStatus,
+	type DecayTier,
+	type AtomicFact,
+	type Entity,
+	type ItemsFile
+} from "./para.js"
+export {
+	appendToLog,
+	logEvent,
+	logFact,
+	logDecision,
+	logAction,
+	readLog,
+	extractFactsFromLog,
+	extractDecisionsFromLog,
+	type LogEntry
+} from "./daily-log.js"

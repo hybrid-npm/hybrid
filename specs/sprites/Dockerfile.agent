@@ -1,0 +1,83 @@
+# ============================================================================
+# Agent Dockerfile
+# ============================================================================
+# Multi-stage build for Agent service
+# Includes all dependencies for running AI agents
+
+# ----------------------------------------------------------------------------
+# Base stage
+# ----------------------------------------------------------------------------
+FROM node:20-bookworm-slim AS base
+
+# Install system dependencies for common agent tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    git \
+    vim \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# ----------------------------------------------------------------------------
+# Dependencies stage
+# ----------------------------------------------------------------------------
+FROM base AS deps
+
+# Copy package files
+COPY package.json tsconfig.json ./
+
+# Install production dependencies
+RUN npm ci --production --ignore-scripts
+
+# ----------------------------------------------------------------------------
+# Builder stage
+# ----------------------------------------------------------------------------
+FROM base AS builder
+
+WORKDIR /app
+
+# Copy source
+COPY src/ ./src/
+COPY package.json tsconfig.json ./
+
+# Install all dependencies
+RUN npm ci
+
+# Build TypeScript
+RUN npm run build
+
+# ----------------------------------------------------------------------------
+# Production stage
+# ----------------------------------------------------------------------------
+FROM base AS production
+
+# Create directories for agent
+RUN mkdir -p /home/sprite/agent/data \
+    && mkdir -p /home/sprite/agent/workspace \
+    && mkdir -p /home/sprite/agent/sessions
+
+# Create non-root user
+RUN groupadd -r sprite && useradd -r -g sprite sprite
+
+# Copy built files
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+
+# Set ownership
+RUN chown -R sprite:sprite /home/sprite
+
+# Switch to non-root user
+USER sprite
+
+# Work directory
+WORKDIR /home/sprite/agent
+
+# Environment variables (set at runtime)
+ENV NODE_ENV=production
+ENV VAULT_URL=""
+ENV USER_ID=""
+ENV AGENT_DATA_PATH=/home/sprite/agent/data
+
+# Default command (runs agent)
+CMD ["node", "dist/agent/agent.js"]

@@ -1,26 +1,21 @@
+import { getRandomValues } from "node:crypto"
+import fs from "node:fs"
+import path from "node:path"
 import { logger } from "@hybrd/utils"
 import { ReactionCodec } from "@xmtp/content-type-reaction"
 import { ReplyCodec } from "@xmtp/content-type-reply"
 import { TransactionReferenceCodec } from "@xmtp/content-type-transaction-reference"
 import { WalletSendCallsCodec } from "@xmtp/content-type-wallet-send-calls"
 import { Client, IdentifierKind, type Signer, XmtpEnv } from "@xmtp/node-sdk"
-import { getRandomValues } from "node:crypto"
-import fs from "node:fs"
-import path from "node:path"
-import { fileURLToPath } from "node:url"
 import { fromString, toString as uint8arraysToString } from "uint8arrays"
-import { createWalletClient, http, toBytes } from "viem"
+import { http, createWalletClient, toBytes } from "viem"
 import { privateKeyToAccount } from "viem/accounts"
 import { sepolia } from "viem/chains"
 import { revokeOldInstallations } from "../scripts/revoke-installations"
+import { resolveAgentSecret } from "./lib/secret.js"
 import { XmtpClient } from "./types"
 
-// ===================================================================
-// Module Setup
-// ===================================================================
-// ES module equivalent of __dirname
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
+export { deriveAgentSecret, resolveAgentSecret } from "./lib/secret.js"
 
 // ===================================================================
 // Type Definitions
@@ -86,11 +81,8 @@ async function clearXMTPDatabase(address: string, env: string) {
 				: path.resolve(process.cwd(), customStoragePath)
 		}
 
-		// Use existing logic as fallback
-		const projectRoot =
-			process.env.PROJECT_ROOT || path.resolve(__dirname, "../../..")
-
-		return path.join(projectRoot, ".data/xmtp") // Local development
+		// Default to .hybrid/.xmtp in current working directory
+		return path.join(process.cwd(), ".hybrid", ".xmtp")
 	}
 
 	// Clear local database files
@@ -103,6 +95,8 @@ async function clearXMTPDatabase(address: string, env: string) {
 		// Legacy fallback paths for backward compatibility
 		path.join(process.cwd(), ".data", "xmtp"),
 		path.join(process.cwd(), "..", ".data", "xmtp"),
+		path.join(process.cwd(), "..", "..", ".data", "xmtp"),
+		// Monorepo root fallback
 		path.join(process.cwd(), "..", "..", ".data", "xmtp")
 	]
 
@@ -150,11 +144,12 @@ export async function createXMTPClient(
 
 	if (!signer) {
 		throw new Error(
-			"No signer provided and XMTP_WALLET_KEY environment variable is not set"
+			"No signer provided and AGENT_WALLET_KEY environment variable is not set"
 		)
 	}
 
-	const { XMTP_DB_ENCRYPTION_KEY, XMTP_ENV } = process.env
+	const { XMTP_ENV } = process.env
+	const agentSecret = resolveAgentSecret(privateKey)
 
 	// Get the wallet address to use the correct database
 	const identifier = await signer.getIdentifier()
@@ -175,13 +170,7 @@ export async function createXMTPClient(
 				)
 			}
 
-			if (!XMTP_DB_ENCRYPTION_KEY) {
-				throw new Error(
-					"XMTP_DB_ENCRYPTION_KEY must be set for persistent mode"
-				)
-			}
-
-			const dbEncryptionKey = getEncryptionKeyFromHex(XMTP_DB_ENCRYPTION_KEY)
+			const dbEncryptionKey = getEncryptionKeyFromHex(agentSecret)
 			const dbPath = await getDbPath(
 				`${XMTP_ENV || "dev"}-${address}`,
 				storagePath
@@ -220,7 +209,8 @@ export async function createXMTPClient(
 
 			if (
 				error instanceof Error &&
-				error.message.includes("5/5 installations")
+				(error.message.includes("installations") ||
+					error.message.match(/\d+\/\d+\s+installations/))
 			) {
 				console.log(
 					`💥 Installation limit reached (attempt ${attempt}/${maxRetries})`
@@ -280,9 +270,7 @@ export async function createXMTPClient(
 					// Try to refresh identity by creating a persistent client first
 					try {
 						console.log("📝 Creating persistent client to refresh identity...")
-						const tempEncryptionKey = XMTP_DB_ENCRYPTION_KEY
-							? getEncryptionKeyFromHex(XMTP_DB_ENCRYPTION_KEY)
-							: getEncryptionKeyFromHex(generateEncryptionKeyHex())
+						const tempEncryptionKey = getEncryptionKeyFromHex(agentSecret)
 						const tempClient = await Client.create(signer, {
 							dbEncryptionKey: tempEncryptionKey,
 							env: XMTP_ENV as XmtpEnv,
@@ -372,12 +360,8 @@ export const getDbPath = async (description = "xmtp", storagePath?: string) => {
 			? storagePath
 			: path.resolve(process.cwd(), storagePath)
 	} else {
-		// Use existing logic as fallback
-		const projectRoot =
-			process.env.PROJECT_ROOT || path.resolve(__dirname, "../../..")
-
-		// Default storage path for local development
-		volumePath = path.join(projectRoot, ".data/xmtp")
+		// Default to .hybrid/.xmtp in current working directory
+		volumePath = path.join(process.cwd(), ".hybrid", ".xmtp")
 	}
 
 	const dbPath = `${volumePath}/${description}.db3`
@@ -822,7 +806,3 @@ export async function createXMTPConnectionManager(
 	await manager.connect()
 	return manager
 }
-
-// ===================================================================
-// User Address Resolution with Auto-Refresh
-// ===================================================================

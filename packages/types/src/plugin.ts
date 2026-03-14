@@ -55,4 +55,6 @@ export interface PluginRegistry<TContext = unknown> {
 export interface PluginContext {
 	agent: Agent
 	behaviors?: BehaviorRegistry
+	scheduler?: unknown
+	xmtpClient?: unknown
 }

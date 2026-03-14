@@ -1,0 +1,61 @@
+{
+	"name": "hybrid/agent",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"main": "./dist/index.cjs",
+	"exports": {
+		".": {
+			"types": "./src/index.ts",
+			"import": "./src/index.ts",
+			"require": "./dist/index.cjs"
+		},
+		"./server": {
+			"types": "./src/server/index.ts",
+			"import": "./src/server/index.ts",
+			"require": "./dist/server/index.cjs"
+		}
+	},
+	"scripts": {
+		"build": "node build.mjs",
+		"dev": "concurrently --names \"server,xmtp\" --prefix-colors \"cyan,magenta\" \"pnpm run dev:server\" \"pnpm run dev:sidecar\"",
+		"dev:server": "tsx watch --clear-screen=false src/server/simple.ts",
+		"dev:sidecar": "tsx watch --clear-screen=false src/xmtp.ts",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@anthropic-ai/claude-agent-sdk": "^0.2.38",
+		"@google/generative-ai": "^0.21.0",
+		"@hono/node-server": "^1.13.5",
+		"@hybrd/scheduler": "workspace:*",
+		"@hybrd/xmtp": "workspace:*",
+		"@hybrid/memory": "workspace:*",
+		"@xmtp/agent-sdk": "0.0.14",
+		"@xmtp/node-bindings": "^1.9.1",
+		"@xmtp/node-sdk": "^4.1.0",
+		"ai": "^6.0.0",
+		"better-sqlite3": "^11.0.0",
+		"chokidar": "^4.0.0",
+		"dotenv": "^16.4.5",
+		"hono": "^4.10.8",
+		"openai": "^4.0.0",
+		"picocolors": "^1.1.1",
+		"viem": "^2.46.2",
+		"zod": "^4.0.0"
+	},
+	"devDependencies": {
+		"@types/better-sqlite3": "^7.6.13",
+		"@types/node": "^20.0.0",
+		"concurrently": "^9.0.0",
+		"esbuild": "^0.27.3",
+		"tsx": "^4.19.3",
+		"typescript": "^5.9.2",
+		"vitest": "^4.0.18"
+	},
+	"optionalDependencies": {
+		"node-llama-cpp": "^3.0.0",
+		"sqlite-vec": "^0.1.0"
+	}
+}

@@ -1,0 +1,78 @@
+# ============================================================================
+# Vault Dockerfile
+# ============================================================================
+# Multi-stage build for Vault service
+# Optimized for small size and security
+
+# ----------------------------------------------------------------------------
+# Base stage
+# ----------------------------------------------------------------------------
+FROM node:20-bookworm-slim AS base
+
+# Install ca-certificates for HTTPS
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# ----------------------------------------------------------------------------
+# Dependencies stage
+# ----------------------------------------------------------------------------
+FROM base AS deps
+
+# Copy package files
+COPY package.json tsconfig.json ./
+
+# Install production dependencies only
+RUN npm ci --production --ignore-scripts
+
+# ----------------------------------------------------------------------------
+# Builder stage
+# ----------------------------------------------------------------------------
+FROM base AS builder
+
+WORKDIR /app
+
+# Copy source
+COPY src/ ./src/
+COPY package.json tsconfig.json ./
+
+# Install all dependencies
+RUN npm ci
+
+# Build TypeScript
+RUN npm run build
+
+# ----------------------------------------------------------------------------
+# Production stage
+# ----------------------------------------------------------------------------
+FROM base AS production
+
+# Create non-root user for security
+RUN groupadd -r sprite && useradd -r -g sprite sprite
+
+# Copy built files
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+
+# Set ownership
+RUN chown -R sprite:sprite /app
+
+# Switch to non-root user
+USER sprite
+
+# Expose port
+EXPOSE 2680
+
+# Environment
+ENV NODE_ENV=production
+ENV PORT=2680
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:2680/status || exit 1
+
+# Start
+CMD ["node", "dist/vault/vault-service.js"]

@@ -1,3 +1,29 @@
+import { existsSync } from "node:fs"
+import { dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
+import { config } from "dotenv"
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+
+// Load .env first, then .env.local (which overrides)
+const projectRoot = process.cwd()
+const envPaths = [
+	join(projectRoot, ".env"),
+	join(projectRoot, ".env.local"),
+	join(__dirname, "..", "..", "agents", "hybrid-agent", ".env"),
+	join(__dirname, "..", "..", "agents", "hybrid-agent", ".env.local"),
+	join(__dirname, "..", "..", "..", "agents", "hybrid-agent", ".env"),
+	join(__dirname, "..", "..", "..", "agents", "hybrid-agent", ".env.local"),
+	join(__dirname, "..", "..", ".env"),
+	join(__dirname, "..", "..", ".env.local")
+]
+
+for (const envPath of envPaths) {
+	if (existsSync(envPath)) {
+		config({ path: envPath })
+	}
+}
+
 import {
 	createSigner,
 	createXMTPClient,
@@ -6,45 +32,42 @@ import {
 	validateEnvironment
 } from "../src/client"
 
-async function registerOnProduction() {
-	console.log("🚀 Starting XMTP Production Network Registration...")
+async function registerOnXMTP() {
+	const XMTP_ENV = process.env.XMTP_ENV || "dev"
+	const networkName = XMTP_ENV === "production" ? "Production" : "Dev"
 
-	// Validate required environment variables
-	const { XMTP_WALLET_KEY } = validateEnvironment([
-		"XMTP_WALLET_KEY",
-		"XMTP_DB_ENCRYPTION_KEY"
-	])
+	console.log(`🚀 Starting XMTP ${networkName} Network Registration...`)
 
-	if (!XMTP_WALLET_KEY) {
-		console.error("❌ XMTP_WALLET_KEY is required for registration")
+	const { AGENT_WALLET_KEY } = validateEnvironment(["AGENT_WALLET_KEY"])
+
+	if (!AGENT_WALLET_KEY) {
+		console.error("❌ AGENT_WALLET_KEY is required for registration")
 		process.exit(1)
 	}
 
 	try {
 		console.log("🔑 Creating signer...")
-		const signer = createSigner(XMTP_WALLET_KEY)
+		const signer = createSigner(AGENT_WALLET_KEY)
 
-		// Get wallet address for logging
 		const identifier = await signer.getIdentifier()
 		const address = identifier.identifier
 		console.log(`📍 Wallet Address: ${address}`)
 
-		console.log("🌐 Connecting to XMTP Production Network...")
-		console.log("⚠️  This will prompt you to sign messages in your wallet")
-		console.log("   - 'XMTP : Authenticate to inbox' message")
-		console.log("   - 'Grant messaging access to app' message")
-		console.log("   - 'Create inbox' message (if first time)")
+		console.log(`🌐 Connecting to XMTP ${networkName} Network...`)
+		if (XMTP_ENV === "production") {
+			console.log("⚠️  This will prompt you to sign messages in your wallet")
+			console.log("   - 'XMTP : Authenticate to inbox' message")
+			console.log("   - 'Grant messaging access to app' message")
+			console.log("   - 'Create inbox' message (if first time)")
+		}
 
-		// Use getDbPath to ensure directory creation and proper path handling
-		const dbPath = getDbPath(`production-${address}`)
+		const dbPath = await getDbPath(`${XMTP_ENV}-${address}`)
 		console.log(`📁 Database path: ${dbPath}`)
 
-		// Connect to production network
-		const client = await createXMTPClient(XMTP_WALLET_KEY)
+		const client = await createXMTPClient(AGENT_WALLET_KEY)
 
-		console.log("✅ Successfully connected to XMTP Production Network!")
+		console.log(`✅ Successfully connected to XMTP ${networkName} Network!`)
 
-		// Log client details
 		await logAgentDetails(client)
 
 		console.log("📡 Syncing conversations...")
@@ -55,16 +78,15 @@ async function registerOnProduction() {
 
 		console.log("🎉 Registration Complete!")
 		console.log(`
-✓ Wallet ${address} is now registered on XMTP Production Network
+✓ Wallet ${address} is now registered on XMTP ${networkName} Network
 ✓ Inbox ID: ${client.inboxId}
-✓ Database: production-${address}.db3
-✓ Ready to receive messages on production network
+✓ Database: ${XMTP_ENV}-${address}.db3
+✓ Ready to receive messages on ${networkName.toLowerCase()} network
 
 Next steps:
-1. Update your environment: XMTP_ENV=production
-2. Start your listener service
-3. Share your address for others to message: ${address}
-4. Test messaging at: https://xmtp.chat/dm/${address}
+1. Start your listener service
+2. Share your address for others to message: ${address}
+3. Test messaging at: https://xmtp.chat/dm/${address}
     `)
 	} catch (error) {
 		console.error("❌ Registration failed:", error)
@@ -85,6 +107,11 @@ Next steps:
 				console.log(
 					"💾 Database access issue. Please check file permissions and ensure the directory exists."
 				)
+			} else if (
+				error.message.includes("base16") ||
+				error.message.includes("hex")
+			) {
+				console.log("🔐 AGENT_WALLET_KEY must be a valid private key")
 			} else {
 				console.log("💡 Make sure your wallet is connected and try again.")
 			}
@@ -94,8 +121,7 @@ Next steps:
 	}
 }
 
-// Run registration
-registerOnProduction().catch((error) => {
+registerOnXMTP().catch((error) => {
 	console.error("💥 Fatal error during registration:", error)
 	process.exit(1)
 })

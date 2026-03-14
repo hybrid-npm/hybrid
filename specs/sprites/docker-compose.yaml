@@ -1,0 +1,99 @@
+# ============================================================================
+# Docker Compose - Local Development
+# ============================================================================
+# This file is for local development only.
+# For production, deploy directly to Sprites.
+
+services:
+  # ---------------------------------------------------------------------------
+  # Vault Service
+  # ---------------------------------------------------------------------------
+  vault:
+    build:
+      context: .
+      dockerfile: Dockerfile.vault
+    container_name: sprites-vault
+    ports:
+      - "2680:2680"
+    environment:
+      - PORT=2680
+      - NODE_ENV=production
+      # Optional: INITIAL_KEY=64-hex-chars (for auto-init in dev)
+    volumes:
+      - vault-data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:2680/status"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - sprites-net
+
+  # ---------------------------------------------------------------------------
+  # Agent Service
+  # ---------------------------------------------------------------------------
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+    container_name: sprites-agent
+    ports:
+      - "2681:2681"
+    environment:
+      - NODE_ENV=production
+      - VAULT_URL=http://vault:2680
+      - USER_ID=dev-user
+      - AGENT_DATA_PATH=/home/sprite/agent/data
+    volumes:
+      - agent-data:/home/sprite/agent/data
+      - agent-workspace:/home/sprite/agent/workspace
+    depends_on:
+      vault:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - sprites-net
+
+  # ---------------------------------------------------------------------------
+  # CLI Client (for testing)
+  # ---------------------------------------------------------------------------
+  cli:
+    build:
+      context: .
+      dockerfile: Dockerfile.vault
+    container_name: sprites-cli
+    environment:
+      - VAULT_URL=http://vault:2680
+    profiles:
+      - cli
+    command: ["sleep", "infinity"]
+    networks:
+      - sprites-net
+
+# ----------------------------------------------------------------------------
+# Volumes
+# ----------------------------------------------------------------------------
+volumes:
+  vault-data:
+    driver: local
+  agent-data:
+    driver: local
+  agent-workspace:
+    driver: local
+
+# ----------------------------------------------------------------------------
+# Networks
+# ----------------------------------------------------------------------------
+networks:
+  sprites-net:
+    driver: bridge
+    name: sprites-local
+
+# ----------------------------------------------------------------------------
+# Profiles
+# ----------------------------------------------------------------------------
+# Run specific services:
+#   docker-compose --profile agent up    # Just agent
+#   docker-compose --profile cli up      # Just CLI (for testing)

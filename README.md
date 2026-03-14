@@ -1,482 +1,512 @@
-# Hybrid - Typescript Framework for building crypto AI Agents.
+# Hybrid
 
-An open-source agent framework for building conversational AI agents on XMTP. 
+**Drop-in OpenClaw replacement with native XMTP messaging.**
 
-Hybrid makes it easy for developers to create intelligent agents that can understand natural language, process messages, and respond through XMTP's decentralized messaging protocol.
+Hybrid is a TypeScript agent runtime with **100% OpenClaw feature parity** — your `SOUL.md`, `AGENTS.md`, memory files, and skills work without modification. On top of that, you get a decentralized messaging layer via XMTP, a 3-layer PARA memory system, multi-user access control, and a channel adapter framework for connecting to any network.
 
-See [hybrid.dev](https://hybrid.dev) for more information.
+Port your OpenClaw instance in under 10 minutes. Deploy to Fly.io, Cloudflare Workers, or any Node.js host.
 
-## 📦 Quickstart
+---
 
-Getting started with Hybrid is simple:
+## Why Hybrid
 
-### 1. Initialize your project
+OpenClaw gave agents persistent memory, skills, and a scheduler. Hybrid keeps all of that and adds the missing pieces for real-world multi-user deployment:
+
+- **Messaging** — agents live on XMTP, a decentralized messaging protocol. Users reach your agent from any XMTP-compatible app, no account required beyond a wallet.
+- **Multi-user memory** — each user's memory is isolated by wallet address. Owners get full access; guests get their own private slice.
+- **Structured knowledge** — beyond flat markdown files, Hybrid adds a PARA-based entity graph with atomic facts, decay tiers, and fact supersession.
+- **Channel adapters** — XMTP today, Telegram or Slack tomorrow. A uniform adapter interface with local HTTP IPC, so channels are independently deployable.
+
+---
+
+## OpenClaw Compatibility
+
+Everything that works in OpenClaw works in Hybrid. Same files, same format, same behavior.
+
+| | OpenClaw | Hybrid |
+|--|:--:|:--:|
+| `SOUL.md` + `AGENTS.md` config | ✅ | ✅ |
+| `MEMORY.md` auto-memory | ✅ | ✅ |
+| `memory/*.md` indexed files | ✅ | ✅ |
+| Session transcripts (`.hybrid/memory/conversations/{userId}/{conversationId}.json`) | ✅ | ✅ |
+| Vector search (sqlite-vec) | ✅ | ✅ |
+| BM25 / FTS hybrid search | ✅ | ✅ |
+| Embedding providers (openai, gemini, voyage, mistral, local, auto) | ✅ | ✅ |
+| Daily logs (`.hybrid/memory/logs/YYYY-MM-DD.md`) | ✅ | ✅ |
+| Skills (`SKILL.md` format) | ✅ | ✅ |
+| Scheduler (cron / every / at) | ✅ | ✅ |
+| **Per-user memory isolation** | ❌ | ✅ |
+| **PARA knowledge graph** | ❌ | ✅ |
+| **Atomic facts + decay tiers** | ❌ | ✅ |
+| **Fact supersession** | ❌ | ✅ |
+| **Multi-user ACL (wallet-based)** | ❌ | ✅ |
+| **XMTP native messaging** | ❌ | ✅ |
+| **Channel adapter framework** | ❌ | ✅ |
+| **ENS + Basename resolution** | ❌ | ✅ |
+
+---
+
+## Quickstart
+
+### Porting from OpenClaw
+
+Your config files, memory, and skills work without modification.
+
+**1. Scaffold into a new directory**
 
 ```bash
 npm create hybrid my-agent
 cd my-agent
 ```
 
-This creates all the necessary files and configuration for your agent.
+**2. Copy your OpenClaw files over**
 
-### 2. Get your OpenRouter API key
-   
-Visit [OpenRouter](https://openrouter.ai/keys), create an account and generate an API key
+```bash
+cp /path/to/openclaw/SOUL.md   ./SOUL.md
+cp /path/to/openclaw/AGENTS.md ./AGENTS.md
+cp /path/to/openclaw/MEMORY.md ./MEMORY.md
+cp -r /path/to/openclaw/memory ./memory
+cp -r /path/to/openclaw/skills ./skills
+```
 
-Add it to your `.env` file:
+**3. Add new skills** (optional)
+
+```bash
+hybrid skills add github:cloudflare/skills/wrangler
+hybrid skills add github:you/my-skill
+```
+
+**4. Set your env vars**
+
+```bash
+cp .env.example .env
+```
+
+Then fill in `.env`:
 
 ```env
-OPENROUTER_API_KEY=your_openrouter_api_key_here
+OPENROUTER_API_KEY=your_key    # or ANTHROPIC_API_KEY
+
+# XMTP identity — generate a wallet key for your agent
+AGENT_WALLET_KEY=0x...
+XMTP_ENV=production
 ```
 
-### 3. Generate XMTP keys
+**5. Register and run**
 
 ```bash
-hybrid keys
+hybrid register    # one-time: registers your wallet on the XMTP network
+hybrid dev
 ```
 
-or automatically add it to your `.env` file:  
+Your agent is reachable at its wallet address from any XMTP client. Send it a DM at [xmtp.chat](https://xmtp.chat).
 
-```bash
-hybrid keys --write
+---
+
+## Onboarding
+
+When you first create a Hybrid agent, it includes a `BOOTSTRAP.md` file that defines the first-run onboarding experience.
+
+### First Run
+
+1. **Configure ACL** — Add your wallet address to `ACL.md`:
+   ```markdown
+   ## Owners
+
+   - 0xyour_wallet_address
+   ```
+
+2. **Start the agent**:
+   ```bash
+   pnpm dev
+   ```
+
+3. **Chat with your agent** — The agent will:
+   - Ask about its identity (name, personality, emoji)
+   - Learn about you (name, preferences, timezone)
+   - Discuss boundaries and behavior
+   - Delete `BOOTSTRAP.md` when complete
+
+4. **Onboarding complete** — Your agent now has a unique identity!
+
+### How It Works
+
+- **Owner-only**: During onboarding, only the owner can interact with the agent
+- **State tracking**: Progress is saved in `.hybrid/workspace-state.json`
+- **Automatic completion**: The agent detects when `BOOTSTRAP.md` is deleted and marks onboarding complete
+- **OpenClaw compatible**: Uses the same BOOTSTRAP.md format and flow
+
+### Adding More Users
+
+After onboarding, add more owners or guests to `ACL.md`:
+- **Owners** can access all memory and modify agent configuration
+- **Guests** get isolated memory and can only create their own user profile
+
+### Multi-Tenant Profiles
+
+Each user gets their own profile:
+```
+users/
+├── 0xalice/
+│   └── USER.md    ← Alice's preferences
+└── 0xbob/
+    └── USER.md    ← Bob's preferences
 ```
 
-### 4. Register your wallet with XMTP
+The agent maintains its identity (`IDENTITY.md`, `SOUL.md`) across all users.
+
+---
+
+### Starting fresh
 
 ```bash
+npm create hybrid my-agent
+cd my-agent
+cp .env.example .env   # fill in OPENROUTER_API_KEY and AGENT_WALLET_KEY
 hybrid register
-```
-
-This generates secure wallet and encryption keys for your XMTP agent.
-
-  ### 5. Start developing
-
-```bash
 hybrid dev
 ```
 
-Your agent will start listening for XMTP messages and you're ready to build! 
+---
 
-Go to [https://xmtp.chat/dm/](https://xmtp.chat/dm/) and send a message to your agent.
+## Project Structure
 
-## 🧠 Agent Behaviors
+Running `hybrid init <name>` generates this project structure:
 
-`hybrid` comes with a set of behaviors that you can use to customize your agent's behavior. Behaviors are executed before or after the agent responds.
-
-### Basic Agent
-
-Here's a basic agent implementation:
-
-```typescript
-import { createOpenRouter } from "@openrouter/ai-sdk-provider"
-import { Agent } from "hybrid"
-import { filterMessages, reactWith, threadedReply } from "hybrid/behaviors"
-
-export const openrouter = createOpenRouter({
-	apiKey: process.env.OPENROUTER_API_KEY
-})
-
-const agent = new Agent({
-	name: "Basic Agent",
-	model: openrouter("x-ai/grok-4"),
-	instructions:
-		"You are a XMTP agent that responds to messages and reactions. Be conversational."
-})
-
-await agent.listen({
-	port: process.env.PORT || "8454"
-})
+```
+my-agent/
+├── package.json                 # Project config (name replaced)
+├── .gitignore                   # Ignores credentials/, sessions/, memory/, etc.
+├── .env.example                 # Environment template
+│
+├── credentials/                 # Access control
+│   └── xmtp-allowFrom.json      # Created during init with owner wallet
+│
+├── skills/                      # Copied from core skills
+│   ├── memory/SKILL.md
+│   ├── xmtp/SKILL.md
+│   └── skills-manager/SKILL.md
+│
+├── skills-lock.json             # Locks installed skill versions
+│
+└── [Agent Configuration Files]
+    ├── SOUL.md                  # Agent personality & principles
+    ├── IDENTITY.md              # Name, creature, vibe, emoji
+    ├── USER.md                  # Human profile template
+    ├── AGENTS.md                # Workspace rules & memory system
+    ├── TOOLS.md                 # Local notes (cameras, SSH, etc.)
+    ├── BOOTSTRAP.md             # First-run setup guide
+    └── HEARTBEAT.md             # Periodic task checklist
 ```
 
-### Message Filtering
+### Key Files
 
-By default, the agent will process all messages in the conversation. You can filter messages by using the `filterMessages` behavior.
+| File | Purpose |
+|------|---------|
+| `SOUL.md` | Agent personality, principles, and behavior style |
+| `IDENTITY.md` | Name, creature type, vibe, emoji, avatar |
+| `USER.md` | Human profile — name, preferences, context |
+| `AGENTS.md` | Workspace rules, memory system, group chat behavior |
+| `TOOLS.md` | Local notes — camera names, SSH aliases, TTS voices |
+| `BOOTSTRAP.md` | First-run onboarding guide (deleted after setup) |
+| `HEARTBEAT.md` | Periodic task checklist for proactive behavior |
 
-```typescript
-import { filterMessages } from "hybrid/behaviors"
+### Init Flow
 
-await agent.listen({
-	port: process.env.PORT || "8454",
-	behaviors: [
-      filterMessages((filter) =>
-        filters.isReply() || filters.isDM() || filters.hasMention("@agent")
-      )
-    ]
-})
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    hybrid init <name>                        │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  1. Copy templates/agent/ → <name>/                         │
+│     - package.json (with name replaced)                     │
+│     - SOUL.md, IDENTITY.md, USER.md, AGENTS.md             │
+│     - TOOLS.md, BOOTSTRAP.md, HEARTBEAT.md                 │
+│     - .gitignore, .env.example                              │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  2. Copy core skills/ → <name>/skills/                      │
+│     - memory/                                               │
+│     - xmtp/                                                 │
+│     - skills-manager/                                       │
+│                                                             │
+│     Create skills-lock.json with core skill references      │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  3. Prompt: "Enter your wallet address (owner):"           │
+│                                                             │
+│     Input: 0xAbC123...                                      │
+│                                                             │
+│     → Create credentials/xmtp-allowFrom.json               │
+│       { "version": 1, "allowFrom": ["0xabc123..."] }       │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Output:                                                    │
+│                                                             │
+│  ✅ Created agent at: my-agent/                             │
+│                                                             │
+│  Next steps:                                                │
+│    cd my-agent                                              │
+│    npm install  # or pnpm install                           │
+│    hybrid dev   # Start development                         │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-The filter function receives a `filter` object with methods that return boolean values. Return `true` to process the message, `false` to filter it out.
+### Agent Runtime Architecture
 
-**Available filter methods:**
-- `filter.isText()` - Message is text content
-- `filter.isReply()` - Message is a reply
-- `filter.isReaction()` - Message is a reaction
-- `filter.isReaction(emoji, action?)` - Message is a reaction with specific emoji and/or action ("added" | "removed")
-- `filter.isDM()` - Message is a direct message
-- `filter.isFromSelf()` - Message is from the agent itself
-- `filter.isFromSelf()` - Message is from the agent itself (alias for isFromSelf)
-- `filter.isFrom(address)` - Message is from a specific Ethereum address (async)
-- `filter.hasMention(mention:string)` - Message contains a mention
-- `filter.hasContent()` - Message has content
-- `filter.isGroup()` - Message is in a group conversation
-- `filter.isGroupAdmin()` - Message sender is group admin
-- `filter.isGroupSuperAdmin()` - Message sender is group super admin
-- `filter.isRemoteAttachment()` - Message has remote attachment
-- `filter.isTextReply()` - Message is a text reply
-
-**Using async filters:**
-
-Filters can now be async to support operations like address resolution:
-
-```typescript
-filterMessages(async (filter) => 
-  !await filter.isFrom("0x1234567890123456789012345678901234567890") && 
-  !filter.isFromSelf()
-)
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Agent Process                            │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐     │
+│  │   SOUL.md   │    │  IDENTITY.md│    │   USER.md   │     │
+│  │ Personality │    │ Who am I?   │    │ Human info  │     │
+│  └─────────────┘    └─────────────┘    └─────────────┘     │
+│         │                  │                  │              │
+│         └──────────────────┼──────────────────┘              │
+│                            ▼                                │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │                   System Prompt                       │   │
+│  │  [IDENTITY] + [SOUL] + [AGENTS] + [TOOLS] + [USER]   │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                            │                                │
+│                            ▼                                │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │              Claude Agent SDK                        │   │
+│  │  query({ prompt, options }) → conversation stream    │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                            │                                │
+│                            ▼                                │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │                   Skills Layer                       │   │
+│  │  ./skills/*/SKILL.md → Tool definitions              │   │
+│  └─────────────────────────────────────────────────────┘   │
+Owners can read all memory — shared, per-user, and the `memory/` directory. Guests only read and write their own slice. If there's no `ACL.md`, everyone is treated as an owner (to allow initial onboarding). Set up ACL immediately after first run to restrict access.
+└─────────────────────────────────────────────────────────────┘
 ```
 
-See XMTP Agent SDK filter docs for all filtering options: [XMTP Agent SDK – Built-in filters](https://github.com/xmtp/xmtp-js/tree/main/sdks/agent-sdk#3-builtin-filters).
+---
 
-### Reactions
+## Memory
 
-A common behavior for agents is to react to the inbound message to let others know the agent is aware of the message and will reply.
+Hybrid has a 3-layer memory system. All three layers are indexed together into SQLite for unified search.
 
-```typescript
-import { reactWith } from "hybrid/behaviors"
+### Layer 1 — PARA Knowledge Graph
 
-await agent.listen({
-	port: process.env.PORT || "8454",
-	behaviors: [reactWith("👀")]
-})
+Structured entity storage inspired by the [PARA method](https://fortelabs.com/blog/para/). The agent can create named entities in four buckets — `projects`, `areas`, `resources`, `archives` — and attach atomic facts to each one.
+
+```
+.hybrid/memory/life/
+  areas/people/Alice/
+    items.json     ← all facts, including superseded ones
+    summary.md     ← hot + warm facts only, used for search indexing
 ```
 
-### Threaded Replies
+Each fact has a **decay tier** based on how recently and how often it's been accessed:
 
-By default, the agent will reply to the dm / group message in a top-level manner. You can change this to a threaded manner by using the `threadedReply` behavior. This will have the agent reply to the original message and start a thread.
+| Tier | Condition |
+|------|-----------|
+| Hot | accessed in the last 7 days, or 5+ accesses in the last 14 days |
+| Warm | accessed in the last 30 days, or 10+ total accesses |
+| Cold | not accessed in 30+ days |
 
-```typescript
-import { threadedReply } from "hybrid/behaviors"
+Cold facts are excluded from search and from `summary.md` — but never deleted. When a fact becomes outdated, **supersession** marks the old fact as `superseded` and links it to the new one. Both stay in `items.json` as a history trail.
 
-await agent.listen({
-	port: process.env.PORT || "8454",
-	behaviors: [threadedReply()]
-})
+### Layer 2 — Daily Log
+
+An append-only chronological log. Each day gets its own file:
+
+```
+.hybrid/memory/logs/2026-03-02.md
 ```
 
-## 🛠️ Tools Standard Library
+The agent logs facts, decisions, and actions throughout a session. Entries are timestamped and tagged `[FACT]`, `[DECISION]`, or `[ACTION]`. Nothing is ever rewritten — the file only grows.
 
-Hybrid includes a comprehensive standard library of tools for building crypto-enabled agents:
+### Layer 3 — Auto Memory
 
-### Blockchain Tools (`blockchainTools`)
+A structured `MEMORY.md` with five fixed sections: **User Preferences**, **Learnings**, **Decisions**, **Context**, **Notes**. The agent appends dated bullet points to the relevant section as it learns things about the user.
 
-```typescript
-import { Agent } from "hybrid"
-import { blockchainTools } from "hybrid/tools"
+### Per-User Isolation
 
-const agent = new Agent({
-  name: "my-agent",
-  model: myModel,
-  tools: blockchainTools,
-  // Expose runtime configuration used by blockchain tools
-  createRuntime: () => ({
-    rpcUrl: process.env.RPC_URL,
-    privateKey: process.env.PRIVATE_KEY as `0x${string}` | undefined,
-    defaultChain: "mainnet" as const
-  }),
-  instructions: "You can check balances, send transactions, and interact with the blockchain."
-})
+Every user's memory is scoped to their wallet address:
+
+```
+.hybrid/memory/users/0xabc.../MEMORY.md    ← guest's private memory
+MEMORY.md                                  ← shared memory (owners only)
 ```
 
-**Available Tools:**
-- `getBalance` - Get native token balance for any address
-- `sendTransaction` - Send native tokens to another address
-- `getTransaction` - Get transaction details by hash
-- `getBlock` - Get blockchain block information
-- `getGasPrice` - Get current gas prices
-- `estimateGas` - Estimate gas costs for transactions
+Access control is defined in `ACL.md` at the project root:
 
-**Supported Chains:** Ethereum, Polygon, Arbitrum, Optimism, Base, and Sepolia testnet
+```markdown
+## Owners
 
-### XMTP Tools
-
-The XMTP plugin automatically includes the following tools when your agent starts listening for messages:
-
-**Available Tools:**
-- `sendMessage` - Send messages to XMTP conversations
-- `sendReply` - Reply to specific messages
-- `sendReaction` - Send emoji reactions
-- `getMessage` - Retrieve message details by ID
-
-These tools are automatically available to your agent without needing to explicitly include them in your agent configuration.
-
-### Using Blockchain Tools
-
-```typescript
-import { Agent } from "hybrid"
-import { blockchainTools } from "hybrid/tools"
-
-const agent = new Agent({
-  name: "blockchain-agent",
-  model: myModel,
-  tools: blockchainTools,
-  createRuntime: () => ({
-    rpcUrl: process.env.RPC_URL,
-    privateKey: process.env.PRIVATE_KEY as `0x${string}` | undefined,
-    defaultChain: "mainnet" as const
-  })
-})
+- 0xabc123...    # Added 2026-03-01
 ```
 
-## 🖥️ CLI Commands
+Owners can read all memory — shared, per-user, and the `memory/` directory. Guests only read and write their own slice. If there's no ACL file, everyone is treated as an owner (to allow initial onboarding). Once you add your first owner to the ACL, all other users default to guest.
 
-The Hybrid CLI provides several commands to manage your agent development workflow:
+### Search
 
+Queries run both **vector search** (semantic, via sqlite-vec) and **BM25 keyword search** (FTS5) in parallel. Results are merged with a 70/30 weighting by default and filtered by a minimum relevance score. If no embedding provider is configured, it falls back to keyword-only.
+
+---
+
+## Scheduler
+
+The scheduler lets the agent take action on a time-based trigger — run a cron job, fire after an interval, or execute once at a specific time. Jobs are persisted to SQLite and survive restarts.
+
+### Schedule Types
+
+```typescript
+// One-time — fires once at a specific time
+{ kind: "at", at: "2026-03-15T09:00:00Z" }
+
+// Interval — fires every N milliseconds
+{ kind: "every", everyMs: 3_600_000 }  // every hour
+
+// Cron — standard cron expression with optional timezone
+{ kind: "cron", expr: "0 9 * * 1-5", tz: "America/New_York" }
+```
+
+### How It Works
+
+The scheduler uses precise `setTimeout` calls — it computes the exact millisecond of the next job and sleeps until then. There's no fixed polling loop. A maintenance heartbeat runs at most every 60 seconds to handle edge cases.
+
+When a job fires, the scheduler sends the agent an **agent turn** — a message it processes just like a user message. The agent's response can optionally be delivered to a recipient via a channel adapter (e.g. sent as an XMTP message).
+
+```typescript
+// Example job payload
+{
+  kind: "agentTurn",
+  message: "Send the daily summary to the team",
+  delivery: {
+    mode: "announce",
+    channel: "xmtp",
+    to: "0xrecipient..."
+  }
+}
+```
+
+### Error Handling
+
+Failed jobs back off exponentially before retrying:
+
+| Consecutive failures | Delay before retry |
+|---------------------|--------------------|
+| 1 | 30 seconds |
+| 2 | 1 minute |
+| 3 | 5 minutes |
+| 4 | 15 minutes |
+| 5+ | 1 hour |
+
+Jobs that appear stuck (running for more than 2 hours) are automatically unstuck on the next scheduler start.
+
+---
+
+## Architecture
+
+```
+                    XMTP network • HTTP • Scheduler callbacks
+                                      │
+                                      ▼
+                    ┌─────────────────────────────────┐
+                    │       Channel Adapters           │
+                    │  @hybrd/channels  (port 8455)    │
+                    │  XMTP adapter → HTTP IPC         │
+                    └─────────────────────────────────┘
+                                      │
+                                      ▼
+                    ┌─────────────────────────────────┐
+                    │        Agent Server              │
+                    │  hybrid/agent  (port 8454)       │
+                    │                                  │
+                    │  SOUL.md + AGENTS.md             │
+                    │  Memory search (vector + BM25)   │
+                    │  MCP: memory tools               │
+                    │  MCP: scheduler tools            │
+                    │  Claude Code SDK → SSE stream    │
+                    └─────────────────────────────────┘
+                               │            │
+               ┌───────────────┘            └───────────────┐
+               ▼                                            ▼
+┌──────────────────────────┐              ┌──────────────────────────────┐
+│      @hybrd/memory        │              │       @hybrd/scheduler        │
+│                           │              │                               │
+│  Layer 1: PARA graph      │              │  cron / interval / one-time   │
+│    projects / areas /     │              │  Precise timer, no polling    │
+│    resources / archives   │              │  Exponential error backoff    │
+│                           │              │  Delivers via channel adapter │
+│  Layer 2: Daily log       │              └──────────────────────────────┘
+│    logs/YYYY-MM-DD.md     │
+│                           │
+│  Layer 3: Auto memory     │
+│    MEMORY.md              │
+│                           │
+│  SQLite + sqlite-vec      │
+│  Multi-user ACL           │
+└──────────────────────────┘
+```
+
+---
+
+## Packages
+
+| Package | Description |
+|---------|-------------|
+| [`hybrid/agent`](./packages/agent/README.md) | Agent runtime: HTTP server + XMTP sidecar |
+| [`hybrid/gateway`](./packages/gateway/README.md) | Cloudflare Workers gateway + container lifecycle |
+| [`@hybrd/memory`](./packages/memory/README.md) | 3-layer PARA memory, multi-user ACL, hybrid search |
+| [`@hybrd/scheduler`](./packages/scheduler/README.md) | Agentic cron/interval/one-time scheduler |
+| [`@hybrd/channels`](./packages/channels/README.md) | Channel adapter framework (XMTP, ...) |
+| [`@hybrd/xmtp`](./packages/xmtp/README.md) | XMTP client, plugin, ENS/Basename resolvers |
+| [`@hybrd/cli`](./packages/cli/README.md) | `hybrid` CLI: build, dev, deploy, skills |
+| [`@hybrd/types`](./packages/types/README.md) | Shared TypeScript type definitions |
+| [`@hybrd/utils`](./packages/utils/README.md) | Shared utilities |
+| [`create-hybrid`](./packages/create-hybrid/README.md) | Project scaffolding (`npm create hybrid`) |
+
+---
+
+## Deployment
+
+### Fly.io
 ```bash
-# Initialize a new agent project
-npm create hybrid
+hybrid deploy fly
+```
 
-# Use the CLI
-hybrid keys
-hybrid dev
+### Cloudflare Workers + Containers
+```bash
+hybrid deploy cf
+```
+
+### Any Node.js host
+```bash
 hybrid build
-hybrid clean
-hybrid upgrade
-hybrid register
-hybrid revoke <inboxId>
-hybrid revoke:all
-
-# Or use project scripts generated by create-hybrid
-pnpm dev
-pnpm build
-pnpm start
+# Ship .hybrid/ to your server and run start.sh
 ```
 
-## 🔧 Developing Locally
+---
 
-If you want to work with the source code or contribute to Hybrid:
-
-### Prerequisites
-
-- **Node.js**: Version 22 or higher
-- **pnpm**: Package manager
-- **Git**: Version control
-
-### 1. Clone and Install
+## Monorepo Development
 
 ```bash
-git clone <repository-url>
-cd hybrid
 pnpm install
+pnpm build      # Build all packages
+pnpm test       # Run tests
+pnpm lint       # Lint (biome)
+pnpm typecheck  # Type check
 ```
 
-### 2. Environment Setup
+---
 
-Create a `.env.local` file in the root directory:
+## License
 
-```env
-# AI Configuration
-OPENROUTER_API_KEY="your_openai_api_key"
-
-# XMTP Configuration
-XMTP_WALLET_KEY="0x..."  # Private key for XMTP agent
-XMTP_DB_ENCRYPTION_KEY="..."  # Database encryption key
-XMTP_ENV="dev"  # dev, production
-```
-
-### 3. Start Development Server
-
-```bash
-# Start the agent
-pnpm dev
-```
-
-This starts the agent and begins listening for XMTP messages on the configured port (default: 8454).
-
-## 🛠️ Development
-
-### Available Scripts
-
-```bash
-# Development
-pnpm build                  # Build all packages
-pnpm build:watch            # Build all packages in watch mode
-pnpm test                   # Run tests across all packages
-pnpm typecheck              # Type checking across all packages
-
-# Code Quality
-pnpm lint                   # Lint all packages
-pnpm lint:fix               # Fix linting issues
-pnpm format                 # Format code (handled by Biome)
-
-# Maintenance
-pnpm clean                  # Clean build artifacts
-pnpm nuke                   # Remove all node_modules (nuclear option)
-pnpm bump                   # Bump version (patch by default)
-pnpm bump:patch             # Bump patch version
-pnpm bump:minor             # Bump minor version
-pnpm bump:major             # Bump major version
-
-# Release
-pnpm release                # Build and publish all packages
-```
-
-### Project Structure
-
-Hybrid is designed as a framework for developers to build XMTP agents:
-
-#### Basic Example (`examples/basic`)
-- **Message Processing**: Handle incoming XMTP messages with custom filters
-- **AI Integration**: Connect any AI model for natural language understanding
-- **Agent Configuration**: Simple setup with instructions and behavior
-- **XMTP Listening**: Built-in server to listen for messages on any port
-
-#### Core Packages
-- **core/**: Main agent framework library (published as "hybrid")
-  - Agent runtime and plugin system
-  - Type-safe message handling
-  - Flexible filtering and processing
-  - Integration with AI providers and XMTP
-- **cli/**: Command-line interface for agent management
-  - Project initialization and setup
-  - XMTP key generation and management
-  - Development server and build tools
-- **utils/**: Common utilities and helpers (@hybrd/utils)
-  - Array, string, and object utilities
-  - Date and UUID helpers
-  - Markdown processing utilities
-- **xmtp/**: XMTP client and messaging utilities (@hybrd/xmtp)
-  - Client initialization and management
-  - Message sending and receiving
-  - Address resolution (ENS, BaseName, XMTP)
-  - Content type handling and encryption
-
-### Key Technologies
-
-- **Core**: Node.js 22+, TypeScript, pnpm workspace
-- **Build**: Turbo for monorepo orchestration and caching
-- **Messaging**: XMTP Protocol for decentralized messaging
-- **AI**: OpenRouter API and Vercel AI SDK for natural language processing
-- **Web3**: Viem for Ethereum interactions, Coinbase AgentKit for DeFi
-- **Development**: Biome for linting and formatting
-- **Testing**: Vitest for fast unit and integration tests
-
-### Environment Variables
-
-Key environment variables for agent operation:
-
-```env
-# Required
-OPENROUTER_API_KEY="your_openai_api_key"  # For AI integration
-XMTP_WALLET_KEY="0x..."                        # XMTP wallet private key
-XMTP_ENV="dev"                           # dev or production
-
-# Optional
-PORT="8454"                              # Port for the agent server
-XMTP_DB_ENCRYPTION_KEY="..."                     # For secure data encryption
-```
-
-## 🚀 Deployment
-
-Deploy your Hybrid agent anywhere Node.js runs:
-
-### Build and Deploy
-
-1. **Build the project**:
-```bash
-pnpm build
-```
-
-2. **Deploy to any Node.js hosting provider**:
-   - Vercel
-   - Railway
-   - Render
-   - Heroku
-   - DigitalOcean
-   - AWS Lambda
-   - Google Cloud Functions
-
-### Environment Variables
-
-Make sure these environment variables are configured in your deployment:
-- `OPENROUTER_API_KEY` - Your AI API key
-- `XMTP_WALLET_KEY` - XMTP wallet private key
-- `XMTP_ENV` - dev or production
-- `PORT` - Port for the agent server (optional)
-
-## 🧪 Testing
-
-### Run Tests
-
-```bash
-pnpm test
-```
-
-### Manual Testing
-
-1. Start your agent: `pnpm dev`
-2. Send XMTP messages to test your agent's responses
-3. Verify your custom filters and AI integration work as expected
-
-## 📚 API Reference
-
-### Core Classes
-
-- **Agent**: Main agent class for creating and configuring XMTP agents
-- **MessageListenerConfig**: Configuration for message filtering and processing
-- **Reaction**: Type for handling XMTP reactions
-
-### Key Methods
-
-- `agent.listen()`: Start listening for XMTP messages with custom filters
-- `filter()`: Define which messages your agent should respond to
-- `processMessage()`: Handle incoming XMTP messages
-- `sendResponse()`: Send responses back to users
-
-### Message Types
-
-Hybrid supports all XMTP message types:
-- **Text Messages**: Standard text content
-- **Reactions**: 👍, ❤️, and custom reactions
-- **Replies**: Threaded conversations
-- **Custom Content**: Any XMTP-supported content type
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
-
-## 📄 License
-
-ISC License - see LICENSE file for details
-
-## 🏗️ Architecture
-
-This project uses a monorepo structure with multiple packages and supporting directories:
-
-```
-hybrid/
-├── config/                # Shared configuration (biome, tsconfig)
-├── examples/
-│   └── basic/             # Basic agent example implementation
-├── packages/
-│   ├── core/              # Main agent framework library (published as "hybrid")
-│   ├── cli/               # Command-line interface (bin: "hybrid")
-│   ├── create-hybrid/     # Project scaffolding tool (npm create hybrid)
-│   ├── ponder/            # Ponder plugin and event forwarder
-│   ├── types/             # Shared TypeScript types (@hybrd/types)
-│   ├── utils/             # Utilities (@hybrd/utils)
-│   └── xmtp/              # XMTP client and resolvers (@hybrd/xmtp)
-├── scripts/               # Repo scripts (version bump, etc.)
-└── site/                  # Docs website
-```
-
-## 🆘 Support
-
-- **Documentation**: Check the `/docs` directory
-- **Issues**: Create GitHub issues for bugs
-- **Discussions**: Use GitHub discussions for questions
-
-Built with ❤️ using modern web3 technologies and natural language processing
+MIT

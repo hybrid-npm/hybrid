@@ -1,0 +1,71 @@
+name: Evals
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/agent/**'
+      - 'packages/memory/**'
+      - 'packages/scheduler/**'
+      - 'packages/channels/**'
+      - 'eval/**'
+      - '.github/workflows/evals.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'packages/agent/**'
+      - 'packages/memory/**'
+      - 'packages/scheduler/**'
+      - 'packages/channels/**'
+      - 'eval/**'
+      - '.github/workflows/evals.yml'
+
+env:
+  OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  XMTP_ENV: dev
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.5
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build:packages
+
+      - name: Run evals (auto-spawns agent)
+        run: pnpm evals:run
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results
+          path: eval/results/
+          retention-days: 7
+
+      - name: Generate JUnit report
+        if: always()
+        run: |
+          if [ -f eval/results/results.xml ]; then
+            echo "::group::Eval Results"
+            cat eval/results/results.xml
+            echo "::endgroup::"
+          fi

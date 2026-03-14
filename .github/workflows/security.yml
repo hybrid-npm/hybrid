@@ -1,0 +1,116 @@
+name: Security Tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  security-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.5
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build agent package
+        run: pnpm build:packages
+
+      - name: Build Docker image
+        run: |
+          docker build -f deployments/flyio/Dockerfile -t hybrid-agent:test .
+
+      - name: Test 1 - Secrets directory has correct permissions (drwx------)
+        run: |
+          PERMS=$(docker run --rm hybrid-agent:test sh -c "ls -ld /app/data/secrets")
+          echo "$PERMS"
+          echo "$PERMS" | grep -q "drwx------" || (echo "FAIL: secrets dir permissions wrong" && exit 1)
+
+      - name: Test 2 - Secrets directory owned by app
+        run: |
+          OWNER=$(docker run --rm hybrid-agent:test sh -c "ls -ld /app/data/secrets")
+          echo "$OWNER"
+          echo "$OWNER" | grep -q "app" || (echo "FAIL: secrets dir not owned by app" && exit 1)
+
+      - name: Test 3 - app user can write and read secret files
+        run: |
+          docker run --rm hybrid-agent:test sh -c "
+            echo 'testkey' > /app/data/secrets/wallet.key &&
+            chmod 400 /app/data/secrets/wallet.key &&
+            cat /app/data/secrets/wallet.key | grep -q 'testkey'
+          " || (echo "FAIL: app cannot read/write secrets" && exit 1)
+
+      - name: Test 4 - claude user CANNOT read secrets directory
+        run: |
+          # Write a secret as app, then verify claude cannot read it
+          docker run --rm hybrid-agent:test sh -c "
+            echo 'testkey' > /app/data/secrets/wallet.key &&
+            chmod 400 /app/data/secrets/wallet.key &&
+            sudo -u claude cat /app/data/secrets/wallet.key 2>&1 | grep -q 'Permission denied'
+          " || (echo "FAIL: claude can read secrets" && exit 1)
+
+      - name: Test 5 - Both users exist with correct UIDs
+        run: |
+          docker run --rm hybrid-agent:test sh -c "id app" | grep -q "uid=1000" || (echo "FAIL: app user missing or wrong UID" && exit 1)
+          docker run --rm hybrid-agent:test sh -c "id claude" | grep -q "uid=1001" || (echo "FAIL: claude user missing or wrong UID" && exit 1)
+
+      - name: Test 6 - Workspace isolation directory exists
+        run: |
+          docker run --rm hybrid-agent:test sh -c "test -d /app/data/workspaces" || (echo "FAIL: /app/data/workspaces missing" && exit 1)
+
+      - name: Test 7 - Data directory structure exists
+        run: |
+          docker run --rm hybrid-agent:test sh -c "
+            test -d /app/data/memory/users &&
+            test -d /app/data/credentials &&
+            test -d /app/data/secrets
+          " || (echo "FAIL: data directory structure incomplete" && exit 1)
+
+      - name: Test 8 - No secret env vars leak to app user
+        run: |
+          # Even if someone accidentally sets these, entrypoint scrubs them
+          RESULT=$(docker run --rm -e AGENT_WALLET_KEY="leak" hybrid-agent:test sh -c "printenv | grep -cE 'AGENT_WALLET_KEY'" 2>&1 || true)
+          if [ "$RESULT" != "0" ] && [ -n "$RESULT" ]; then
+            echo "FAIL: secret env vars leaked through entrypoint"
+            exit 1
+          fi
+
+      - name: Test 9 - claude user CANNOT list secrets directory
+        run: |
+          docker run --rm hybrid-agent:test sh -c "
+            sudo -u claude ls /app/data/secrets 2>&1 | grep -q 'Permission denied'
+          " || (echo "FAIL: claude can list secrets directory" && exit 1)
+
+      - name: Test 10 - claude user CAN read code in /app/dist
+        run: |
+          docker run --rm hybrid-agent:test sh -c "
+            sudo -u claude ls /app/dist/agent/ >/dev/null 2>&1
+          " || (echo "FAIL: claude cannot read /app/dist" && exit 1)
+
+      - name: Test 11 - claude user CAN write to workspaces
+        run: |
+          docker run --rm hybrid-agent:test sh -c "
+            sudo -u claude touch /app/data/workspaces/test-file &&
+            sudo -u claude rm /app/data/workspaces/test-file
+          " || (echo "FAIL: claude cannot write to /app/data/workspaces" && exit 1)
+
+      - name: Test 12 - claude-wrapper.sh exists and is executable
+        run: |
+          docker run --rm hybrid-agent:test sh -c "
+            test -x /usr/local/bin/claude-wrapper.sh
+          " || (echo "FAIL: claude-wrapper.sh missing or not executable" && exit 1)

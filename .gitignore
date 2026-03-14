@@ -11,6 +11,7 @@ node_modules
 
 # testing
 coverage
+eval/results/
 
 # next.js
 .cache
@@ -21,6 +22,9 @@ build
 # misc
 .DS_Store
 *.pem
+
+# generated files
+site/.source/
 
 # debug
 npm-debug.log*
@@ -49,9 +53,20 @@ tsconfig.tsbuildinfo
 xmtp-production-*
 xmtp-development-*
 .data/
+*.db3
+*.db3-shm
+*.db3-wal
+*.db3.sqlcipher_salt
 
-.ponder/
+# skill installation temp
+.temp-skill-install/
+.temp-npm-install/
+
+# hybrid build output
+.hybrid/
+
 sandbox/
+workspace/
 scratchpad.md
 
 # START Ruler Generated Files
@@ -67,3 +82,4 @@ scratchpad.md
 CLAUDE.md
 CLAUDE.md.bak
 # END Ruler Generated Files
+*.db3*

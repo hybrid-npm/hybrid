@@ -5,6 +5,7 @@ import {
 	createUser
 } from "@xmtp/agent-sdk"
 
+import { randomUUID } from "node:crypto"
 import type {
 	AgentMessage,
 	AgentRuntime,
@@ -17,7 +18,6 @@ import type {
 	XmtpMessage
 } from "@hybrd/types"
 import { logger } from "@hybrd/utils"
-import { randomUUID } from "node:crypto"
 import { createXMTPClient, getDbPath } from "./client"
 import { ContentTypeReply, ContentTypeText, type Reply } from "./index"
 
@@ -74,30 +74,22 @@ export function XMTPPlugin(): Plugin<PluginContext> {
 		name: "xmtp",
 		description: "Provides XMTP messaging functionality",
 		apply: async (app, context): Promise<void> => {
-			const {
-				XMTP_WALLET_KEY,
-				XMTP_DB_ENCRYPTION_KEY,
-				XMTP_ENV = "production"
-			} = process.env
+			const { AGENT_WALLET_KEY, XMTP_ENV = "production" } = process.env
 
 			const { agent } = context
 			const pluginContext = context as PluginContext & {
 				behaviors?: BehaviorRegistry
 			}
 
-			if (!XMTP_WALLET_KEY) {
-				throw new Error("XMTP_WALLET_KEY must be set")
+			if (!AGENT_WALLET_KEY) {
+				throw new Error("AGENT_WALLET_KEY must be set")
 			}
 
-			if (!XMTP_DB_ENCRYPTION_KEY) {
-				throw new Error("XMTP_DB_ENCRYPTION_KEY must be set")
-			}
-
-			const user = createUser(XMTP_WALLET_KEY as `0x${string}`)
+			const user = createUser(AGENT_WALLET_KEY as `0x${string}`)
 			const signer = createSigner(user)
 
 			const xmtpClient = await createXMTPClient(
-				XMTP_WALLET_KEY as `0x${string}`
+				AGENT_WALLET_KEY as `0x${string}`
 			)
 
 			const address = user.account.address.toLowerCase()
@@ -106,12 +98,15 @@ export function XMTPPlugin(): Plugin<PluginContext> {
 			)
 			logger.debug(`📁 Using database path: ${agentDbPath}`)
 
-			const xmtp = await XmtpAgent.create(signer, {
+			const xmtp = (await XmtpAgent.create(signer, {
 				env: XMTP_ENV as XmtpEnv,
 				dbPath: agentDbPath
-			})
+			})) as any
 
-			xmtp.on("reaction", async ({ conversation, message }) => {
+			const botInboxId = xmtp.client?.inboxId
+			const MAX_HISTORY = 20
+
+			xmtp.on("reaction", async ({ conversation, message }: any) => {
 				try {
 					const text = message.content.content
 					const messages: AgentMessage[] = [
@@ -125,35 +120,64 @@ export function XMTPPlugin(): Plugin<PluginContext> {
 					const baseRuntime: AgentRuntime = {
 						conversation: conversation as unknown as XmtpConversation,
 						message: message as unknown as XmtpMessage,
-						xmtpClient
+						xmtpClient,
+						...(context.scheduler ? { scheduler: context.scheduler } : {})
 					}
 
 					const runtime = await agent.createRuntimeContext(baseRuntime)
 
 					// Execute pre-response behaviors
-					if (context.behaviors) {
-						const behaviorContext: BehaviorContext = {
-							runtime,
-							client: xmtpClient as unknown as XmtpClient,
-							conversation: conversation as unknown as XmtpConversation,
-							message: message as unknown as XmtpMessage
-						}
-						await context.behaviors.executeBefore(behaviorContext)
-					}
-
-					const { text: reply } = await agent.generate(messages, { runtime })
-
-					// Execute post-response behaviors
 					let behaviorContext: BehaviorContext | undefined
 					if (context.behaviors) {
 						behaviorContext = {
 							runtime,
 							client: xmtpClient as unknown as XmtpClient,
 							conversation: conversation as unknown as XmtpConversation,
-							message: message as unknown as XmtpMessage,
-							response: reply
+							message: message as unknown as XmtpMessage
+						}
+						await context.behaviors.executeBefore(behaviorContext)
+
+						// Check if behaviors were stopped early (e.g., due to filtering)
+						if (behaviorContext.stopped) {
+							logger.debug(
+								`🔇 [XMTP Plugin] Skipping reaction response due to behavior chain being stopped`
+							)
+							return
+						}
+
+						// Check if message was filtered out by filterMessages behavior
+						if (behaviorContext.sendOptions?.filtered) {
+							logger.debug(
+								`🔇 [XMTP Plugin] Skipping reaction response due to message being filtered`
+							)
+							return
+						}
+					}
+
+					const { text: reply } = await agent.generate(messages, { runtime })
+
+					// Execute post-response behaviors
+					if (context.behaviors) {
+						if (behaviorContext) {
+							behaviorContext.response = reply
+						} else {
+							behaviorContext = {
+								runtime,
+								client: xmtpClient as unknown as XmtpClient,
+								conversation: conversation as unknown as XmtpConversation,
+								message: message as unknown as XmtpMessage,
+								response: reply
+							}
 						}
 						await context.behaviors.executeAfter(behaviorContext)
+
+						// Check if post behaviors were stopped early
+						if (behaviorContext.stopped) {
+							logger.debug(
+								`🔇 [XMTP Plugin] Skipping reaction response due to post-behavior chain being stopped`
+							)
+							return
+						}
 					} else {
 						// Create minimal context for send options
 						behaviorContext = {
@@ -163,14 +187,6 @@ export function XMTPPlugin(): Plugin<PluginContext> {
 							message: message as unknown as XmtpMessage,
 							response: reply
 						}
-					}
-
-					// Check if message was filtered out by filterMessages behavior
-					if (behaviorContext?.sendOptions?.filtered) {
-						logger.debug(
-							`🔇 [XMTP Plugin] Skipping reaction response due to message being filtered`
-						)
-						return
 					}
 
 					await sendResponse(
@@ -184,7 +200,7 @@ export function XMTPPlugin(): Plugin<PluginContext> {
 				}
 			})
 
-			xmtp.on("reply", async ({ conversation, message }) => {
+			xmtp.on("reply", async ({ conversation, message }: any) => {
 				try {
 					// TODO - why isn't this typed better?
 					const text = message.content.content as string
@@ -199,7 +215,8 @@ export function XMTPPlugin(): Plugin<PluginContext> {
 					const baseRuntime: AgentRuntime = {
 						conversation: conversation as unknown as XmtpConversation,
 						message: message as unknown as XmtpMessage,
-						xmtpClient
+						xmtpClient,
+						...(context.scheduler ? { scheduler: context.scheduler } : {})
 					}
 
 					const runtime = await agent.createRuntimeContext(baseRuntime)
@@ -270,17 +287,56 @@ export function XMTPPlugin(): Plugin<PluginContext> {
 				}
 			})
 
-			xmtp.on("text", async ({ conversation, message }) => {
+			xmtp.on("text", async ({ conversation, message }: any) => {
 				try {
 					const text = message.content
+
+					let historyMessages: AgentMessage[] = []
+					try {
+						console.log("[xmtp] fetching conversation history...")
+						const history = await conversation.messages({
+							limit: MAX_HISTORY + 1,
+							direction: 1
+						})
+
+						console.log(
+							`[xmtp] got ${history.length} messages from conversation.messages()`
+						)
+
+						const filtered = history
+							.filter((msg: any) => msg.id !== message.id)
+							.filter(
+								(msg: any) => msg.content && typeof msg.content === "string"
+							)
+							.slice(0, MAX_HISTORY)
+							.reverse()
+
+						console.log(`[xmtp] after filter: ${filtered.length} messages`)
+
+						historyMessages = filtered.map((msg: any) => ({
+							id: msg.id,
+							role:
+								msg.senderInboxId === botInboxId
+									? ("assistant" as const)
+									: ("user" as const),
+							parts: [{ type: "text" as const, text: msg.content as string }]
+						}))
+					} catch (historyErr) {
+						console.error(`[xmtp] history error:`, historyErr)
+					}
+
 					const messages: AgentMessage[] = [
+						...historyMessages,
 						{ id: randomUUID(), role: "user", parts: [{ type: "text", text }] }
 					]
+
+					console.log(`[xmtp] sending ${messages.length} messages to agent`)
 
 					const baseRuntime: AgentRuntime = {
 						conversation: conversation as unknown as XmtpConversation,
 						message: message as unknown as XmtpMessage,
-						xmtpClient
+						xmtpClient,
+						...(context.scheduler ? { scheduler: context.scheduler } : {})
 					}
 
 					const runtime = await agent.createRuntimeContext(baseRuntime)
@@ -351,12 +407,15 @@ export function XMTPPlugin(): Plugin<PluginContext> {
 				}
 			})
 
+			// Store xmtpClient in context for scheduler and other components
+			;(context as any).xmtpClient = xmtpClient
+
 			// Event handlers removed due to incompatibility with current XMTP agent SDK
 
 			void xmtp
 				.start()
 				.then(() => logger.debug("✅ XMTP agent listener started"))
-				.catch((err) =>
+				.catch((err: any) =>
 					console.error("❌ XMTP agent listener failed to start:", err)
 				)
 		}

@@ -11,7 +11,10 @@
 			".cache",
 			".next",
 			".react-email",
-			".vercel"
+			".vercel",
+			"site/.source",
+			"packages/core/agent",
+			"packages/core/gateway"
 		]
 	},
 	"vcs": {
