@@ -30,7 +30,7 @@
 	"dependencies": {
 		"@hybrd/types": "workspace:*",
 		"@hybrd/xmtp": "workspace:*",
-		"@hybrid/memory": "workspace:*",
+		"@hybrd/memory": "workspace:*",
 		"@xmtp/agent-sdk": "0.0.14",
 		"@xmtp/node-bindings": "^1.9.1",
 		"@xmtp/node-sdk": "^4.1.0",

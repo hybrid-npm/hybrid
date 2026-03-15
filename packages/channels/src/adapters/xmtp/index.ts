@@ -1,7 +1,7 @@
 import fs from "node:fs"
 import path from "node:path"
 import { resolveAgentSecret } from "@hybrd/xmtp"
-import { readACLAllowFrom } from "@hybrid/memory"
+import { readACLAllowFrom } from "@hybrd/memory"
 import { createUser } from "@xmtp/agent-sdk"
 import pc from "picocolors"
 import { type XMTPAdapterConfig } from "./adapter.js"

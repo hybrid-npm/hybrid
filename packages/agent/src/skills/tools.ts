@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process"
 import { createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk"
-import { getRole, parseACL } from "@hybrid/memory"
+import { getRole, parseACL } from "@hybrd/memory"
 import { z } from "zod"
 import { getSkills, uninstallSkill } from "../server/routes/skills.js"
 import {

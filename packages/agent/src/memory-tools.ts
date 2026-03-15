@@ -20,7 +20,7 @@ import {
 	removeOwner,
 	searchFacts,
 	upsertACLPendingRequest
-} from "@hybrid/memory"
+} from "@hybrd/memory"
 import { z } from "zod"
 import { createFileTools } from "./tools/file.js"
 

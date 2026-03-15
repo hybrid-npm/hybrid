@@ -1,4 +1,4 @@
-import { getRole, parseACL } from "@hybrid/memory"
+import { getRole, parseACL } from "@hybrd/memory"
 import type { Context } from "hono"
 
 const PROJECT_ROOT = process.env.AGENT_PROJECT_ROOT || process.cwd()

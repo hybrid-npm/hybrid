@@ -1,16 +1,12 @@
 {
 	"name": "hybrid",
-	"version": "2.0.0",
+	"version": "2.0.1",
 	"type": "module",
 	"bin": {
 		"hybrid": "./dist/cli.js",
 		"hy": "./dist/cli.js"
 	},
-	"files": [
-		"dist",
-		"skills",
-		"templates"
-	],
+	"files": ["dist", "skills", "templates"],
 	"exports": {
 		".": {
 			"types": "./src/index.ts",
@@ -36,7 +32,7 @@
 		"@hono/node-server": "^1.13.5",
 		"@hybrd/scheduler": "workspace:*",
 		"@hybrd/xmtp": "workspace:*",
-		"@hybrid/memory": "workspace:*",
+		"@hybrd/memory": "workspace:*",
 		"@xmtp/agent-sdk": "0.0.14",
 		"@xmtp/node-bindings": "^1.9.1",
 		"@xmtp/node-sdk": "^4.1.0",

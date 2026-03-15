@@ -6,7 +6,7 @@ import type {
 	TriggerRequest,
 	TriggerResponse
 } from "@hybrd/types"
-import { readACLAllowFrom } from "@hybrid/memory"
+import { readACLAllowFrom } from "@hybrd/memory"
 import { Agent } from "@xmtp/agent-sdk"
 import type { Conversation } from "@xmtp/node-sdk"
 import express from "express"

@@ -1,7 +1,7 @@
 import { existsSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { tool } from "@anthropic-ai/claude-agent-sdk"
-import type { Role } from "@hybrid/memory"
+import type { Role } from "@hybrd/memory"
 import { z } from "zod"
 import { editFileInWorkspace } from "../file-operations/edit"
 import { applyPatchToWorkspace } from "../file-operations/patch"

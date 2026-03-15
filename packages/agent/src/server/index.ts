@@ -13,7 +13,7 @@ import {
 	createSchedulerTools,
 	createSqliteStore
 } from "@hybrd/scheduler"
-import { MemoryIndexManager, resolveMemoryConfig } from "@hybrid/memory"
+import { MemoryIndexManager, resolveMemoryConfig } from "@hybrd/memory"
 import { Hono } from "hono"
 import pc from "picocolors"
 import { privateKeyToAccount } from "viem/accounts"
