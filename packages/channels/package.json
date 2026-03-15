@@ -1,6 +1,6 @@
 {
 	"name": "@hybrd/channels",
-	"version": "0.0.1",
+	"version": "2.0.0",
 	"keywords": ["channels", "xmtp", "telegram", "slack", "hybrid", "adapter"],
 	"type": "module",
 	"files": ["dist", "src"],
