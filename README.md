@@ -28,11 +28,11 @@ Everything that works in OpenClaw works in Hybrid. Same files, same format, same
 | `SOUL.md` + `AGENTS.md` config | ✅ | ✅ |
 | `MEMORY.md` auto-memory | ✅ | ✅ |
 | `memory/*.md` indexed files | ✅ | ✅ |
-| Session transcripts (`.hybrid/memory/conversations/{userId}/{conversationId}.json`) | ✅ | ✅ |
+| Session transcripts (`memory/conversations/{userId}/{conversationId}.json`) | ✅ | ✅ |
 | Vector search (sqlite-vec) | ✅ | ✅ |
 | BM25 / FTS hybrid search | ✅ | ✅ |
 | Embedding providers (openai, gemini, voyage, mistral, local, auto) | ✅ | ✅ |
-| Daily logs (`.hybrid/memory/logs/YYYY-MM-DD.md`) | ✅ | ✅ |
+| Daily logs (`memory/logs/YYYY-MM-DD.md`) | ✅ | ✅ |
 | Skills (`SKILL.md` format) | ✅ | ✅ |
 | Scheduler (cron / every / at) | ✅ | ✅ |
 | **Per-user memory isolation** | ❌ | ✅ |
@@ -132,7 +132,7 @@ When you first create a Hybrid agent, it includes a `BOOTSTRAP.md` file that def
 ### How It Works
 
 - **Owner-only**: During onboarding, only the owner can interact with the agent
-- **State tracking**: Progress is saved in `.hybrid/workspace-state.json`
+- **State tracking**: Progress is saved in `workspace-state.json`
 - **Automatic completion**: The agent detects when `BOOTSTRAP.md` is deleted and marks onboarding complete
 - **OpenClaw compatible**: Uses the same BOOTSTRAP.md format and flow
 
@@ -305,7 +305,7 @@ Hybrid has a 3-layer memory system. All three layers are indexed together into S
 Structured entity storage inspired by the [PARA method](https://fortelabs.com/blog/para/). The agent can create named entities in four buckets — `projects`, `areas`, `resources`, `archives` — and attach atomic facts to each one.
 
 ```
-.hybrid/memory/life/
+memory/life/
   areas/people/Alice/
     items.json     ← all facts, including superseded ones
     summary.md     ← hot + warm facts only, used for search indexing
@@ -326,7 +326,7 @@ Cold facts are excluded from search and from `summary.md` — but never deleted.
 An append-only chronological log. Each day gets its own file:
 
 ```
-.hybrid/memory/logs/2026-03-02.md
+memory/logs/2026-03-02.md
 ```
 
 The agent logs facts, decisions, and actions throughout a session. Entries are timestamped and tagged `[FACT]`, `[DECISION]`, or `[ACTION]`. Nothing is ever rewritten — the file only grows.
@@ -340,7 +340,7 @@ A structured `MEMORY.md` with five fixed sections: **User Preferences**, **Learn
 Every user's memory is scoped to their wallet address:
 
 ```
-.hybrid/memory/users/0xabc.../MEMORY.md    ← guest's private memory
+memory/users/0xabc.../MEMORY.md    ← guest's private memory
 MEMORY.md                                  ← shared memory (owners only)
 ```
 
@@ -490,7 +490,7 @@ hybrid deploy cf
 ### Any Node.js host
 ```bash
 hybrid build
-# Ship .hybrid/ to your server and run start.sh
+# Ship dist/ to your server and run start.sh
 ```
 
 ---
