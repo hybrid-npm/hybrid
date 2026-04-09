@@ -52,8 +52,8 @@ export class ExternalDatabaseAdapter implements StorageAdapter {
 }
 
 export function createStorageAdapter(): StorageAdapter | null {
-  if (typeof globalThis !== 'undefined' && 'R2_STORAGE' in globalThis) {
-    return new R2StorageAdapter((globalThis as any).R2_STORAGE)
+  if (typeof globalThis !== 'undefined' && 'AGENT_STORAGE' in globalThis) {
+    return new R2StorageAdapter((globalThis as any).AGENT_STORAGE)
   }
   
   if (typeof process !== 'undefined' && process.env?.DATABASE_URL) {
