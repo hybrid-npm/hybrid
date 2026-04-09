@@ -1,8 +1,6 @@
-import type { XmtpClient, XmtpConversation, XmtpMessage } from "./xmtp"
+export type ChannelId = "web" | (string & {})
 
 export interface AgentRuntime {
-	conversation: XmtpConversation
-	message: XmtpMessage
-	xmtpClient: XmtpClient
+	channel?: ChannelId
 	scheduler?: unknown
 }

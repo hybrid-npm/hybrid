@@ -24,17 +24,7 @@ export type {
 } from "./plugin"
 
 // Runtime types
-export type { AgentRuntime } from "./runtime"
-
-// XMTP types
-export type {
-	HonoVariables,
-	XmtpClient,
-	XmtpConversation,
-	XmtpMessage,
-	XmtpSender,
-	XmtpSubjects
-} from "./xmtp"
+export type { AgentRuntime, ChannelId } from "./runtime"
 
 // Resolver types
 export type { Resolver } from "./resolver"
@@ -52,7 +42,6 @@ export type {
 
 // Channel types
 export type {
-	ChannelId,
 	CronDeliveryMode,
 	CronDelivery,
 	TriggerRequest,

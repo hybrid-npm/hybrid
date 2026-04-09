@@ -62,8 +62,6 @@ function debug(...args: unknown[]) {
 	if (DEBUG) console.log("[debug]", ...args)
 }
 
-const XMTP_ENV = process.env.XMTP_ENV || "dev"
-
 const SCHEDULER_ENABLED = process.env.SCHEDULER_ENABLED !== "false"
 const SCHEDULER_POLL_MS = Number.parseInt(
 	process.env.SCHEDULER_POLL_MS || "60000",
@@ -352,43 +350,12 @@ async function initScheduler() {
 			}
 		}
 
-		const XMTP_SIDECAR_PORT = process.env.XMTP_SIDECAR_PORT || "8455"
-
 		const dispatcher = {
 			dispatch: async (params: {
 				channel: string
 				to: string
 				message: string
 			}) => {
-				if (params.channel === "xmtp") {
-					try {
-						const res = await fetch(
-							`http://127.0.0.1:${XMTP_SIDECAR_PORT}/api/send`,
-							{
-								method: "POST",
-								headers: { "Content-Type": "application/json" },
-								body: JSON.stringify({
-									conversationId: params.to,
-									message: params.message
-								})
-							}
-						)
-
-						if (res.ok) {
-							return { delivered: true }
-						}
-						return {
-							delivered: false,
-							error: `XMTP sidecar returned ${res.status}`
-						}
-					} catch (err) {
-						return {
-							delivered: false,
-							error: (err as Error).message
-						}
-					}
-				}
-
 				return {
 					delivered: false,
 					error: `Unknown channel: ${params.channel}`
@@ -454,6 +421,7 @@ interface ContainerRequest {
 	teamId?: string
 	systemPrompt?: string
 	conversationId?: string
+	channel?: string
 }
 
 function encodeSSE(data: string): Uint8Array {
@@ -577,11 +545,13 @@ When scheduling tasks, calculate the target time relative to the current time ab
 		? req.conversationId.replace(/[^a-zA-Z0-9_:=-]/g, "")
 		: undefined
 
+	const channel = req.channel || (sanitizedConversationId ? "xmtp" : "web")
+
 	const conversationContext = sanitizedConversationId
 		? `## Conversation Context
 
 - Conversation ID: ${sanitizedConversationId}
-- Channel: xmtp
+- Channel: ${channel}
 
 When scheduling reminders, include delivery info to send the message back to this conversation:
 \`\`\`json
@@ -589,7 +559,7 @@ When scheduling reminders, include delivery info to send the message back to thi
   "name": "Reminder name",
   "schedule": { "kind": "at", "at": "<ISO timestamp>" },
   "payload": { "kind": "agentTurn", "message": "Your reminder message" },
-  "delivery": { "mode": "announce", "channel": "xmtp", "to": "${sanitizedConversationId}" }
+  "delivery": { "mode": "announce", "channel": "${channel}", "to": "${sanitizedConversationId}" }
 }
 \`\`\`
 
@@ -598,6 +568,20 @@ When scheduling reminders, include delivery info to send the message back to thi
 - NEVER say "Current time is 2026-03-02T..."
 - ONLY say things like "in 1 minute" or "at 4:30 PM"
 - Keep it SHORT: "Got it! I'll remind you in 1 minute"`
+		: ""
+
+	const PLAINTEXT_CHANNELS = new Set(["xmtp", "whatsapp", "sms"])
+	const channelFormatting = PLAINTEXT_CHANNELS.has(channel)
+		? `## Channel Formatting (${channel})
+
+You are responding on ${channel}, which renders plain text only. Follow these rules strictly:
+- Do NOT use markdown formatting (no #, ##, **, *, -, backticks, code blocks, etc.)
+- Write in plain, natural language
+- Use line breaks for separation instead of headers
+- Use simple dashes or numbers for lists (not markdown bullets)
+- Spell out emphasis naturally instead of using bold/italic
+- Never mention tool calls, tool names, or internal processes in your response
+- Keep responses concise and conversational`
 		: ""
 
 	const USER_MD = loadUserMarkdown(req.userId)
@@ -614,6 +598,7 @@ When scheduling reminders, include delivery info to send the message back to thi
 		AGENTS_MD,
 		TOOLS_MD,
 		USER_MD,
+		channelFormatting,
 		currentTime,
 		conversationContext,
 		bootstrapContext

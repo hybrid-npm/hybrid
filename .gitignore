@@ -23,6 +23,9 @@ build
 .DS_Store
 *.pem
 
+# ai data
+data
+
 # generated files
 site/.source/
 
@@ -64,7 +67,6 @@ xmtp-development-*
 
 # hybrid build output
 .hybrid/
-
 sandbox/
 workspace/
 scratchpad.md
