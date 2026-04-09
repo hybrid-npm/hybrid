@@ -544,7 +544,8 @@ When scheduling tasks, calculate the target time relative to the current time ab
 		? req.conversationId.replace(/[^a-zA-Z0-9_:=-]/g, "")
 		: undefined
 
-	const channel = req.channel || "web"
+	const rawChannel = req.channel || "web"
+	const channel = rawChannel.replace(/[^a-zA-Z0-9_-]/g, "")
 
 	const conversationContext = sanitizedConversationId
 		? `## Conversation Context
