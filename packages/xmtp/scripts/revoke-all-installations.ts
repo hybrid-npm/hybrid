@@ -34,7 +34,7 @@ async function revokeAllInstallations() {
 		const secret = resolveAgentSecret(AGENT_WALLET_KEY)
 		const dbEncryptionKey = new Uint8Array(Buffer.from(secret, "hex"))
 
-		const dbPath = await getDbPath(`${env}-${address}`)
+		const dbPath = await getDbPath(`agent-${env}-${address}`)
 
 		await Client.create(signer, {
 			dbEncryptionKey,

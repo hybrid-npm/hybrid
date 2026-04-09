@@ -18,7 +18,7 @@ import type {
 	XmtpMessage
 } from "@hybrd/types"
 import { logger } from "@hybrd/utils"
-import { createXMTPClient, getDbPath } from "./client"
+import { getDbPath } from "./client"
 import { ContentTypeReply, ContentTypeText, type Reply } from "./index"
 
 // Re-export types from @hybrd/types for backward compatibility
@@ -88,20 +88,23 @@ export function XMTPPlugin(): Plugin<PluginContext> {
 			const user = createUser(AGENT_WALLET_KEY as `0x${string}`)
 			const signer = createSigner(user)
 
-			const xmtpClient = await createXMTPClient(
-				AGENT_WALLET_KEY as `0x${string}`
-			)
-
 			const address = user.account.address.toLowerCase()
+			console.log(`[xmtp] Using wallet: ${address}`)
+
 			const agentDbPath = await getDbPath(
 				`agent-${XMTP_ENV || "dev"}-${address}`
 			)
 			logger.debug(`📁 Using database path: ${agentDbPath}`)
 
+			// Use XmtpAgent.create which handles everything including database
+			// Do NOT call createXMTPClient separately - that would create duplicate installations
 			const xmtp = (await XmtpAgent.create(signer, {
 				env: XMTP_ENV as XmtpEnv,
 				dbPath: agentDbPath
 			})) as any
+
+			// Get the underlying client for use in runtime
+			const xmtpClient = xmtp.client
 
 			const botInboxId = xmtp.client?.inboxId
 			const MAX_HISTORY = 20

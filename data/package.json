@@ -1,0 +1,12 @@
+{
+  "name": "data",
+  "private": true,
+  "scripts": {
+    "dev": "tsx ../packages/agent/src/server/index.ts",
+    "build": "echo 'Build from monorepo root'",
+    "start": "tsx ../packages/agent/src/server/index.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.3"
+  }
+}

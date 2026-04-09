@@ -1,0 +1,22 @@
+{
+  "agent-browser": {
+    "source": "core",
+    "installedAt": "2026-03-15T02:45:23.594Z"
+  },
+  "memory": {
+    "source": "core",
+    "installedAt": "2026-03-15T02:45:23.594Z"
+  },
+  "scheduler": {
+    "source": "core",
+    "installedAt": "2026-03-15T02:45:23.594Z"
+  },
+  "skills-manager": {
+    "source": "core",
+    "installedAt": "2026-03-15T02:45:23.594Z"
+  },
+  "xmtp": {
+    "source": "core",
+    "installedAt": "2026-03-15T02:45:23.594Z"
+  }
+}

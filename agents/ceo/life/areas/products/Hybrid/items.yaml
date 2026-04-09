@@ -1,0 +1,51 @@
+---
+facts:
+  - id: hybrid_001
+    type: product_core_value
+    content: "TypeScript agent runtime with 100% OpenClaw feature parity plus XMTP decentralized messaging, multi-user memory isolation, PARA knowledge graph, and channel adapter framework"
+    source: "README.md review"
+    timestamp: "2026-03-15T14:55:00Z"
+    tier: hot
+    access_count: 1
+    last_accessed: "2026-03-15T14:55:00Z"
+    status: active
+
+  - id: hybrid_002
+    type: product_architecture
+    content: "Monorepo with packages: agent (runtime), gateway (Cloudflare Workers), memory (3-layer PARA), scheduler (cron/interval), channels (adapter framework), xmtp (client), cli, types, utils, create-hybrid"
+    source: "Package structure analysis"
+    timestamp: "2026-03-15T14:55:00Z"
+    tier: hot
+    access_count: 1
+    last_accessed: "2026-03-15T14:55:00Z"
+    status: active
+
+  - id: hybrid_003
+    type: product_compatibility
+    content: "100% OpenClaw compatible - SOUL.md, AGENTS.md, memory files, and skills work without modification. Port time: under 10 minutes"
+    source: "README.md"
+    timestamp: "2026-03-15T14:55:00Z"
+    tier: hot
+    access_count: 1
+    last_accessed: "2026-03-15T14:55:00Z"
+    status: active
+
+  - id: hybrid_004
+    type: product_tech_stack
+    content: "Node.js 22, TypeScript, pnpm workspace, Turbo (monorepo), Claude Agent SDK, XMTP protocol, SQLite + sqlite-vec for search"
+    source: "package.json and README"
+    timestamp: "2026-03-15T14:55:00Z"
+    tier: hot
+    access_count: 1
+    last_accessed: "2026-03-15T14:55:00Z"
+    status: active
+
+  - id: hybrid_005
+    type: product_deployment
+    content: "Deployment targets: Fly.io, Cloudflare Workers + Containers, any Node.js host"
+    source: "README.md"
+    timestamp: "2026-03-15T14:55:00Z"
+    tier: hot
+    access_count: 1
+    last_accessed: "2026-03-15T14:55:00Z"
+    status: active

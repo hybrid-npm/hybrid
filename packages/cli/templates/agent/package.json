@@ -2,11 +2,11 @@
 	"name": "{{name}}",
 	"private": true,
 	"scripts": {
-		"dev": "tsx ../packages/agent/src/server/index.ts",
-		"build": "echo 'Build from monorepo root'",
-		"start": "tsx ../packages/agent/src/server/index.ts"
+		"dev": "hybrid dev",
+		"build": "hybrid build",
+		"start": "hybrid start"
 	},
-	"devDependencies": {
-		"tsx": "^4.19.3"
+	"dependencies": {
+		"hybrid": "^*"
 	}
 }

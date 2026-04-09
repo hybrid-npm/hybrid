@@ -7,13 +7,14 @@ import {
 	query
 } from "@anthropic-ai/claude-agent-sdk"
 import { serve } from "@hono/node-server"
+import { MemoryIndexManager, resolveMemoryConfig } from "@hybrd/memory"
 import {
 	type SchedulerExecutor,
 	SchedulerService,
 	createSchedulerTools,
 	createSqliteStore
 } from "@hybrd/scheduler"
-import { MemoryIndexManager, resolveMemoryConfig } from "@hybrd/memory"
+import { config } from "dotenv"
 import { Hono } from "hono"
 import pc from "picocolors"
 import { privateKeyToAccount } from "viem/accounts"
@@ -33,12 +34,20 @@ const _dirname =
 		: dirname(fileURLToPath(import.meta.url))
 
 // ============================================================================
+// Load .env files from project directory FIRST (before any other code)
+// ============================================================================
+const PROJECT_ROOT = process.env.AGENT_PROJECT_ROOT || process.cwd()
+const envLocalPath = join(PROJECT_ROOT, ".env.local")
+const envPath = join(PROJECT_ROOT, ".env")
+
+config({ path: envLocalPath, override: true })
+config({ path: envPath })
+
+// ============================================================================
 // SECURITY: Load secrets from persistent volume into memory
 // Secrets are file-based only — never in process.env
 // ============================================================================
 loadSecrets()
-
-const PROJECT_ROOT = process.env.AGENT_PROJECT_ROOT || process.cwd()
 
 // Auto-configure OpenRouter if OPENROUTER_API_KEY is present
 // See: https://openrouter.ai/docs/guides/guides/claude-code-integration
@@ -73,9 +82,24 @@ const SCHEDULER_POLL_MS = Number.parseInt(
 let scheduler: SchedulerService | null = null
 
 function getWalletAddress(): string | null {
-	if (!hasSecret("AGENT_WALLET_KEY")) return null
+	// Try secret store first (production)
+	if (hasSecret("AGENT_WALLET_KEY")) {
+		try {
+			const key = getWalletKey()
+			const keyWithPrefix = key.startsWith("0x")
+				? (key as `0x${string}`)
+				: (`0x${key}` as `0x${string}`)
+			const account = privateKeyToAccount(keyWithPrefix)
+			return account.address
+		} catch {
+			return null
+		}
+	}
+
+	// Fall back to env var (development)
+	const key = process.env.AGENT_WALLET_KEY
+	if (!key) return null
 	try {
-		const key = getWalletKey()
 		const keyWithPrefix = key.startsWith("0x")
 			? (key as `0x${string}`)
 			: (`0x${key}` as `0x${string}`)
@@ -955,6 +979,15 @@ const app = new Hono()
 
 app.get(HEALTH_CHECK_PATH, (c) => {
 	return c.json({ status: "healthy" })
+})
+
+// Config endpoint - exposes only public config (wallet address, never private key)
+app.get("/api/config", (c) => {
+	const walletAddress = getWalletAddress()
+	return c.json({
+		walletAddress,
+		xmtpEnv: process.env.XMTP_ENV || "production"
+	})
 })
 
 app.post(AGENT_ENDPOINT, async (c) => {

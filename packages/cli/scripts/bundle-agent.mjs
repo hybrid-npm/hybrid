@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, readdirSync } from "node:fs"
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import * as esbuild from "esbuild"
@@ -7,12 +7,14 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const cliDir = resolve(__dirname, "..")
 const monorepoDir = resolve(cliDir, "..", "..")
 const agentDir = resolve(monorepoDir, "packages", "agent")
+const devUiDir = resolve(monorepoDir, "packages", "dev-ui")
 const outDir = resolve(cliDir, "dist")
 
 console.log("\n📦 Bundling hybrid package...")
 
 // Ensure output directories exist
 mkdirSync(resolve(outDir, "server"), { recursive: true })
+mkdirSync(resolve(outDir, "dev-ui"), { recursive: true })
 
 // Build agent runtime
 console.log("  Building agent runtime...")
@@ -62,6 +64,26 @@ await esbuild.build({
 })
 
 console.log("  ✓ Agent runtime built")
+
+// Build and copy dev UI
+console.log("  Building dev UI...")
+const devUiOutDir = resolve(outDir, "dev-ui")
+
+// Run vite build in dev-ui directory
+const { execSync } = await import("node:child_process")
+execSync("vite build", { cwd: devUiDir, stdio: "pipe" })
+
+// Copy the built assets
+if (existsSync(resolve(devUiDir, "dist"))) {
+	rmSync(resolve(devUiOutDir), { recursive: true, force: true })
+	mkdirSync(devUiOutDir, { recursive: true })
+	cpSync(resolve(devUiDir, "dist"), resolve(devUiOutDir, "public"), {
+		recursive: true
+	})
+	console.log("  ✓ Dev UI built and copied")
+} else {
+	console.log("  ⚠️ Dev UI dist not found")
+}
 
 // Copy core skills
 console.log("  Copying core skills...")

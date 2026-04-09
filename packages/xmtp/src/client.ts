@@ -155,6 +155,8 @@ export async function createXMTPClient(
 	const identifier = await signer.getIdentifier()
 	const address = identifier.identifier
 
+	console.log(`[xmtp] Creating client for wallet: ${address}`)
+
 	while (attempt < maxRetries) {
 		try {
 			logger.debug(
@@ -172,7 +174,7 @@ export async function createXMTPClient(
 
 			const dbEncryptionKey = getEncryptionKeyFromHex(agentSecret)
 			const dbPath = await getDbPath(
-				`${XMTP_ENV || "dev"}-${address}`,
+				`agent-${XMTP_ENV || "dev"}-${address}`,
 				storagePath
 			)
 			logger.debug(`📁 Using database path: ${dbPath}`)
@@ -196,7 +198,7 @@ export async function createXMTPClient(
 
 			await backupDbToPersistentStorage(
 				dbPath,
-				`${XMTP_ENV || "dev"}-${address}`
+				`agent-${XMTP_ENV || "dev"}-${address}`
 			)
 
 			console.log(`Wallet: ${address}`)
@@ -224,6 +226,10 @@ export async function createXMTPClient(
 					// Extract inboxId from the error message
 					const inboxIdMatch = error.message.match(/InboxID ([a-f0-9]+)/)
 					const inboxId = inboxIdMatch ? inboxIdMatch[1] : undefined
+
+					console.error(`\n❌ XMTP connection failed for wallet: ${address}`)
+					console.error(`   This wallet is not registered on XMTP.`)
+					console.error(`   Run 'hybrid register' to register this wallet.\n`)
 
 					// First try to revoke old installations
 					const revocationSuccess = await revokeOldInstallations(
@@ -275,7 +281,7 @@ export async function createXMTPClient(
 							dbEncryptionKey: tempEncryptionKey,
 							env: XMTP_ENV as XmtpEnv,
 							dbPath: await getDbPath(
-								`${XMTP_ENV || "dev"}-${address}`,
+								`agent-${XMTP_ENV || "dev"}-${address}`,
 								storagePath
 							),
 							codecs: [

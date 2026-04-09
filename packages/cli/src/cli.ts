@@ -55,9 +55,25 @@ async function main() {
 	if (command === "dev") return dev(args.includes("--docker"))
 	if (command === "start") return start()
 	if (command === "deploy") return deploy(args[1], args.includes("--keygen"))
-	if (command === "init") return init(args[1])
+	if (command === "init") {
+		if (args.includes("-h") || args.includes("--help")) {
+			console.log("Usage: hybrid init [name]")
+			console.log("")
+			console.log(
+				"Initialize a new agent in the current directory or a new directory."
+			)
+			console.log("")
+			console.log("Arguments:")
+			console.log(
+				"  name    Optional name for the agent (creates a new directory)"
+			)
+			return
+		}
+		return init(args[1])
+	}
 	if (command === "keygen") return keygen(args[1])
 	if (command === "register") return register()
+	if (command === "doctor") return doctor()
 	if (command === "revoke") return revoke(args[1])
 	if (command === "revoke-all") return revokeAll()
 
@@ -123,7 +139,7 @@ async function main() {
 	console.log("Usage: hybrid <command>")
 	console.log("")
 	console.log("Commands:")
-	console.log("  init <name>           Initialize a new agent")
+	console.log("  init [name]         Initialize a new agent")
 	console.log("  dev                   Start development server")
 	console.log("  build [--target]      Build for deployment (fly, railway)")
 	console.log("  start                 Run built agent")
@@ -132,6 +148,7 @@ async function main() {
 	console.log("Wallet:")
 	console.log("  keygen [prefix]       Generate a new wallet")
 	console.log("  register              Register wallet on XMTP")
+	console.log("  doctor                Diagnose and fix common issues")
 	console.log("  revoke <inboxId>      Revoke installations")
 	console.log("  revoke-all            Revoke all installations")
 	console.log("")
@@ -208,6 +225,112 @@ async function skillsList() {
 }
 
 // ============================================================================
+// Doctor - diagnose and fix common issues
+// ============================================================================
+
+async function doctor() {
+	const { existsSync, readFileSync } = await import("node:fs")
+	const { resolve } = await import("node:path")
+
+	const projectDir = projectRoot
+	const envPath = resolve(projectDir, ".env")
+	const credentialsDir = resolve(projectDir, "credentials")
+
+	console.log("\n🔍 Running diagnostics...\n")
+
+	let issuesFound = false
+
+	// Check .env exists
+	if (!existsSync(envPath)) {
+		console.log("❌ Missing .env file")
+		issuesFound = true
+	} else {
+		console.log("✓ .env file exists")
+	}
+
+	// Check .env has required variables
+	const envContent = readFileSync(envPath, "utf-8")
+	const hasWalletKey =
+		envContent.includes("AGENT_WALLET_KEY=") &&
+		!envContent.match(/AGENT_WALLET_KEY=\s*$/)
+	const hasApiKey =
+		(envContent.includes("ANTHROPIC_API_KEY=") &&
+			!envContent.match(/^ANTHROPIC_API_KEY=\s*$/m)) ||
+		(envContent.includes("ANTHROPIC_AUTH_TOKEN=") &&
+			!envContent.match(/^ANTHROPIC_AUTH_TOKEN=\s*$/m))
+
+	if (!hasWalletKey) {
+		console.log("❌ Missing AGENT_WALLET_KEY in .env")
+		issuesFound = true
+	} else {
+		console.log("✓ AGENT_WALLET_KEY configured")
+	}
+
+	if (!hasApiKey) {
+		console.log("❌ Missing API key in .env")
+		issuesFound = true
+	} else {
+		console.log("✓ API key configured")
+	}
+
+	// Check credentials/xmtp-allowFrom.json
+	const aclPath = resolve(credentialsDir, "xmtp-allowFrom.json")
+	if (!existsSync(aclPath)) {
+		console.log("❌ Missing credentials/xmtp-allowFrom.json")
+		issuesFound = true
+	} else {
+		try {
+			const acl = JSON.parse(readFileSync(aclPath, "utf-8"))
+			if (acl.allowFrom && acl.allowFrom.length > 0) {
+				console.log("✓ Owner configured")
+			} else {
+				console.log("❌ No owners configured")
+				issuesFound = true
+			}
+		} catch {
+			console.log("❌ Invalid credentials/xmtp-allowFrom.json")
+			issuesFound = true
+		}
+	}
+
+	// Check credentials directory
+	if (!existsSync(credentialsDir)) {
+		console.log("❌ Missing credentials directory")
+		issuesFound = true
+	} else {
+		console.log("✓ credentials directory exists")
+	}
+
+	// Check skills
+	const skillsDir = resolve(projectDir, "skills")
+	if (!existsSync(skillsDir)) {
+		console.log("❌ Missing skills directory")
+		issuesFound = true
+	} else {
+		console.log("✓ skills directory exists")
+	}
+
+	if (issuesFound) {
+		console.log("\n⚠️  Issues detected!")
+		const hasEnv = existsSync(envPath)
+		const hasWallet = hasEnv && envContent.includes("AGENT_WALLET_KEY=")
+		if (!hasEnv) {
+			console.log("\nRun 'hybrid init' to set up a new agent project.")
+		} else if (hasWallet) {
+			console.log(
+				"\nRun 'hybrid init .' in an empty directory, or check that you entered"
+			)
+			console.log("an owner address during initialization.")
+		}
+		return
+	}
+
+	console.log("\n✓ All checks passed!")
+	console.log("\nIf you're still having issues starting the agent, try:")
+	console.log("  hybrid register  # Register your wallet on XMTP")
+}
+
+// ============================================================================
 // ClawHub - Wrapper around clawhub CLI
 // ============================================================================
 
@@ -260,12 +383,6 @@ async function clawhubWhoami() {
 // ============================================================================
 
 async function init(name?: string) {
-	if (!name) {
-		console.error("Error: Agent name required")
-		console.error("Usage: hybrid init <name>")
-		process.exit(1)
-	}
-
 	const {
 		cpSync,
 		existsSync,
@@ -277,14 +394,25 @@ async function init(name?: string) {
 	const { createInterface } = await import("node:readline")
 
 	const templateDir = resolve(packageDir, "templates", "agent")
-	const targetDir = resolve(process.cwd(), name)
+	const targetDir = name ? resolve(process.cwd(), name) : process.cwd()
 
-	if (existsSync(targetDir)) {
+	if (name && existsSync(targetDir)) {
 		console.error(`Error: Directory '${name}' already exists`)
 		process.exit(1)
 	}
 
-	console.log(`\n📦 Creating agent: ${name}\n`)
+	if (!name) {
+		const entries = readdirSync(targetDir).filter((f) => !f.startsWith("."))
+		if (entries.length > 0) {
+			console.error(
+				"Error: Current directory is not empty. Specify a name to create a new directory, or clear the current directory."
+			)
+			process.exit(1)
+		}
+	}
+
+	const dirName = name || basename(process.cwd())
+	console.log(`\n📦 Initializing agent: ${dirName}\n`)
 
 	// Copy template
 	cpSync(templateDir, targetDir, { recursive: true })
@@ -292,7 +420,7 @@ async function init(name?: string) {
 	// Update package.json with agent name
 	const pkgPath = resolve(targetDir, "package.json")
 	const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"))
-	pkg.name = name
+	pkg.name = dirName
 	writeFileSync(pkgPath, JSON.stringify(pkg, null, 2))
 
 	// Copy core skills from bundled package
@@ -457,11 +585,17 @@ async function init(name?: string) {
 	writeFileSync(envPath, envContent)
 	console.log("✅ Updated .env file")
 
-	console.log(`\n✅ Created agent at: ${name}/`)
-	console.log("\nNext steps:")
-	console.log(`  cd ${name}`)
-	console.log("  npm install  # or pnpm install")
-	console.log("  hybrid dev   # Start development")
+	console.log(`\n✅ Initialized agent: ${dirName}`)
+	if (name) {
+		console.log("\nNext steps:")
+		console.log(`  cd ${name}`)
+		console.log("  npm install  # or pnpm install")
+		console.log("  hybrid dev   # Start development")
+	} else {
+		console.log("\nNext steps:")
+		console.log("  npm install  # or pnpm install")
+		console.log("  hybrid dev   # Start development")
+	}
 }
 
 // ============================================================================
@@ -717,6 +851,7 @@ async function dev(useDocker: boolean) {
 	const { execSync } = await import("node:child_process")
 	const { existsSync, readFileSync } = await import("node:fs")
 	const { privateKeyToAccount } = await import("viem/accounts")
+	const { resolve } = await import("node:path")
 
 	if (useDocker) {
 		console.log("\n🐳 Docker dev not yet implemented for new structure")
@@ -777,20 +912,33 @@ process.exit(0);
 	// Remove duplicate projectDir declaration
 	const agentServer = resolve(packageDir, "dist", "server", "index.cjs")
 	const agentXmtp = resolve(packageDir, "dist", "xmtp.cjs")
+	const devUiDir = resolve(packageDir, "dist", "dev-ui", "public")
+	const devUiSrcDir = resolve(packageDir, "..", "dev-ui")
 
 	console.log("\n🚀 Starting development server...\n")
 	console.log(`   Project: ${projectDir}`)
 	console.log(`   Runtime: ${packageDir}\n`)
 
+	// Open browser after a short delay
+	setTimeout(async () => {
+		try {
+			const open = (await import("open")).default
+			open("http://localhost:8456").catch(() => {})
+		} catch {
+			// ignore if open fails
+		}
+	}, 1000)
+
 	try {
 		execSync(
-			`npx concurrently --names "server,xmtp" --prefix-colors "cyan,magenta" "node ${agentServer}" "node ${agentXmtp}"`,
+			`npx concurrently --names "server,xmtp,chat" --prefix-colors "cyan,magenta,yellow" "node ${agentServer}" "node ${agentXmtp}" "cd ${devUiSrcDir} && npx vite build && npx vite preview --port 8456"`,
 			{
 				cwd: projectDir,
 				stdio: "inherit",
 				env: {
 					...process.env,
-					AGENT_PROJECT_ROOT: projectDir
+					AGENT_PROJECT_ROOT: projectDir,
+					DEV_UI_PORT: "8456"
 				}
 			}
 		)
@@ -938,7 +1086,9 @@ async function deploy(platform?: string, keygen = false) {
 	// Validate app name to prevent command injection
 	if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(appName)) {
 		console.error(`\n❌ Invalid app name: ${appName}`)
-		console.error("App name must start with a letter/digit and contain only letters, digits, hyphens, and underscores.")
+		console.error(
+			"App name must start with a letter/digit and contain only letters, digits, hyphens, and underscores."
+		)
 		process.exit(1)
 	}
 
@@ -1087,7 +1237,13 @@ async function deploy(platform?: string, keygen = false) {
 			try {
 				execFileSync(
 					"fly",
-					["secrets", "set", `OPENROUTER_API_KEY=${openRouterKey}`, "--app", appName],
+					[
+						"secrets",
+						"set",
+						`OPENROUTER_API_KEY=${openRouterKey}`,
+						"--app",
+						appName
+					],
 					{
 						cwd: distDir,
 						stdio: "inherit"
@@ -1203,9 +1359,6 @@ async function generateVanityWallet(
 
 async function register() {
 	const { execSync } = await import("node:child_process")
-	const { existsSync, readFileSync } = await import("node:fs")
-	const { join } = await import("node:path")
-	const { privateKeyToAccount } = await import("viem/accounts")
 
 	const walletKey = process.env.AGENT_WALLET_KEY || process.env.WALLET_KEY
 	if (!walletKey) {
@@ -1213,30 +1366,10 @@ async function register() {
 		process.exit(1)
 	}
 
+	const { privateKeyToAccount } = await import("viem/accounts")
 	const account = privateKeyToAccount(
 		(walletKey.startsWith("0x") ? walletKey : `0x${walletKey}`) as `0x${string}`
 	)
-
-	// Verify ACL exists
-	const projectDir = projectRoot
-	const aclPath = join(projectDir, "credentials", "xmtp-allowFrom.json")
-
-	if (!existsSync(aclPath)) {
-		console.error("\n❌ No credentials/xmtp-allowFrom.json")
-		console.error("Run 'hybrid init' first")
-		process.exit(1)
-	}
-
-	try {
-		const acl = JSON.parse(readFileSync(aclPath, "utf-8"))
-		if (!acl.allowFrom?.length) {
-			console.error("\n❌ No owners in ACL")
-			process.exit(1)
-		}
-	} catch {
-		console.error("\n❌ Invalid credentials/xmtp-allowFrom.json")
-		process.exit(1)
-	}
 
 	console.log(`\n🔐 Registering ${account.address} on XMTP...`)
 	try {

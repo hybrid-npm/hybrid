@@ -63,6 +63,9 @@ function getWalletAddress(): string | null {
 	if (hasSecret("AGENT_WALLET_KEY")) {
 		try {
 			const key = getWalletKey()
+			console.log(
+				`[wallet] Loaded from secrets: ${key.slice(0, 10)}...${key.slice(-8)}`
+			)
 			const account = privateKeyToAccount(
 				key.startsWith("0x")
 					? (key as `0x${string}`)
@@ -77,6 +80,9 @@ function getWalletAddress(): string | null {
 	// Fall back to env var (development)
 	const key = process.env.AGENT_WALLET_KEY
 	if (!key) return null
+	console.log(
+		`[wallet] Loaded from env: ${key.slice(0, 10)}...${key.slice(-8)}`
+	)
 	try {
 		const account = privateKeyToAccount(
 			key.startsWith("0x")
@@ -109,6 +115,15 @@ app.post("/api/skills/remove", handleRemoveSkill)
 
 // Auth routes
 app.post("/api/auth/verify", handleAuthVerify)
+
+// Config endpoint - exposes only public config (wallet address, never private key)
+app.get("/api/config", (c) => {
+	const walletAddress = getWalletAddress()
+	return c.json({
+		walletAddress,
+		xmtpEnv: process.env.XMTP_ENV || "production"
+	})
+})
 
 // Mini app static files
 app.use("*", serveMiniApp)

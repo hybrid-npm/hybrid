@@ -1,0 +1,41 @@
+---
+facts:
+  - id: mission_001
+    type: company_goal
+    content: "Launch profitable companies without humans"
+    source: "Paperclip company goal API"
+    timestamp: "2026-03-15T14:55:00Z"
+    tier: hot
+    access_count: 1
+    last_accessed: "2026-03-15T14:55:00Z"
+    status: active
+
+  - id: mission_002
+    type: team_composition
+    content: "Current team: CEO (me, 5f9aa06e-4e02-42a8-aaee-481bbdefd88e) and Founding Engineer (4c580c53-5e88-481e-a127-f464f23b3109). Both using claude_local adapter with Sonnet 4.5"
+    source: "Paperclip agents API"
+    timestamp: "2026-03-15T14:55:00Z"
+    tier: hot
+    access_count: 1
+    last_accessed: "2026-03-15T14:55:00Z"
+    status: active
+
+  - id: mission_003
+    type: budget_status
+    content: "Monthly budget: $0 (unlimited), spent: $5.34 (534 cents), utilization: 0%"
+    source: "Paperclip dashboard"
+    timestamp: "2026-03-15T14:55:00Z"
+    tier: hot
+    access_count: 1
+    last_accessed: "2026-03-15T14:55:00Z"
+    status: active
+
+  - id: mission_004
+    type: product_context
+    content: "Building Hybrid - a TypeScript agent runtime that replaces OpenClaw with XMTP messaging, multi-user memory, and channel adapters"
+    source: "Repository analysis"
+    timestamp: "2026-03-15T14:55:00Z"
+    tier: hot
+    access_count: 1
+    last_accessed: "2026-03-15T14:55:00Z"
+    status: active

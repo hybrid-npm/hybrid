@@ -1,9 +1,40 @@
 import { existsSync, readFileSync, statSync } from "node:fs"
 import { extname, resolve } from "node:path"
 import type { MiddlewareHandler } from "hono"
+import { privateKeyToAccount } from "viem/accounts"
+import { getWalletKey, hasSecret, loadSecrets } from "../lib/secret-store.js"
 
 const MINI_APP_DIR =
 	process.env.MINI_APP_DIR || resolve(process.cwd(), "server", "dist")
+
+function getWalletAddress(): string | null {
+	loadSecrets()
+	if (hasSecret("AGENT_WALLET_KEY")) {
+		try {
+			const key = getWalletKey()
+			const account = privateKeyToAccount(
+				key.startsWith("0x")
+					? (key as `0x${string}`)
+					: (`0x${key}` as `0x${string}`)
+			)
+			return account.address
+		} catch {
+			return null
+		}
+	}
+	const key = process.env.AGENT_WALLET_KEY
+	if (!key) return null
+	try {
+		const account = privateKeyToAccount(
+			key.startsWith("0x")
+				? (key as `0x${string}`)
+				: (`0x${key}` as `0x${string}`)
+		)
+		return account.address
+	} catch {
+		return null
+	}
+}
 
 const MIME_TYPES: Record<string, string> = {
 	".html": "text/html; charset=utf-8",
@@ -51,7 +82,26 @@ export const serveMiniApp: MiddlewareHandler = async (c, next) => {
 		const ext = extname(fullPath)
 		const contentType = MIME_TYPES[ext] || "application/octet-stream"
 
-		const content = readFileSync(fullPath)
+		let content = readFileSync(fullPath)
+
+		// Inject agent wallet address and XMTP env into HTML (server-side rendered)
+		// Private key never leaves the server - only the address is exposed
+		if (ext === ".html") {
+			const walletAddress = getWalletAddress()
+			const xmtpEnv = process.env.XMTP_ENV || "production"
+			if (walletAddress) {
+				const html = content.toString("utf-8")
+				const injected = html.replace(
+					"</body>",
+					`<script>
+window.AGENT_WALLET_ADDRESS = "${walletAddress}";
+window.XMTP_ENV = "${xmtpEnv}";
+</script></body>`
+				)
+				content = Buffer.from(injected)
+			}
+		}
+
 		return new Response(content, {
 			headers: {
 				"Content-Type": contentType,

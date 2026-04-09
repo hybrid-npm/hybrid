@@ -61,7 +61,7 @@ async function registerOnXMTP() {
 			console.log("   - 'Create inbox' message (if first time)")
 		}
 
-		const dbPath = await getDbPath(`${XMTP_ENV}-${address}`)
+		const dbPath = await getDbPath(`agent-${XMTP_ENV}-${address}`)
 		console.log(`📁 Database path: ${dbPath}`)
 
 		const client = await createXMTPClient(AGENT_WALLET_KEY)
@@ -80,7 +80,7 @@ async function registerOnXMTP() {
 		console.log(`
 ✓ Wallet ${address} is now registered on XMTP ${networkName} Network
 ✓ Inbox ID: ${client.inboxId}
-✓ Database: ${XMTP_ENV}-${address}.db3
+✓ Database: agent-${XMTP_ENV}-${address}.db3
 ✓ Ready to receive messages on ${networkName.toLowerCase()} network
 
 Next steps:
