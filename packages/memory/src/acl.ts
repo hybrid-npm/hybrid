@@ -25,18 +25,17 @@ export interface PairingStore {
 	requests: PairingRequest[]
 }
 
-const CHANNEL = "default"
 const PAIRING_CODE_LENGTH = 8
 const PAIRING_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 const PAIRING_PENDING_TTL_MS = 60 * 60 * 1000
 const PAIRING_PENDING_MAX = 3
 
 function getAllowFromPath(workspaceDir: string): string {
-	return join(getCredentialsPath(workspaceDir), `${CHANNEL}-allowFrom.json`)
+	return join(getCredentialsPath(workspaceDir), "allowFrom.json")
 }
 
 function getPairingPath(workspaceDir: string): string {
-	return join(getCredentialsPath(workspaceDir), `${CHANNEL}-pairing.json`)
+	return join(getCredentialsPath(workspaceDir), "pairing.json")
 }
 
 function randomCode(): string {
