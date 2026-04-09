@@ -28,7 +28,7 @@ describe("create-hybrid CLI", () => {
 
 	it("should create all template files", () => {
 		execSync(
-			`npx tsx "${CLI_PATH}" --name ${PROJECT_NAME} --env dev --agent-name "Test Agent"`,
+			`npx tsx "${CLI_PATH}" --name ${PROJECT_NAME} --agent-name "Test Agent"`,
 			{ cwd: TEMP_DIR, timeout: 15000 }
 		)
 
@@ -53,7 +53,7 @@ describe("create-hybrid CLI", () => {
 
 	it("should create users directory for multi-tenant profiles", () => {
 		execSync(
-			`npx tsx "${CLI_PATH}" --name ${PROJECT_NAME} --env dev --agent-name "Test Agent"`,
+			`npx tsx "${CLI_PATH}" --name ${PROJECT_NAME} --agent-name "Test Agent"`,
 			{ cwd: TEMP_DIR, timeout: 15000 }
 		)
 
@@ -63,7 +63,7 @@ describe("create-hybrid CLI", () => {
 
 	it("should create ACL.md for owner access control", () => {
 		execSync(
-			`npx tsx "${CLI_PATH}" --name ${PROJECT_NAME} --env dev --agent-name "Test Agent"`,
+			`npx tsx "${CLI_PATH}" --name ${PROJECT_NAME} --agent-name "Test Agent"`,
 			{ cwd: TEMP_DIR, timeout: 15000 }
 		)
 
@@ -77,7 +77,7 @@ describe("create-hybrid CLI", () => {
 
 	it("should create package.json with correct name", () => {
 		execSync(
-			`npx tsx "${CLI_PATH}" --name ${PROJECT_NAME} --env dev --agent-name "Test Agent"`,
+			`npx tsx "${CLI_PATH}" --name ${PROJECT_NAME} --agent-name "Test Agent"`,
 			{ cwd: TEMP_DIR, timeout: 15000 }
 		)
 
@@ -90,7 +90,7 @@ describe("create-hybrid CLI", () => {
 
 	it("should create required project structure", () => {
 		execSync(
-			`npx tsx "${CLI_PATH}" --name ${PROJECT_NAME} --env dev --agent-name "Test Agent"`,
+			`npx tsx "${CLI_PATH}" --name ${PROJECT_NAME} --agent-name "Test Agent"`,
 			{ cwd: TEMP_DIR, timeout: 15000 }
 		)
 
@@ -99,9 +99,9 @@ describe("create-hybrid CLI", () => {
 		expect(existsSync(join(PROJECT_DIR, "src", "dev-gateway.ts"))).toBe(true)
 	})
 
-	it("should create .env.example with correct XMTP_ENV", () => {
+	it("should create .env.example with WALLET_KEY", () => {
 		execSync(
-			`npx tsx "${CLI_PATH}" --name ${PROJECT_NAME} --env dev --agent-name "Test Agent"`,
+			`npx tsx "${CLI_PATH}" --name ${PROJECT_NAME} --agent-name "Test Agent"`,
 			{ cwd: TEMP_DIR, timeout: 15000 }
 		)
 
@@ -109,12 +109,12 @@ describe("create-hybrid CLI", () => {
 		expect(existsSync(envPath)).toBe(true)
 
 		const content = readFileSync(envPath, "utf-8")
-		expect(content).toContain("XMTP_ENV=dev")
+		expect(content).toContain("WALLET_KEY=")
 	})
 
 	it("should create Dockerfile with all templates", () => {
 		execSync(
-			`npx tsx "${CLI_PATH}" --name ${PROJECT_NAME} --env dev --agent-name "Test Agent"`,
+			`npx tsx "${CLI_PATH}" --name ${PROJECT_NAME} --agent-name "Test Agent"`,
 			{ cwd: TEMP_DIR, timeout: 15000 }
 		)
 
@@ -141,7 +141,7 @@ describe("create-hybrid CLI", () => {
 
 	it("should create other required files", () => {
 		execSync(
-			`npx tsx "${CLI_PATH}" --name ${PROJECT_NAME} --env dev --agent-name "Test Agent"`,
+			`npx tsx "${CLI_PATH}" --name ${PROJECT_NAME} --agent-name "Test Agent"`,
 			{ cwd: TEMP_DIR, timeout: 15000 }
 		)
 
@@ -154,7 +154,7 @@ describe("create-hybrid CLI", () => {
 
 	it("should create server with multi-tenant USER.md loading", () => {
 		execSync(
-			`npx tsx "${CLI_PATH}" --name ${PROJECT_NAME} --env dev --agent-name "Test Agent"`,
+			`npx tsx "${CLI_PATH}" --name ${PROJECT_NAME} --agent-name "Test Agent"`,
 			{ cwd: TEMP_DIR, timeout: 15000 }
 		)
 
@@ -168,12 +168,11 @@ describe("create-hybrid CLI", () => {
 
 	it("should use production environment when specified", () => {
 		execSync(
-			`npx tsx "${CLI_PATH}" --name ${PROJECT_NAME} --env production --agent-name "Test Agent"`,
+			`npx tsx "${CLI_PATH}" --name ${PROJECT_NAME} --agent-name "Test Agent"`,
 			{ cwd: TEMP_DIR, timeout: 15000 }
 		)
 
 		const envPath = join(PROJECT_DIR, ".env.example")
-		const content = readFileSync(envPath, "utf-8")
-		expect(content).toContain("XMTP_ENV=production")
+		expect(existsSync(envPath)).toBe(true)
 	})
 })

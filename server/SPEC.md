@@ -1,7 +1,7 @@
 # Hybrid Mini App Specification
 
 ## Overview
-A mini app that allows users to chat with a Hybrid agent directly from XMTP or Farcaster.
+A mini app that allows users to chat with a Hybrid agent directly from Farcaster.
 
 ## Functionality
 

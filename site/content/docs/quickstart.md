@@ -22,15 +22,15 @@ pnpm install # or yarn install or npm install
 
 ### Generate Keys
 
-Generate XMTP wallet and encryption keys:
+Generate wallet and encryption keys:
 
 ```bash
 npx hybrid keys
 ```
 
 This generates:
-- **Wallet private key** - For XMTP identity
-- **DB encryption key** - For message encryption
+- **Wallet private key** - For agent identity
+- **DB encryption key** - For data encryption
 
 Use the `--write` flag to automatically save keys to your `.env` file:
 
@@ -102,7 +102,7 @@ await agent.listen({
 
 ### Add Tools (Optional)
 
-Add blockchain tools to your agent. Note: XMTP tools are automatically included when your agent starts listening for messages.
+Add blockchain tools to your agent:
 
 ```typescript
 import { blockchainTools } from "hybrid/tools"
@@ -127,7 +127,7 @@ const agent = new Agent({
 npx hybrid dev
 ```
 
-Your agent is now running and listening for XMTP messages on port 8454.
+Your agent is now running and listening for messages on port 8454.
 
 ## Deploy Your Agent
 
@@ -146,9 +146,9 @@ Deploy to your preferred hosting platform:
 # Make sure to set environment variables in your hosting platform
 ```
 
-### Register with XMTP Network (Production)
+### Register Agent (Production)
 
-If deploying to production, register your wallet with XMTP:
+If deploying to production, register your agent:
 
 ```bash
 npx hybrid register
@@ -158,19 +158,16 @@ npx hybrid register
 
 - Learn about [Core Concepts](/core-concepts) to understand how Hybrid agents work
 - Explore [Agent Configuration](/agent/prompts) for customizing behavior
-- Check out [XMTP Tools](/tools/xmtp) for messaging capabilities
 - Add [Blockchain Tools](/tools/blockchain) for crypto functionality
 
 ## Quick Reference
 
 | Command                       | Description                              |
 | ----------------------------- | ---------------------------------------- |
-| `npx hybrid keys`             | Generate XMTP wallet and encryption keys |
+| `npx hybrid keys`             | Generate wallet and encryption keys      |
 | `npx hybrid keys --write`     | Generate and save keys to .env           |
 | `npx hybrid dev`              | Start development server with watch mode |
 | `npx hybrid build`            | Build the TypeScript project             |
 | `npx hybrid clean`            | Remove dist directory                    |
-| `npx hybrid register`         | Register wallet with XMTP network        |
-| `npx hybrid revoke <inboxId>` | Revoke XMTP installation                 |
-| `npx hybrid revoke:all`       | Revoke all XMTP installations            |
+| `npx hybrid register`         | Register agent identity                  |
 | `npx hybrid upgrade`          | Upgrade all hybrid packages              |

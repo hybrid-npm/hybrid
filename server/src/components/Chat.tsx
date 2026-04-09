@@ -37,7 +37,7 @@ export default function Chat() {
     setIsLoading(true);
 
     try {
-      const res = await fetch("/api/xmtp", {
+      const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -64,7 +64,7 @@ export default function Chat() {
   return (
     <div style={{ minHeight: "100vh", padding: "1rem", maxWidth: "28rem", margin: "0 auto", backgroundColor: "#fafafa" }}>
       <h1 style={{ fontSize: "1.25rem", fontWeight: "bold", marginBottom: "1rem" }}>
-        🤖 XMTP Agent
+        🤖 AI Agent
       </h1>
 
       {context?.user?.fid && (

@@ -10,7 +10,7 @@
  *   npx tsx src/client.ts encrypt "Hello World"
  *   npx tsx src/client.ts decrypt <base64>
  *   npx tsx src/client.ts sign "message"
- *   npx tsx src/client.ts xmtp-identity 0x123...
+
  */
 
 import process from 'process';
@@ -34,9 +34,6 @@ interface VaultResponse<T = unknown> {
   uptime?: number;
   version?: string;
   error?: string;
-  privateKey?: string;
-  publicKey?: string;
-  inboxId?: string;
   key?: string;
   message?: string;
   availableEndpoints?: string[];
@@ -165,30 +162,6 @@ async function cmdSign(message: string) {
 `);
 }
 
-async function cmdXmtpIdentity(walletAddress: string) {
-  if (!walletAddress) {
-    console.error('Error: Wallet address is required');
-    console.error('Usage: npx tsx src/client.ts xmtp-identity 0x123...');
-    process.exit(1);
-  }
-  
-  const result = await vaultRequest<{
-    privateKey: string;
-    publicKey: string;
-    inboxId: string;
-  }>('/xmtp/identity', { walletAddress });
-  
-  console.log(`
-╔═══════════════════════════════════════════════════════════════╗
-║                    XMTP IDENTITY                              ║
-╠═══════════════════════════════════════════════════════════════╣
-║  Inbox ID:    ${result.inboxId?.padEnd(44)}║
-║  Public Key:  ${(result.publicKey?.substring(0, 20) + '...').padEnd(44)}║
-║  Private Key: ${(result.privateKey?.substring(0, 20) + '...').padEnd(44)}║
-╚═══════════════════════════════════════════════════════════════╝
-  `);
-}
-
 async function cmdDeriveKey(purpose: string) {
   if (!purpose) {
     console.error('Error: Purpose is required');
@@ -221,7 +194,6 @@ Commands:
   encrypt <data>            Encrypt text
   decrypt <base64>         Decrypt base64 blob
   sign <message>            Sign message
-  xmtp-identity <wallet>   Get XMTP identity
   derive-key <purpose>     Derive sub-key for purpose
   help                     Show this help
 
@@ -243,9 +215,6 @@ Examples:
 
   # Sign a message
   npx tsx src/client.ts sign "My message"
-
-  # Get XMTP identity
-  npx tsx src/client.ts xmtp-identity 0x1234567890123456789012345678901234567890
 
   # Derive a sub-key
   npx tsx src/client.ts derive-key "session-encryption"
@@ -295,10 +264,6 @@ async function main() {
       
       case 'sign':
         await cmdSign(process.argv.slice(3).join(' '));
-        break;
-      
-      case 'xmtp-identity':
-        await cmdXmtpIdentity(process.argv[3]);
         break;
       
       case 'derive-key':

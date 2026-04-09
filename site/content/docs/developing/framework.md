@@ -18,7 +18,7 @@ hybrid/
 ├── packages/
 │   ├── core/                 # Core framework
 │   ├── cli/                  # Command-line interface
-│   ├── xmtp/                 # XMTP integration
+│   ├── channels/             # Channel adapters
 │   ├── utils/                # Shared utilities
 │   └── types/                # TypeScript type definitions
 ├── docs/                     # Documentation
@@ -76,7 +76,6 @@ packages/core/
 │   ├── tools/               # Built-in tools
 │   │   ├── index.ts
 │   │   ├── blockchain/
-│   │   ├── xmtp/
 │   │   └── mini-apps/
 │   ├── types/               # Type definitions
 │   │   ├── agent.ts
@@ -160,7 +159,6 @@ pnpm --filter @hybrd/core test
   },
   "dependencies": {
     "@ai-sdk/openai": "^0.0.24",
-    "@xmtp/xmtp-js": "^11.3.0",
     "viem": "^2.7.0",
     "zod": "^3.22.0"
   },
@@ -193,7 +191,6 @@ export default defineConfig({
   minify: false,
   external: [
     '@ai-sdk/openai',
-    '@xmtp/xmtp-js',
     'viem'
   ]
 })
@@ -208,21 +205,21 @@ export default defineConfig({
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { Agent } from '../src/agent/agent'
 import { MockAIModel } from './mocks/ai-model'
-import { MockXMTPClient } from './mocks/xmtp-client'
+import { MockMessagingClient } from './mocks/messaging-client'
 
 describe('Agent', () => {
   let agent: Agent
   let mockModel: MockAIModel
-  let mockXMTP: MockXMTPClient
+  let mockMessaging: MockMessagingClient
   
   beforeEach(() => {
     mockModel = new MockAIModel()
-    mockXMTP = new MockXMTPClient()
+    mockMessaging = new MockMessagingClient()
     
     agent = new Agent({
       model: mockModel,
       instructions: "You are a test agent",
-      xmtpClient: mockXMTP
+      messagingClient: mockMessaging
     })
   })
   
@@ -252,8 +249,8 @@ describe('Agent', () => {
       const result = await agent.processMessage(message)
       
       expect(result.processed).toBe(true)
-      expect(mockXMTP.sentMessages).toHaveLength(1)
-      expect(mockXMTP.sentMessages[0].content).toContain('Hello!')
+      expect(mockMessaging.sentMessages).toHaveLength(1)
+      expect(mockMessaging.sentMessages[0].content).toContain('Hello!')
     })
     
     it('should handle processing errors gracefully', async () => {
@@ -374,12 +371,12 @@ describe('Agent Lifecycle Integration', () => {
 // packages/core/test/helpers/test-environment.ts
 import { Agent, AgentConfig } from '../../src/agent/agent'
 import { MockAIModel } from '../mocks/ai-model'
-import { MockXMTPClient } from '../mocks/xmtp-client'
+import { MockMessagingClient } from '../mocks/messaging-client'
 import { MockDatabase } from '../mocks/database'
 
 export class TestEnvironment {
   private mockModel: MockAIModel
-  private mockXMTP: MockXMTPClient
+  private mockMessaging: MockMessagingClient
   private mockDB: MockDatabase
   private agents: Agent[] = []
   
@@ -391,16 +388,16 @@ export class TestEnvironment {
   
   private async initialize() {
     this.mockModel = new MockAIModel()
-    this.mockXMTP = new MockXMTPClient()
+    this.mockMessaging = new MockMessagingClient()
     this.mockDB = new MockDatabase()
     
-    await this.mockXMTP.connect()
+    await this.mockMessaging.connect()
   }
   
   createAgent(config: Partial<AgentConfig>): Agent {
     const agent = new Agent({
       model: this.mockModel,
-      xmtpClient: this.mockXMTP,
+      messagingClient: this.mockMessaging,
       database: this.mockDB,
       ...config
     })
@@ -410,7 +407,7 @@ export class TestEnvironment {
   }
   
   async sendMessage(agent: Agent, content: string): Promise<Message> {
-    return this.mockXMTP.simulateIncomingMessage({
+    return this.mockMessaging.simulateIncomingMessage({
       content,
       sender: '0x1234567890abcdef1234567890abcdef12345678',
       conversation: { id: 'test-conv', isGroup: false }
@@ -423,7 +420,7 @@ export class TestEnvironment {
         reject(new Error('Response timeout'))
       }, timeout)
       
-      this.mockXMTP.on('messageSent', (message) => {
+      this.mockMessaging.on('messageSent', (message) => {
         clearTimeout(timer)
         resolve(message)
       })
@@ -432,7 +429,7 @@ export class TestEnvironment {
   
   async cleanup() {
     await Promise.all(this.agents.map(agent => agent.stop()))
-    await this.mockXMTP.disconnect()
+    await this.mockMessaging.disconnect()
     await this.mockDB.close()
   }
 }

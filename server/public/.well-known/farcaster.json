@@ -1,12 +1,12 @@
 {
   "miniapp": {
     "version": "1",
-    "name": "XMTP Chat",
+    "name": "Agent Chat",
     "homeUrl": "https://your-app.com",
     "iconUrl": "https://your-app.com/icon.png",
     "splashImageUrl": "https://your-app.com/splash.png",
     "splashBackgroundColor": "#000000",
-    "description": "Chat with an XMTP agent",
+    "description": "Chat with an AI agent",
     "primaryCategory": "social"
   }
 }

@@ -1,10 +1,10 @@
 # hybrid/gateway
 
-Production Cloudflare Workers gateway for Hybrid AI agents. Routes web requests to the agent container, manages container lifecycle (including the XMTP sidecar), and persists the XMTP database to Cloudflare R2.
+Production Cloudflare Workers gateway for Hybrid AI agents. Routes web requests to the agent container, manages container lifecycle, and persists data to Cloudflare R2.
 
 ## Overview
 
-The gateway is the entry point for all production traffic. It runs as a Cloudflare Worker and uses a Durable Object (`Sandbox`) to manage a Docker container running the agent server and XMTP sidecar.
+The gateway is the entry point for all production traffic. It runs as a Cloudflare Worker and uses a Durable Object (`Sandbox`) to manage a Docker container running the agent server.
 
 This package is the **Cloudflare deployment target** for the full Hybrid agent stack. It is deployed via `hybrid deploy cf` or `wrangler deploy`.
 
@@ -24,12 +24,11 @@ This package is the **Cloudflare deployment target** for the full Hybrid agent s
 │       ensureAgentServer()                                          │
 │               │                                                    │
 │               ├── sandbox.listProcesses()  (wait up to 30s)       │
-│               ├── Check for server/index.js and xmtp.cjs          │
+│               ├── Check for server/index.js                      │
 │               ├── HTTP health check on port 8454                  │
 │               └── If unhealthy:                                    │
 │                     kill all node processes                        │
 │                     start server (wait for port 8454)             │
-│                     start sidecar (wait for "Connected to XMTP")  │
 │               │                                                    │
 │               ▼                                                    │
 │       sandbox.containerFetch() → port 8454 inside container       │
@@ -44,7 +43,7 @@ This package is the **Cloudflare deployment target** for the full Hybrid agent s
 
 ### `POST /api/chat`
 
-Main chat endpoint. Ensures the agent server and XMTP sidecar are running in the container, then proxies the request as a streaming SSE passthrough.
+Main chat endpoint. Ensures the agent server is running in the container, then proxies the request as a streaming SSE passthrough.
 
 ```http
 POST https://your-agent.workers.dev/api/chat
@@ -79,20 +78,17 @@ Checks the full stack: gateway, container processes, and agent server HTTP healt
 The `ensureAgentServer()` function manages container process health:
 
 1. **Wait for container**: Polls `sandbox.listProcesses()` up to 30 seconds (1s intervals)
-2. **Check processes**: Looks for `server/index.js` (agent server) and `sidecar/index.js` (XMTP sidecar)
+2. **Check processes**: Looks for `server/index.js` (agent server)
 3. **Health check**: HTTP GET to port 8454 on the container
 4. **If unhealthy**:
    - Kills all `node` processes in the container
    - Starts agent server: `node /app/dist/server/index.cjs` — waits for TCP port 8454
-   - Starts XMTP sidecar: `node /app/dist/sidecar/index.cjs` — waits for `"Connected to XMTP"` log (30s timeout)
    - Final health check loop (10 retries, 500ms intervals)
 
 ## Environment Variables
 
 | Variable | Description |
 |----------|-------------|
-| `AGENT_WALLET_KEY` | Private key for the agent's XMTP wallet (required) |
-| `XMTP_ENV` | XMTP environment: `dev` or `production` |
 | `ANTHROPIC_API_KEY` | Anthropic API key |
 | `ANTHROPIC_BASE_URL` | Override Anthropic base URL (auto-set for OpenRouter) |
 | `ANTHROPIC_AUTH_TOKEN` | Auth token (auto-set from `OPENROUTER_API_KEY`) |
@@ -121,19 +117,14 @@ If `OPENROUTER_API_KEY` is set, the gateway automatically sets:
     }
   ],
   "r2_buckets": [
-    { "binding": "XMTP_STORAGE", "bucket_name": "hybrid-xmtp-databases" }
+    { "binding": "AGENT_STORAGE", "bucket_name": "hybrid-agent-storage" }
   ]
 }
 ```
 
-## R2 Database Persistence
+## R2 Data Persistence
 
-The gateway binds the `XMTP_STORAGE` R2 bucket, which is used by `@hybrd/xmtp`'s `createXMTPClient()` to persist the encrypted XMTP SQLite database across container restarts:
-
-1. On connect: download `<inboxId>.db3` from R2 to the container filesystem
-2. On connect complete: upload updated `.db3` back to R2
-
-This enables stateless containers while preserving XMTP conversation history and installation state.
+The gateway binds an `AGENT_STORAGE` R2 bucket for persisting agent data across container restarts.
 
 ## Durable Object
 
@@ -148,9 +139,7 @@ export { Sandbox } from "@cloudflare/sandbox"
 ```typescript
 export interface GatewayEnv {
   AgentContainer: DurableObjectNamespace
-  XMTP_STORAGE: R2Bucket
-  AGENT_WALLET_KEY: string
-  XMTP_ENV: string
+  AGENT_STORAGE: R2Bucket
   ANTHROPIC_API_KEY?: string
   ANTHROPIC_BASE_URL?: string
   ANTHROPIC_AUTH_TOKEN?: string
@@ -171,9 +160,8 @@ wrangler deploy
 
 ## Relation to Other Packages
 
-- Runs `packages/agent/dist/server/index.cjs` and `packages/agent/dist/xmtp.cjs` inside the container
-- R2 storage is consumed by `@hybrd/xmtp`'s `getDbPath()` and `backupDbToPersistentStorage()`
-- The simplified version of this gateway (without XMTP sidecar) is generated by `packages/create-hybrid` as `src/gateway/index.ts`
+- Runs `packages/agent/dist/server/index.cjs` inside the container
+- R2 storage provides persistent data across container restarts
 - `packages/cli` (`hybrid deploy cf`) builds the agent then calls `wrangler deploy` in this package
 
 ## License

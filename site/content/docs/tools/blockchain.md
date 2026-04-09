@@ -347,4 +347,3 @@ const safeTool = createTool({
 
 - Explore [Foundry Integration](/blockchain/foundry) for smart contract development
 - Check out [Multi-chain Support](/blockchain/multi-chain) for advanced cross-chain operations
-- See [XMTP Tools](/tools/xmtp) for messaging capabilities

@@ -99,7 +99,7 @@ contract AgentRegistry is Ownable, ReentrancyGuard {
         address owner;
         string name;
         string description;
-        string xmtpAddress;
+        string messagingAddress;
         uint256 registrationTime;
         bool active;
         uint256 reputation;
@@ -109,7 +109,7 @@ contract AgentRegistry is Ownable, ReentrancyGuard {
     mapping(string => address) public nameToAgent;
     address[] public agentList;
     
-    event AgentRegistered(address indexed agent, string name, string xmtpAddress);
+    event AgentRegistered(address indexed agent, string name, string messagingAddress);
     event AgentUpdated(address indexed agent, string name, string description);
     event AgentDeactivated(address indexed agent);
     event ReputationUpdated(address indexed agent, uint256 newReputation);
@@ -119,7 +119,7 @@ contract AgentRegistry is Ownable, ReentrancyGuard {
     function registerAgent(
         string memory _name,
         string memory _description,
-        string memory _xmtpAddress
+        string memory _messagingAddress
     ) external payable nonReentrant {
         require(msg.value >= registrationFee, "Insufficient registration fee");
         require(bytes(_name).length > 0, "Name cannot be empty");
@@ -130,7 +130,7 @@ contract AgentRegistry is Ownable, ReentrancyGuard {
             owner: msg.sender,
             name: _name,
             description: _description,
-            xmtpAddress: _xmtpAddress,
+            messagingAddress: _messagingAddress,
             registrationTime: block.timestamp,
             active: true,
             reputation: 100 // Starting reputation
@@ -139,7 +139,7 @@ contract AgentRegistry is Ownable, ReentrancyGuard {
         nameToAgent[_name] = msg.sender;
         agentList.push(msg.sender);
         
-        emit AgentRegistered(msg.sender, _name, _xmtpAddress);
+        emit AgentRegistered(msg.sender, _name, _messagingAddress);
     }
     
     function updateAgent(
@@ -408,21 +408,18 @@ contract AgentRegistryTest is Test {
     function testFuzzRegisterAgent(
         string memory name,
         string memory description,
-        string memory xmtpAddress
+        string memory messagingAddress
     ) public {
-        vm.assume(bytes(name).length > 0 && bytes(name).length < 100);
-        vm.assume(bytes(description).length < 1000);
-        vm.assume(bytes(xmtpAddress).length > 0);
-        
+        vm.assume(bytes(messagingAddress).length > 0);
         vm.deal(agent1, 1 ether);
         vm.prank(agent1);
         
-        registry.registerAgent{value: 0.01 ether}(name, description, xmtpAddress);
+        registry.registerAgent{value: 0.01 ether}(name, description, messagingAddress);
         
         AgentRegistry.Agent memory agent = registry.getAgent(agent1);
         assertEq(agent.name, name);
         assertEq(agent.description, description);
-        assertEq(agent.xmtpAddress, xmtpAddress);
+        assertEq(agent.messagingAddress, messagingAddress);
     }
 }
 ```
@@ -492,7 +489,7 @@ contract InteractScript is Script {
         REGISTRY.registerAgent{value: 0.01 ether}(
             "MyHybridAgent",
             "A sophisticated DeFi trading agent",
-            vm.envString("AGENT_XMTP_ADDRESS")
+            vm.envString("AGENT_MESSAGING_ADDRESS")
         );
         
         vm.stopBroadcast();
@@ -645,7 +642,7 @@ class ContractIntegratedAgent extends Agent {
     if (message.content.includes("register on chain")) {
       await this.call("registerOnChain", {
         name: "AutoRegisteredAgent",
-        description: "Agent registered via XMTP message"
+        description: "Agent registered via channel message"
       })
       
       await this.call("sendMessage", {
@@ -813,6 +810,6 @@ contract AgentWorkflowTest is Test {
 ## Next Steps
 
 - Learn about [Multi-chain Support](/blockchain/multi-chain) for cross-chain operations
-- Explore [XMTP Tools](/tools/xmtp) for messaging capabilities
+- Explore [Channel Adapters](/tools) for messaging capabilities
 - Check out [Tools](/tools) for creating custom agent capabilities
 - See [Developing](/developing/contributing) for advanced development

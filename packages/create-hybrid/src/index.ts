@@ -43,16 +43,6 @@ async function main() {
 			initial: "my-agent"
 		},
 		{
-			type: cliArgs.env ? null : "select",
-			name: "env",
-			message: "XMTP environment",
-			choices: [
-				{ title: "production", value: "production" },
-				{ title: "dev", value: "dev" }
-			],
-			initial: 0
-		},
-		{
 			type: cliArgs["agent-name"] ? null : "text",
 			name: "agentName",
 			message: "Agent display name",
@@ -61,7 +51,6 @@ async function main() {
 	])
 
 	const name = cliArgs.name || response.name
-	const env = cliArgs.env || response.env
 	const agentName = cliArgs["agent-name"] || response.agentName
 
 	if (!name) {
@@ -83,8 +72,7 @@ async function main() {
 
 	const templateData = {
 		name,
-		agentName: agentName || "Hybrid Agent",
-		env: env || "production"
+		agentName: agentName || "Hybrid Agent"
 	}
 
 	writeFileSync(join(projectDir, "package.json"), packageJson(templateData))
@@ -745,7 +733,7 @@ You are ${data.agentName}. Be accurate, concise, and practical.
 `
 }
 
-function envExample(data: { env: string }) {
+function envExample() {
 	return `# Anthropic API (or use OpenRouter below)
 ANTHROPIC_API_KEY=your_api_key_here
 
@@ -754,8 +742,7 @@ ANTHROPIC_API_KEY=your_api_key_here
 # ANTHROPIC_AUTH_TOKEN=your_openrouter_key
 
 # Agent configuration
-AGENT_WALLET_KEY=your_private_key_here
-XMTP_ENV=${data.env}
+WALLET_KEY=your_private_key_here
 `
 }
 

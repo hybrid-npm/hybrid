@@ -15,7 +15,7 @@
 import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 
-export type SecretName = "AGENT_WALLET_KEY"
+export type SecretName = "WALLET_KEY"
 
 const secrets = new Map<SecretName, string>()
 
@@ -33,11 +33,11 @@ function getSecretPaths(): Record<SecretName, string> {
 	// which will cause existsSync checks to fail safely
 	if (!secretsDir) {
 		return {
-			AGENT_WALLET_KEY: ""
+			WALLET_KEY: ""
 		}
 	}
 	return {
-		AGENT_WALLET_KEY: join(secretsDir, "wallet.key")
+		WALLET_KEY: join(secretsDir, "wallet.key")
 	}
 }
 
@@ -75,10 +75,10 @@ export function getSecret(name: SecretName): string | undefined {
  * Throws if not loaded.
  */
 export function getWalletKey(): string {
-	const key = secrets.get("AGENT_WALLET_KEY")
+	const key = secrets.get("WALLET_KEY")
 	if (!key) {
 		throw new Error(
-			"AGENT_WALLET_KEY not loaded. Call loadSecrets() at startup."
+			"WALLET_KEY not loaded. Call loadSecrets() at startup."
 		)
 	}
 	return key

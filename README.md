@@ -1,8 +1,8 @@
 # Hybrid
 
-**Drop-in OpenClaw replacement with native XMTP messaging.**
+**Drop-in OpenClaw replacement with channel adapter framework.**
 
-Hybrid is a TypeScript agent runtime with **100% OpenClaw feature parity** — your `SOUL.md`, `AGENTS.md`, memory files, and skills work without modification. On top of that, you get a decentralized messaging layer via XMTP, a 3-layer PARA memory system, multi-user access control, and a channel adapter framework for connecting to any network.
+Hybrid is a TypeScript agent runtime with **100% OpenClaw feature parity** — your `SOUL.md`, `AGENTS.md`, memory files, and skills work without modification. On top of that, you get a 3-layer PARA memory system, multi-user access control, and a channel adapter framework for connecting to any network.
 
 Port your OpenClaw instance in under 10 minutes. Deploy to Fly.io, Cloudflare Workers, or any Node.js host.
 
@@ -12,10 +12,10 @@ Port your OpenClaw instance in under 10 minutes. Deploy to Fly.io, Cloudflare Wo
 
 OpenClaw gave agents persistent memory, skills, and a scheduler. Hybrid keeps all of that and adds the missing pieces for real-world multi-user deployment:
 
-- **Messaging** — agents live on XMTP, a decentralized messaging protocol. Users reach your agent from any XMTP-compatible app, no account required beyond a wallet.
+- **Messaging** — agents communicate through channel adapters. Connect to Telegram, Slack, or any platform through a uniform adapter interface with local HTTP IPC.
 - **Multi-user memory** — each user's memory is isolated by wallet address. Owners get full access; guests get their own private slice.
 - **Structured knowledge** — beyond flat markdown files, Hybrid adds a PARA-based entity graph with atomic facts, decay tiers, and fact supersession.
-- **Channel adapters** — XMTP today, Telegram or Slack tomorrow. A uniform adapter interface with local HTTP IPC, so channels are independently deployable.
+- **Channel adapters** — Telegram or Slack today, more tomorrow. A uniform adapter interface with local HTTP IPC, so channels are independently deployable.
 
 ---
 
@@ -40,7 +40,6 @@ Everything that works in OpenClaw works in Hybrid. Same files, same format, same
 | **Atomic facts + decay tiers** | ❌ | ✅ |
 | **Fact supersession** | ❌ | ✅ |
 | **Multi-user ACL (wallet-based)** | ❌ | ✅ |
-| **XMTP native messaging** | ❌ | ✅ |
 | **Channel adapter framework** | ❌ | ✅ |
 | **ENS + Basename resolution** | ❌ | ✅ |
 
@@ -86,20 +85,13 @@ Then fill in `.env`:
 
 ```env
 OPENROUTER_API_KEY=your_key    # or ANTHROPIC_API_KEY
-
-# XMTP identity — generate a wallet key for your agent
-AGENT_WALLET_KEY=0x...
-XMTP_ENV=production
 ```
 
-**5. Register and run**
+**5. Run**
 
 ```bash
-hybrid register    # one-time: registers your wallet on the XMTP network
 hybrid dev
 ```
-
-Your agent is reachable at its wallet address from any XMTP client. Send it a DM at [xmtp.chat](https://xmtp.chat).
 
 ---
 
@@ -162,8 +154,7 @@ The agent maintains its identity (`IDENTITY.md`, `SOUL.md`) across all users.
 ```bash
 npm create hybrid my-agent
 cd my-agent
-cp .env.example .env   # fill in OPENROUTER_API_KEY and AGENT_WALLET_KEY
-hybrid register
+cp .env.example .env   # fill in OPENROUTER_API_KEY
 hybrid dev
 ```
 
@@ -180,11 +171,10 @@ my-agent/
 ├── .env.example                 # Environment template
 │
 ├── credentials/                 # Access control
-│   └── xmtp-allowFrom.json      # Created during init with owner wallet
+│   └── allowFrom.json           # Created during init with owner wallet
 │
 ├── skills/                      # Copied from core skills
 │   ├── memory/SKILL.md
-│   ├── xmtp/SKILL.md
 │   └── skills-manager/SKILL.md
 │
 ├── skills-lock.json             # Locks installed skill versions
@@ -231,7 +221,6 @@ my-agent/
 ┌─────────────────────────────────────────────────────────────┐
 │  2. Copy core skills/ → <name>/skills/                      │
 │     - memory/                                               │
-│     - xmtp/                                                 │
 │     - skills-manager/                                       │
 │                                                             │
 │     Create skills-lock.json with core skill references      │
@@ -243,7 +232,7 @@ my-agent/
 │                                                             │
 │     Input: 0xAbC123...                                      │
 │                                                             │
-│     → Create credentials/xmtp-allowFrom.json               │
+│     → Create credentials/allowFrom.json                    │
 │       { "version": 1, "allowFrom": ["0xabc123..."] }       │
 └─────────────────────────────────────────────────────────────┘
                               │
@@ -381,7 +370,7 @@ The scheduler lets the agent take action on a time-based trigger — run a cron 
 
 The scheduler uses precise `setTimeout` calls — it computes the exact millisecond of the next job and sleeps until then. There's no fixed polling loop. A maintenance heartbeat runs at most every 60 seconds to handle edge cases.
 
-When a job fires, the scheduler sends the agent an **agent turn** — a message it processes just like a user message. The agent's response can optionally be delivered to a recipient via a channel adapter (e.g. sent as an XMTP message).
+When a job fires, the scheduler sends the agent an **agent turn** — a message it processes just like a user message. The agent's response can optionally be delivered to a recipient via a channel adapter.
 
 ```typescript
 // Example job payload
@@ -390,8 +379,8 @@ When a job fires, the scheduler sends the agent an **agent turn** — a message 
   message: "Send the daily summary to the team",
   delivery: {
     mode: "announce",
-    channel: "xmtp",
-    to: "0xrecipient..."
+    channel: "telegram",
+    to: "user-123..."
   }
 }
 ```
@@ -415,14 +404,14 @@ Jobs that appear stuck (running for more than 2 hours) are automatically unstuck
 ## Architecture
 
 ```
-                    XMTP network • HTTP • Scheduler callbacks
-                                      │
-                                      ▼
-                    ┌─────────────────────────────────┐
-                    │       Channel Adapters           │
-                    │  @hybrd/channels  (port 8455)    │
-                    │  XMTP adapter → HTTP IPC         │
-                    └─────────────────────────────────┘
+                     HTTP • Scheduler callbacks
+                                       │
+                                       ▼
+                     ┌─────────────────────────────────┐
+                     │       Channel Adapters           │
+                     │  @hybrd/channels                 │
+                     │  HTTP IPC                        │
+                     └─────────────────────────────────┘
                                       │
                                       ▼
                     ┌─────────────────────────────────┐
@@ -462,12 +451,11 @@ Jobs that appear stuck (running for more than 2 hours) are automatically unstuck
 
 | Package | Description |
 |---------|-------------|
-| [`hybrid/agent`](./packages/agent/README.md) | Agent runtime: HTTP server + XMTP sidecar |
+| [`hybrid/agent`](./packages/agent/README.md) | Agent runtime: HTTP server |
 | [`hybrid/gateway`](./packages/gateway/README.md) | Cloudflare Workers gateway + container lifecycle |
 | [`@hybrd/memory`](./packages/memory/README.md) | 3-layer PARA memory, multi-user ACL, hybrid search |
 | [`@hybrd/scheduler`](./packages/scheduler/README.md) | Agentic cron/interval/one-time scheduler |
-| [`@hybrd/channels`](./packages/channels/README.md) | Channel adapter framework (XMTP, ...) |
-| [`@hybrd/xmtp`](./packages/xmtp/README.md) | XMTP client, plugin, ENS/Basename resolvers |
+| [`@hybrd/channels`](./packages/channels/README.md) | Channel adapter framework (Telegram, Slack, ...) |
 | [`@hybrd/cli`](./packages/cli/README.md) | `hybrid` CLI: build, dev, deploy, skills |
 | [`@hybrd/types`](./packages/types/README.md) | Shared TypeScript type definitions |
 | [`@hybrd/utils`](./packages/utils/README.md) | Shared utilities |

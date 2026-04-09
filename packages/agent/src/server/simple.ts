@@ -33,7 +33,7 @@ if (process.env.DEBUG) {
 	console.log(`[server] .env path: ${envPath}`)
 	console.log(`[server] .env exists: ${fs.existsSync(envPath)}`)
 	console.log(
-		`[server] AGENT_WALLET_KEY: ${process.env.AGENT_WALLET_KEY ? "set" : "not set"}`
+		`[server] WALLET_KEY: ${hasSecret("WALLET_KEY") ? "set" : "not set"}`
 	)
 }
 
@@ -60,7 +60,7 @@ function getProviderConfig() {
 
 function getWalletAddress(): string | null {
 	// Try secret store first (production)
-	if (hasSecret("AGENT_WALLET_KEY")) {
+	if (hasSecret("WALLET_KEY")) {
 		try {
 			const key = getWalletKey()
 			const account = privateKeyToAccount(
@@ -75,7 +75,7 @@ function getWalletAddress(): string | null {
 	}
 
 	// Fall back to env var (development)
-	const key = process.env.AGENT_WALLET_KEY
+	const key = process.env.WALLET_KEY
 	if (!key) return null
 	try {
 		const account = privateKeyToAccount(
@@ -139,8 +139,8 @@ app.get("/db/download", async (c) => {
 		}
 		const data = await response.arrayBuffer()
 		const filename = key.split("/").pop() || key
-		const localPath = `/app/data/xmtp/${filename}`
-		fs.mkdirSync("/app/data/xmtp", { recursive: true })
+		const localPath = `/app/data/${filename}`
+		fs.mkdirSync("/app/data", { recursive: true })
 		fs.writeFileSync(localPath, new Uint8Array(data))
 		return c.json({ ok: true, bytes: data.byteLength, path: localPath })
 	} catch (err) {

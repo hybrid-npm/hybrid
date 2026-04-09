@@ -181,14 +181,11 @@ COPY AGENTS.md ./AGENTS.md
 # Install dependencies
 RUN npm install
 
-# Create data directories
-RUN mkdir -p /app/data/xmtp
-
 ENV AGENT_PORT=8454
 ENV NODE_ENV=production
 EXPOSE 8454
 
-CMD ["sh", "start.sh"]
+CMD ["node", "server/index.cjs"]
 `
 
 			expect(flyDockerfile).toContain("COPY skills/ ./skills/")
@@ -225,7 +222,7 @@ primary_region = "iad"
   max_machines = 1
 
 [env]
-  XMTP_ENV = "production"
+  NODE_ENV = "production"
 
 [[services]]
   protocol = "tcp"
@@ -493,15 +490,13 @@ ANTHROPIC_API_KEY=your_api_key_here
 # ANTHROPIC_AUTH_TOKEN=your_openrouter_key
 
 # Agent configuration
-AGENT_WALLET_KEY=your_private_key_here
-XMTP_ENV=dev
+WALLET_KEY=your_private_key_here
 `
 					}
 					return ""
 				}),
 				readdirSync: vi.fn(() => [
 					{ name: "memory", isDirectory: () => true },
-					{ name: "xmtp", isDirectory: () => true },
 					{ name: "skills-manager", isDirectory: () => true }
 				])
 			}))
@@ -560,7 +555,7 @@ XMTP_ENV=dev
 			const skillCopies = copiedDirs.filter(
 				(c) => c.dest.includes("my-agent") && c.dest.includes("skills")
 			)
-			expect(skillCopies.length).toBeGreaterThanOrEqual(3)
+			expect(skillCopies.length).toBeGreaterThanOrEqual(2)
 		})
 
 		it("should create skills-lock.json with core skills", async () => {
@@ -574,19 +569,18 @@ XMTP_ENV=dev
 			if (lockWrite) {
 				const lockfile = JSON.parse(lockWrite[1])
 				expect(lockfile).toHaveProperty("memory")
-				expect(lockfile).toHaveProperty("xmtp")
 				expect(lockfile).toHaveProperty("skills-manager")
 				expect(lockfile.memory.source).toBe("core")
 				expect(lockfile.memory).toHaveProperty("installedAt")
 			}
 		})
 
-		it("should create credentials/xmtp-allowFrom.json with owner address", async () => {
+		it("should create credentials/allowFrom.json with owner address", async () => {
 			const mod = await import("./cli")
 			await mod.init("my-agent")
 
 			const aclWrite = Array.from(writtenFiles.entries()).find(
-				([p]) => p.includes("my-agent") && p.includes("xmtp-allowFrom.json")
+				([p]) => p.includes("my-agent") && p.includes("allowFrom.json")
 			)
 			expect(aclWrite).toBeDefined()
 			if (aclWrite) {
@@ -601,7 +595,7 @@ XMTP_ENV=dev
 			await mod.init("my-agent")
 
 			const aclWrite = Array.from(writtenFiles.entries()).find(
-				([p]) => p.includes("my-agent") && p.includes("xmtp-allowFrom.json")
+				([p]) => p.includes("my-agent") && p.includes("allowFrom.json")
 			)
 			if (aclWrite) {
 				const acl = JSON.parse(aclWrite[1])
@@ -622,8 +616,7 @@ XMTP_ENV=dev
 			if (envWrite) {
 				const content = envWrite[1]
 				// Wallet key should be generated (0x + 64 hex chars)
-				expect(content).toMatch(/AGENT_WALLET_KEY=0x[a-f0-9]{64}/)
-				expect(content).toContain("XMTP_ENV=dev")
+				expect(content).toMatch(/WALLET_KEY=0x[a-f0-9]{64}/)
 				expect(content).toContain("ANTHROPIC_AUTH_TOKEN=sk-or-test123")
 				expect(content).toContain(
 					"ANTHROPIC_BASE_URL=https://openrouter.ai/api"

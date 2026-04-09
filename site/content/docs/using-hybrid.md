@@ -7,7 +7,7 @@ Master the Hybrid CLI and development workflow for building and managing your ag
 
 ## Key Management
 
-### Generating XMTP Keys
+### Generating Keys
 
 Create new keys for your agent:
 
@@ -16,8 +16,8 @@ npx hybrid keys
 ```
 
 This generates:
-- **Wallet private key** - For XMTP identity and signing
-- **XMTP DB encryption key** - For message database encryption
+- **Wallet private key** - For agent identity and signing
+- **DB encryption key** - For data encryption
 
 Keys are displayed in the terminal. Save them to your `.env` file manually or use the `--write` flag:
 
@@ -61,12 +61,11 @@ npx hybrid dev
 Features:
 - **Hot reload** - Automatic restart on code changes
 - **Debug logging** - Detailed console output
-- **XMTP integration** - Connects to XMTP network automatically
 
 The dev server:
 - Compiles TypeScript in watch mode
 - Runs your agent
-- Listens for XMTP messages
+- Listens for messages
 - Restarts on file changes
 
 ### Building Projects
@@ -104,43 +103,6 @@ This will:
 - Check for latest versions
 - Update your `package.json`
 
-## XMTP Network Operations
-
-### Wallet Registration
-
-Register your agent's wallet with the XMTP production network:
-
-```bash
-npx hybrid register
-```
-
-This process:
-1. Reads your `AGENT_WALLET_KEY` from environment
-2. Creates an XMTP identity
-3. Registers the wallet on the XMTP network
-4. Confirms successful registration
-
-**Note:** Registration is only needed for production. Development works without registration.
-
-### Revoking Installations
-
-Remove specific XMTP installation by inbox ID:
-
-```bash
-npx hybrid revoke <inboxId>
-```
-
-Revoke all installations for your wallet:
-
-```bash
-npx hybrid revoke:all
-```
-
-Use cases:
-- **Security breach** - Immediately revoke compromised installations
-- **Key rotation** - Revoke old installations before using new keys
-- **Testing cleanup** - Remove test installations
-
 ## Available Commands
 
 | Command                       | Description                                  |
@@ -149,11 +111,9 @@ Use cases:
 | `npx hybrid build`            | Build the TypeScript project                 |
 | `npx hybrid clean`            | Remove dist directory                        |
 | `npx hybrid upgrade`          | Upgrade all hybrid packages to latest        |
-| `npx hybrid keys`             | Generate XMTP wallet and encryption keys     |
+| `npx hybrid keys`             | Generate wallet and encryption keys          |
 | `npx hybrid keys --write`     | Generate and save keys to .env file          |
-| `npx hybrid register`         | Register wallet with XMTP production network |
-| `npx hybrid revoke <inboxId>` | Revoke specific XMTP installation            |
-| `npx hybrid revoke:all`       | Revoke all XMTP installations for wallet     |
+| `npx hybrid register`         | Register agent identity                      |
 
 ## Alias Commands
 
@@ -184,9 +144,6 @@ OPENROUTER_API_KEY=...         # Required: Your AI provider API key
 # Server Configuration
 PORT=8454                       # Optional: HTTP server port (default: 8454)
 
-# XMTP Network
-XMTP_ENV=production            # Optional: XMTP environment (default: production)
-
 # Blockchain Tools (if using)
 PRIVATE_KEY=0x...              # Optional: For sending transactions
 RPC_URL=https://...            # Optional: Custom RPC endpoint
@@ -211,7 +168,7 @@ my-agent/
 1. Generate keys: `npx hybrid keys --write`
 2. Add your API keys to `.env`
 3. Start development: `npx hybrid dev`
-4. Message your agent via XMTP (address shown in terminal)
+4. Message your agent via its configured channel
 
 ### Deployment
 
@@ -226,4 +183,3 @@ my-agent/
 - Learn about [Agent Configuration](/agent/prompts) for customizing behavior
 - Explore [Behaviors](/agent/behaviors) for message processing
 - Check out [Blockchain Tools](/tools/blockchain) for crypto functionality
-- See [XMTP Tools](/tools/xmtp) for messaging capabilities

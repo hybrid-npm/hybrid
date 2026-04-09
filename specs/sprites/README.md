@@ -224,7 +224,6 @@ All endpoints accept JSON bodies, return JSON responses.
 | POST | `/encrypt` | Encrypt data with user's key |
 | POST | `/decrypt` | Decrypt data with user's key |
 | POST | `/sign` | Sign a message with user's key |
-| POST | `/xmtp/identity` | Get XMTP identity for initialization |
 
 #### GET /status
 
@@ -340,29 +339,6 @@ await storage.set('mykey', 'sensitive-data');
 const data = await storage.get('mykey');
 ```
 
-### XMTP Integration
-
-```typescript
-import { createXMTPManager } from './xmtp';
-
-const xmtp = await createXMTPManager(
-  'https://vault-user123.sprites.app',
-  '0x1234567890123456789012345678901234567890',
-  'production'
-);
-
-// Send a message
-await xmtp.sendMessage(
-  '0xrecipient...',
-  'Hello from zero-knowledge XMTP!'
-);
-
-// Stream incoming messages
-await xmtp.streamMessages((message) => {
-  console.log('New message:', message.content);
-});
-```
-
 ## Deployment
 
 ### Docker Images
@@ -410,7 +386,6 @@ specs/sprites/
 ├── agent-storage.ts        # Encrypted storage wrapper
 ├── agent.ts               # Agent entry point
 ├── provision.ts           # User provisioning
-├── xmtp.ts                # XMTP integration
 ├── client.ts             # CLI client
 ├── package.json           # Dependencies
 ├── tsconfig.json          # TypeScript config

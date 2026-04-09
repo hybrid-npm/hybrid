@@ -25,7 +25,7 @@ export interface PairingStore {
 	requests: PairingRequest[]
 }
 
-const CHANNEL = "xmtp"
+const CHANNEL = "default"
 const PAIRING_CODE_LENGTH = 8
 const PAIRING_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 const PAIRING_PENDING_TTL_MS = 60 * 60 * 1000
@@ -203,7 +203,7 @@ export function getRole(acl: ACL | null, userId: string): Role {
 	}
 
 	// Validate that userId is a wallet address format
-	// Non-wallet identifiers (e.g., XMTP inbox IDs) are not allowed in ACL
+	// Non-wallet identifiers are not allowed in ACL
 	const normalizedUserId = normalizeWalletAddress(userId)
 	if (!isValidWalletAddress(normalizedUserId)) {
 		return "guest"

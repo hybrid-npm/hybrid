@@ -7,7 +7,7 @@ Learn how to use built-in tools and create custom tools that extend your agent's
 
 ## Built-in Tools
 
-Hybrid provides two main tool sets:
+Hybrid provides blockchain tool sets:
 
 ### Blockchain Tools
 
@@ -25,18 +25,6 @@ blockchainTools.estimateGas      // Estimate gas for transaction
 
 **Supported chains:** `mainnet`, `sepolia`, `polygon`, `arbitrum`, `optimism`, `base`
 
-### XMTP Tools
-
-XMTP tools are automatically included when your agent starts listening for messages. These tools are available to your agent without needing to explicitly include them:
-
-```typescript
-// Automatically available tools:
-// getMessage      // Get message by ID
-// sendMessage     // Send message to conversation
-// sendReply       // Send threaded reply
-// sendReaction    // Send emoji reaction
-```
-
 ### Using Built-in Tools
 
 ```typescript
@@ -47,9 +35,9 @@ import { blockchainTools } from "hybrid/tools"
 const agent = new Agent({
   name: "Crypto Agent",
   model: createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY })("openai/gpt-4"),
-  instructions: "You can check balances, send messages, and help with crypto tasks.",
+  instructions: "You can check balances and help with crypto tasks.",
   
-  // Add blockchain tools (XMTP tools are automatically included)
+  // Add blockchain tools
   tools: blockchainTools,
   
   // Optional: Configure runtime for blockchain tools
@@ -281,7 +269,6 @@ const agent = new Agent<MyRuntimeExtension>({
 
 ```typescript
 // Option 1: Spread blockchain tools with custom tools
-// (XMTP tools are automatically included)
 const agent = new Agent({
   name: "My Agent",
   model: yourModel,
@@ -344,6 +331,5 @@ outputSchema: z.object({
 ## Next Steps
 
 - Learn about [Blockchain Tools](/tools/blockchain) for detailed crypto functionality
-- Explore [XMTP Tools](/tools/xmtp) for messaging capabilities
 - Check out [Behaviors](/agent/behaviors) for message processing
 - See [Agent Configuration](/agent/prompts) for customizing your agent

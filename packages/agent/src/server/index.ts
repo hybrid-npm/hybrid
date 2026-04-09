@@ -71,7 +71,7 @@ const SCHEDULER_POLL_MS = Number.parseInt(
 let scheduler: SchedulerService | null = null
 
 function getWalletAddress(): string | null {
-	if (!hasSecret("AGENT_WALLET_KEY")) return null
+	if (!hasSecret("WALLET_KEY")) return null
 	try {
 		const key = getWalletKey()
 		const keyWithPrefix = key.startsWith("0x")
@@ -684,7 +684,7 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 	// needs them to authenticate with the LLM API. They pass through via safeEnv
 	// and are also explicitly set below for OpenRouter/Anthropic mode.
 	const SENSITIVE_PREFIXES = [
-		"AGENT_WALLET",
+		"WALLET_KEY",
 		"OPENROUTER_API_KEY",
 		"PRIVATE_KEY",
 		"SECRET",

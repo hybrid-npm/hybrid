@@ -272,9 +272,9 @@ Two-Sprite architecture providing zero-knowledge encryption for AI agent platfor
 │  │  │  └────────────────┘  └────────────────┘  └────────────────┘            │  │   │
 │  │  │                                                                        │  │   │
 │  │  │  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐            │  │   │
-│  │  │  │ POST /sign    │  │ POST /xmtp    │  │ GET /status    │            │  │   │
-│  │  │  │ Sign message  │  │ XMTP identity │  │ Health check   │            │  │   │
-│  │  │  └────────────────┘  └────────────────┘  └────────────────┘            │  │   │
+│  │  │  │ POST /sign    │  │ GET /status    │                              │  │   │
+│  │  │  │ Sign message  │  │ Health check   │                              │  │   │
+│  │  │  └────────────────┘  └────────────────┘                              │  │   │
 │  │  │                                                                        │  │   │
 │  │  │  ┌─────────────────────────────────────────────────────────────────┐  │   │
 │  │  │  │ Key Manager (in-memory)                                        │  │   │
@@ -363,7 +363,6 @@ Key management service. Holds encryption keys in memory only, never writes to di
 | POST | `/encrypt` | Encrypt data with user's key |
 | POST | `/decrypt` | Decrypt data with user's key |
 | POST | `/sign` | Sign a message with user's key |
-| POST | `/xmtp/identity` | Get XMTP identity for initialization |
 | GET | `/status` | Health check, returns initialization state |
 | POST | `/reinit` | Re-initialize after cold start |
 
@@ -414,8 +413,6 @@ When Sprites wake from idle:
 
 | Data Type | Encrypted? | How |
 |-----------|------------|-----|
-| XMTP messages | ✅ Yes | XMTP SDK handles |
-| XMTP identity | ✅ Yes | Via Vault API |
 | Agent session data | ✅ Yes | Agent calls Vault API |
 | Agent workspace files | ❌ No | User's choice |
 | Agent logs | ❌ No | User's choice |
@@ -481,7 +478,6 @@ specs/sprites/
 ├── agent-storage.ts        # Encrypted storage wrapper for Agent
 ├── agent.ts                # Example Agent entry point
 ├── provision.ts            # User provisioning script
-├── xmtp.ts                 # XMTP integration
 ├── client.ts               # CLI client for testing
 ├── package.json            # Dependencies
 ├── tsconfig.json           # TypeScript config

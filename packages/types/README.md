@@ -4,7 +4,7 @@ Shared TypeScript type definitions for the Hybrid AI agent framework. Zero runti
 
 ## Overview
 
-Every other package in the framework imports its shared interfaces from `@hybrd/types` rather than re-defining them. This package covers agents, tools, plugins, behaviors, channels, schedules, XMTP primitives, and runtime context.
+Every other package in the framework imports its shared interfaces from `@hybrd/types` rather than re-defining them. This package covers agents, tools, plugins, behaviors, channels, schedules, and runtime context.
 
 ## Type Categories
 
@@ -72,7 +72,6 @@ interface PluginContext {
   agent: Agent
   behaviors?: BehaviorRegistry
   scheduler?: unknown
-  xmtpClient?: unknown
 }
 ```
 
@@ -88,9 +87,9 @@ interface BehaviorConfig {
 
 interface BehaviorContext<TRuntimeExtension> {
   runtime: AgentRuntime & TRuntimeExtension
-  client: XmtpClient
-  conversation: XmtpConversation
-  message: XmtpMessage
+  client: unknown
+  conversation: unknown
+  message: unknown
   response?: string
   sendOptions?: { threaded?, contentType?, filtered?, metadata? }
   next?: () => Promise<void>
@@ -128,42 +127,16 @@ await registry.executeAfter(behaviorContext)
 
 ```typescript
 interface AgentRuntime {
-  conversation: XmtpConversation
-  message: XmtpMessage
-  xmtpClient: XmtpClient
   scheduler?: unknown
 }
 ```
 
 The `TRuntimeExtension` generic threads through `Agent`, `AgentConfig`, `Tool`, and `BehaviorContext` to allow packages to extend the runtime context without losing type safety.
 
-### XMTP Types
-
-```typescript
-type XmtpClient = Client<unknown>
-type XmtpConversation = Conversation<unknown>
-type XmtpMessage = DecodedMessage<unknown>
-
-type XmtpSender = {
-  address: string
-  inboxId: string
-  name: string
-  basename?: string
-}
-
-type XmtpSubjects = Record<string, `0x${string}`>
-
-// Hono context variable shape used by XMTP plugin
-type HonoVariables = {
-  xmtpClient: XmtpClient
-  resolver?: Resolver
-}
-```
-
 ### Channel Types
 
 ```typescript
-type ChannelId = "xmtp" | (string & {})
+type ChannelId = string
 
 type CronDeliveryMode = "none" | "announce"
 
@@ -261,8 +234,7 @@ interface Resolver {
     ├── plugin.ts      → Plugin, PluginRegistry, PluginContext
     ├── behavior.ts    → BehaviorObject, BehaviorRegistryImpl  ← only runtime export
     ├── runtime.ts     → AgentRuntime
-    ├── xmtp.ts        → XmtpClient, XmtpConversation, XmtpMessage, XmtpSender
-    ├── channel.ts     → ChannelAdapter, TriggerRequest, CronDelivery
+    ├── channel.ts    → ChannelAdapter, TriggerRequest, CronDelivery
     ├── schedule.ts    → CronSchedule, CronJob, SchedulerStatus
     └── resolver.ts    → Resolver
 ```
@@ -271,7 +243,6 @@ interface Resolver {
 
 | Package | Imports From Here |
 |---------|:-----------------:|
-| `@hybrd/xmtp` | ✅ |
 | `@hybrd/channels` | ✅ |
 | `@hybrd/scheduler` | ✅ |
 | `@hybrd/memory` | ✅ |

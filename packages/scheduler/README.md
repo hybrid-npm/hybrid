@@ -141,7 +141,7 @@ type CronPayload =
 ```typescript
 interface CronDelivery {
   mode: "none" | "announce"
-  channel?: string      // "xmtp", etc.
+  channel?: string      // "telegram", "slack", etc.
   to?: string           // Recipient address
   accountId?: string
   bestEffort?: boolean
@@ -177,7 +177,7 @@ await scheduler.add({
   name: "Reminder",
   schedule: { kind: "at", at: "2026-03-01T09:00:00Z" },
   payload: { kind: "agentTurn", message: "Check on the project" },
-  delivery: { mode: "announce", channel: "xmtp", to: "0x..." }
+  delivery: { mode: "announce", channel: "telegram", to: "user-123" }
 })
 ```
 
@@ -244,7 +244,7 @@ interface ChannelAdapter {
 
 | Channel | Port | Description |
 |---------|------|-------------|
-| `xmtp` | 8455 | XMTP messaging |
+| `telegram` | 8456 | Telegram messaging (planned) |
 
 ### Custom Adapter
 
@@ -272,7 +272,6 @@ class SlackAdapter implements ChannelAdapter {
 | SQLite storage | ❌ | ✅ |
 | MCP tools | ❌ | ✅ |
 | Channel adapters | ❌ | ✅ |
-| XMTP integration | ❌ | ✅ |
 
 ## Storage
 

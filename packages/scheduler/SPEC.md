@@ -185,7 +185,7 @@ When a scheduled task fires, the executor needs to:
 
 1. **Call the agent** - POST to `/api/chat` with the stored prompt
 2. **Stream the response** - Handle SSE response
-3. **Optionally send message** - If `conversationId` was stored, send via XMTP
+3. **Optionally send message** - If `conversationId` was stored, send via channel adapter
 
 ```typescript
 scheduler.setExecutor(async (task) => {
@@ -229,11 +229,10 @@ scheduler.setExecutor(async (task) => {
     }
   }
   
-  // If we have XMTP conversation context, send the reply
+  // If we have conversation context, send the reply
   const conversationId = task.context?.conversationId
   if (conversationId) {
-    // XMTP sending would happen here via the sidecar
-    // For now, just log
+    // Channel adapter sending would happen here
     console.log(`[scheduler] Would send to ${conversationId}: ${result.slice(0, 50)}...`)
   }
   
@@ -352,7 +351,7 @@ CREATE TABLE scheduled_tasks (
 ## Future Enhancements
 
 1. **Task metadata** - Store conversation context, user preferences
-2. **XMTP integration** - Send scheduled messages directly to conversations
+2. **Channel integration** - Send scheduled messages directly to conversations
 3. **Task templates** - Predefined task types (reminders, reports, etc.)
 4. **Webhook triggers** - External services can trigger agent tasks
 5. **Task history** - Store execution history for debugging

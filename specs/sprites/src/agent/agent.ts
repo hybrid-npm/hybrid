@@ -128,13 +128,6 @@ async function saveExampleData(storage: AgentStorage): Promise<void> {
   // Save user preferences
   await storage.set('preferences.theme', 'dark');
   console.log('✅ Saved preferences');
-  
-  // Save XMTP identity reference
-  await storage.saveXmtpData('identity', JSON.stringify({
-    inboxId: 'demo-inbox',
-    created: Date.now(),
-  }));
-  console.log('✅ Saved XMTP data');
 }
 
 /**
@@ -150,10 +143,6 @@ async function loadExampleData(storage: AgentStorage): Promise<void> {
   // Load preferences
   const theme = await storage.get('preferences.theme');
   console.log('✅ Loaded theme:', theme);
-  
-  // Load XMTP
-  const xmtp = await storage.loadXmtpData('identity');
-  console.log('✅ Loaded XMTP:', xmtp);
 }
 
 /**
@@ -243,7 +232,6 @@ async function main(): Promise<void> {
 ║  The agent is now running with:                              ║
 ║  • Encrypted session storage                                 ║
 ║  • Zero-knowledge vault connection                          ║
-║  • Protected XMTP identity                                   ║
 ║                                                               ║
 ║  All sensitive data is encrypted with keys stored only      ║
 ║  in the Vault Sprite's memory.                              ║

@@ -57,9 +57,6 @@ async function main() {
 	if (command === "deploy") return deploy(args[1], args.includes("--keygen"))
 	if (command === "init") return init(args[1])
 	if (command === "keygen") return keygen(args[1])
-	if (command === "register") return register()
-	if (command === "revoke") return revoke(args[1])
-	if (command === "revoke-all") return revokeAll()
 
 	if (command === "owner") {
 		const subcommand = args[1]
@@ -131,9 +128,6 @@ async function main() {
 	console.log("")
 	console.log("Wallet:")
 	console.log("  keygen [prefix]       Generate a new wallet")
-	console.log("  register              Register wallet on XMTP")
-	console.log("  revoke <inboxId>      Revoke installations")
-	console.log("  revoke-all            Revoke all installations")
 	console.log("")
 	console.log("Owner:")
 	console.log("  owner add <address>     Add an owner")
@@ -404,7 +398,7 @@ async function init(name?: string) {
 		const credentialsDir = resolve(targetDir, "credentials")
 		mkdirSync(credentialsDir, { recursive: true })
 		writeFileSync(
-			resolve(credentialsDir, "xmtp-allowFrom.json"),
+			resolve(credentialsDir, "allowFrom.json"),
 			JSON.stringify({ version: 1, allowFrom: [normalized] }, null, 2)
 		)
 		console.log(`\n✅ Added owner: ${normalized}`)
@@ -415,8 +409,8 @@ async function init(name?: string) {
 
 	// Update wallet key
 	envContent = envContent.replace(
-		/AGENT_WALLET_KEY=.*/,
-		`AGENT_WALLET_KEY=${walletKey}`
+		/WALLET_KEY=.*/,
+		`WALLET_KEY=${walletKey}`
 	)
 
 	// Update API keys based on provider choice
@@ -497,7 +491,7 @@ async function build(target?: string) {
 	console.log("📦 Copying agent runtime...")
 	const agentDistDir = resolve(packageDir, "dist")
 
-	const files = ["server/index.cjs", "xmtp.cjs"]
+	const files = ["server/index.cjs"]
 
 	for (const file of files) {
 		const src = resolve(agentDistDir, file)
@@ -574,12 +568,9 @@ async function build(target?: string) {
 		version: "1.0.0",
 		type: "module",
 		dependencies: {
-			"@anthropic-ai/claude-agent-sdk": "^0.2.38",
-			"@hono/node-server": "^1.13.5",
-			"@xmtp/agent-sdk": "0.0.14",
-			"@xmtp/node-bindings": "^1.9.1",
-			"@xmtp/node-sdk": "^4.1.0",
-			ai: "^6.0.0",
+		"@anthropic-ai/claude-agent-sdk": "^0.2.38",
+		"@hono/node-server": "^1.13.5",
+		ai: "^6.0.0",
 			"better-sqlite3": "^11.0.0",
 			dotenv: "^16.4.5",
 			hono: "^4.10.8",
@@ -610,9 +601,7 @@ async function build(target?: string) {
 	writeFileSync(
 		resolve(distDir, "start.sh"),
 		`#!/bin/sh
-node server/index.cjs &
-node xmtp.cjs &
-wait
+node server/index.cjs
 `
 	)
 
@@ -629,7 +618,6 @@ WORKDIR /app
 
 # Copy built agent runtime
 COPY server/ ./server/
-COPY xmtp.cjs ./
 
 # Copy config
 COPY SOUL.md ./
@@ -651,15 +639,14 @@ COPY start.sh ./
 RUN npm install --production
 
 # Create data directories and set ownership
-RUN mkdir -p /app/data/xmtp && \\
-    chown -R node:node /app
+RUN chown -R node:node /app
 
 ENV AGENT_PORT=8454
 ENV NODE_ENV=production
 EXPOSE 8454
 
 USER node
-CMD ["sh", "start.sh"]
+CMD ["node", "server/index.cjs"]
 `
 	}
 
@@ -687,7 +674,7 @@ primary_region = "iad"
   max_machines = 1
 
 [env]
-  XMTP_ENV = "production"
+  NODE_ENV = "production"
 
 [[services]]
   protocol = "tcp"
@@ -715,8 +702,6 @@ primary_region = "iad"
 
 async function dev(useDocker: boolean) {
 	const { execSync } = await import("node:child_process")
-	const { existsSync, readFileSync } = await import("node:fs")
-	const { privateKeyToAccount } = await import("viem/accounts")
 
 	if (useDocker) {
 		console.log("\n🐳 Docker dev not yet implemented for new structure")
@@ -725,75 +710,21 @@ async function dev(useDocker: boolean) {
 	}
 
 	const projectDir = projectRoot
-
-	// Check if agent is registered
-	const walletKey = process.env.AGENT_WALLET_KEY || process.env.WALLET_KEY
-	if (walletKey) {
-		const walletKeyFormatted = walletKey.startsWith("0x")
-			? walletKey
-			: `0x${walletKey}`
-		const account = privateKeyToAccount(walletKeyFormatted as `0x${string}`)
-		console.log(`\n🔍 Checking XMTP registration for ${account.address}...`)
-
-		try {
-			const result = execSync(
-				`npx tsx -e "
-import { createSigner, createXMTPClient } from './src/client';
-const signer = createSigner('${walletKeyFormatted}');
-const client = await createXMTPClient(signer, { env: 'production' });
-console.log('REGISTERED:', client.inboxId);
-process.exit(0);
-"`,
-				{
-					cwd: resolve(packageDir, "..", "xmtp"),
-					encoding: "utf-8",
-					stdio: ["pipe", "pipe", "pipe"]
-				}
-			)
-			if (result.includes("REGISTERED:")) {
-				const inboxId = result.match(/REGISTERED: (.+)/)?.[1]
-				console.log(`   ✅ Already registered (inbox: ${inboxId})`)
-			}
-		} catch (err: any) {
-			const output = err.stdout || err.stderr || ""
-			if (
-				output.includes("not registered") ||
-				output.includes("No inbox found") ||
-				output.includes("incomplete identity") ||
-				err.exitCode
-			) {
-				console.log("   ❌ Not registered")
-				console.log("\n📝 Registering agent on XMTP...")
-
-				execSync("npx pnpm --filter @hybrd/xmtp register", {
-					cwd: resolve(packageDir, "..", ".."),
-					stdio: "inherit",
-					env: { ...process.env, AGENT_WALLET_KEY: walletKey }
-				})
-			}
-		}
-	}
-
-	// Remove duplicate projectDir declaration
 	const agentServer = resolve(packageDir, "dist", "server", "index.cjs")
-	const agentXmtp = resolve(packageDir, "dist", "xmtp.cjs")
 
 	console.log("\n🚀 Starting development server...\n")
 	console.log(`   Project: ${projectDir}`)
 	console.log(`   Runtime: ${packageDir}\n`)
 
 	try {
-		execSync(
-			`npx concurrently --names "server,xmtp" --prefix-colors "cyan,magenta" "node ${agentServer}" "node ${agentXmtp}"`,
-			{
-				cwd: projectDir,
-				stdio: "inherit",
-				env: {
-					...process.env,
-					AGENT_PROJECT_ROOT: projectDir
-				}
+		execSync(`node ${agentServer}`, {
+			cwd: projectDir,
+			stdio: "inherit",
+			env: {
+				...process.env,
+				AGENT_PROJECT_ROOT: projectDir
 			}
-		)
+		})
 	} catch {
 		console.error("\n❌ Failed to start dev server")
 		process.exit(1)
@@ -824,22 +755,14 @@ async function start() {
 		env: { ...process.env, AGENT_PROJECT_ROOT: projectDir }
 	})
 
-	const xmtp = spawn("node", [resolve(distDir, "xmtp.cjs")], {
-		cwd: projectDir,
-		stdio: "inherit",
-		env: { ...process.env, AGENT_PROJECT_ROOT: projectDir }
-	})
-
 	const exitHandler = (code: number | null) => {
 		if (code !== 0 && code !== null) process.exit(code)
 	}
 
 	server.on("exit", exitHandler)
-	xmtp.on("exit", exitHandler)
 
 	process.on("SIGINT", () => {
 		server.kill("SIGINT")
-		xmtp.kill("SIGINT")
 		process.exit(0)
 	})
 }
@@ -933,7 +856,7 @@ async function deploy(platform?: string, keygen = false) {
 	}
 
 	// Check for wallet key
-	let walletKey = process.env.AGENT_WALLET_KEY || process.env.WALLET_KEY
+	let walletKey = process.env.WALLET_KEY
 
 	// Validate app name to prevent command injection
 	if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(appName)) {
@@ -959,12 +882,12 @@ async function deploy(platform?: string, keygen = false) {
 	// On subsequent deploys, secrets are already set on Fly
 	if (!appExists) {
 		// Auto-generate wallet if not set or keygen flag is passed
-		if (!walletKey || keygen) {
-			if (keygen) {
-				console.log("\n🔐 Generating new wallet key...")
-			} else {
-				console.log("\n🔐 No AGENT_WALLET_KEY found. Generating new wallet...")
-			}
+			if (!walletKey || keygen) {
+				if (keygen) {
+					console.log("\n🔐 Generating new wallet key...")
+				} else {
+					console.log("\n🔐 No WALLET_KEY found. Generating new wallet...")
+				}
 			walletKey = await generateVanityWallet(
 				"",
 				privateKeyToAccount,
@@ -993,7 +916,7 @@ async function deploy(platform?: string, keygen = false) {
 		}
 
 		// Set up owner ACL
-		const aclPath = resolve(projectDir, "credentials", "xmtp-allowFrom.json")
+		const aclPath = resolve(projectDir, "credentials", "allowFrom.json")
 		if (!existsSync(aclPath)) {
 			const result = await prompts({
 				type: "text",
@@ -1070,7 +993,7 @@ async function deploy(platform?: string, keygen = false) {
 			try {
 				execFileSync(
 					"fly",
-					["secrets", "set", `AGENT_WALLET_KEY=${walletKey}`, "--app", appName],
+					["secrets", "set", `WALLET_KEY=${walletKey}`, "--app", appName],
 					{
 						cwd: distDir,
 						stdio: "inherit"
@@ -1165,7 +1088,7 @@ async function keygen(prefix?: string) {
 	console.log(`   Address: ${account.address}`)
 	console.log(`   Private key: ${walletKey}\n`)
 	console.log("⚠️  Save this key securely!")
-	console.log(`   Add to .env: AGENT_WALLET_KEY=${walletKey}\n`)
+	console.log(`   Add to .env: WALLET_KEY=${walletKey}\n`)
 }
 
 async function generateVanityWallet(
@@ -1198,100 +1121,6 @@ async function generateVanityWallet(
 }
 
 // ============================================================================
-// Register
-// ============================================================================
-
-async function register() {
-	const { execSync } = await import("node:child_process")
-	const { existsSync, readFileSync } = await import("node:fs")
-	const { join } = await import("node:path")
-	const { privateKeyToAccount } = await import("viem/accounts")
-
-	const walletKey = process.env.AGENT_WALLET_KEY || process.env.WALLET_KEY
-	if (!walletKey) {
-		console.error("\n❌ Set AGENT_WALLET_KEY first")
-		process.exit(1)
-	}
-
-	const account = privateKeyToAccount(
-		(walletKey.startsWith("0x") ? walletKey : `0x${walletKey}`) as `0x${string}`
-	)
-
-	// Verify ACL exists
-	const projectDir = projectRoot
-	const aclPath = join(projectDir, "credentials", "xmtp-allowFrom.json")
-
-	if (!existsSync(aclPath)) {
-		console.error("\n❌ No credentials/xmtp-allowFrom.json")
-		console.error("Run 'hybrid init' first")
-		process.exit(1)
-	}
-
-	try {
-		const acl = JSON.parse(readFileSync(aclPath, "utf-8"))
-		if (!acl.allowFrom?.length) {
-			console.error("\n❌ No owners in ACL")
-			process.exit(1)
-		}
-	} catch {
-		console.error("\n❌ Invalid credentials/xmtp-allowFrom.json")
-		process.exit(1)
-	}
-
-	console.log(`\n🔐 Registering ${account.address} on XMTP...`)
-	try {
-		execSync("npx pnpm --filter @hybrd/xmtp register", {
-			cwd: resolve(packageDir, "..", ".."),
-			stdio: "inherit",
-			env: { ...process.env, AGENT_WALLET_KEY: walletKey }
-		})
-	} catch {
-		console.error("\n❌ Registration failed")
-		process.exit(1)
-	}
-}
-
-// ============================================================================
-// Revoke
-// ============================================================================
-
-async function revoke(inboxId?: string) {
-	const { execSync } = await import("node:child_process")
-
-	if (!inboxId) {
-		console.log("\nUsage: hybrid revoke <inboxId>")
-		console.log("Or use: hybrid revoke-all\n")
-		process.exit(1)
-	}
-
-	console.log("\n🔄 Revoking XMTP installations...\n")
-	try {
-		execSync(`npx pnpm --filter @hybrd/xmtp revoke ${inboxId}`, {
-			cwd: resolve(packageDir, "..", ".."),
-			stdio: "inherit"
-		})
-	} catch {
-		console.log("\n❌ Revoke failed. Check AGENT_WALLET_KEY")
-		process.exit(1)
-	}
-}
-
-async function revokeAll() {
-	const { execSync } = await import("node:child_process")
-
-	console.log("\n🔄 Revoking all XMTP installations...\n")
-	try {
-		execSync("npx pnpm --filter @hybrd/xmtp revoke-all", {
-			cwd: resolve(packageDir, "..", ".."),
-			stdio: "inherit"
-		})
-	} catch {
-		console.log("\n❌ Revoke failed. Check AGENT_WALLET_KEY")
-		process.exit(1)
-	}
-}
-
-// ============================================================================
 // Owner
 // ============================================================================
 
@@ -1307,7 +1136,7 @@ async function ownerAdd(address?: string) {
 	}
 
 	const projectDir = projectRoot
-	const aclPath = join(projectDir, "credentials", "xmtp-allowFrom.json")
+	const aclPath = join(projectDir, "credentials", "allowFrom.json")
 	const normalized = address.toLowerCase().trim()
 
 	mkdirSync(join(projectDir, "credentials"), { recursive: true })
@@ -1344,10 +1173,10 @@ async function ownerRemove(address?: string) {
 	}
 
 	const projectDir = projectRoot
-	const aclPath = join(projectDir, "credentials", "xmtp-allowFrom.json")
+	const aclPath = join(projectDir, "credentials", "allowFrom.json")
 
 	if (!existsSync(aclPath)) {
-		console.error("No ACL file. Run 'hybrid register' first.")
+		console.error("No ACL file. Run 'hybrid init' first.")
 		process.exit(1)
 	}
 
@@ -1379,10 +1208,10 @@ async function ownerList() {
 	const { existsSync, readFileSync } = await import("node:fs")
 
 	const projectDir = projectRoot
-	const aclPath = join(projectDir, "credentials", "xmtp-allowFrom.json")
+	const aclPath = join(projectDir, "credentials", "allowFrom.json")
 
 	if (!existsSync(aclPath)) {
-		console.log("\n⚠️  No ACL file. Run 'hybrid register' first.")
+		console.log("\n⚠️  No ACL file. Run 'hybrid init' first.")
 		console.log("\n  Agent is open to all users.")
 		return
 	}

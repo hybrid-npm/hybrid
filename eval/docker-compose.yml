@@ -7,14 +7,10 @@ services:
       dockerfile: eval/Dockerfile.agent
     ports:
       - "8454:8454"
-      - "8455:8455"
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-test-key}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
-      - XMTP_ENV=${XMTP_ENV:-dev}
-      - AGENT_WALLET_KEY=${TEST_AGENT_WALLET_KEY:-}
       - AGENT_PORT=8454
-      - XMTP_SIDECAR_PORT=8455
       - DATA_ROOT=/app/data
       - MEMORY_ENABLED=true
       - SCHEDULER_ENABLED=true

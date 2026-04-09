@@ -5,11 +5,11 @@ description: Launch interactive web apps from your Hybrid agents
 
 # Mini Apps
 
-Enable your Hybrid agents to launch interactive web applications through XMTP messages.
+Enable your Hybrid agents to launch interactive web applications through messages.
 
 ## What are Mini Apps?
 
-Mini apps are web-based interactive UIs that agents can launch by sending URLs through XMTP. They provide rich user experiences for onchain interactions, data visualization, and complex workflows that go beyond simple text responses.
+Mini apps are web-based interactive UIs that agents can launch by sending URLs through messaging channels. They provide rich user experiences for onchain interactions, data visualization, and complex workflows that go beyond simple text responses.
 
 Common use cases:
 - Transaction signing flows
@@ -20,14 +20,14 @@ Common use cases:
 
 ## Creating a Launch Tool
 
-Create a custom tool that sends miniapp URLs via XMTP:
+Create a custom tool that sends miniapp URLs via messaging channels:
 
 ```typescript
 import { createTool } from "hybrid"
 import { z } from "zod"
 
 export const launchMiniappTool = createTool({
-  description: "Launch a miniapp by sending its URL via XMTP",
+  description: "Launch a miniapp by sending its URL",
   inputSchema: z.object({
     message: z
       .string()
@@ -88,7 +88,7 @@ const agent = new Agent({
   instructions: `You are a helpful AI agent integrated with a miniapp. You can help users with:
 - Answering questions about the miniapp and its features
 - Providing guidance on using onchain components
-- Helping with XMTP and Farcaster interactions
+- Helping with Farcaster interactions
 - Explaining miniapp functionality
 
 When appropriate, you can launch the miniapp to provide interactive experiences.`
@@ -125,7 +125,7 @@ OPENROUTER_API_KEY=your_api_key
 Mini apps are standard web applications that can be built with any framework. Popular choices:
 
 - **Next.js** with OnchainKit for Base integrations
-- **MiniKit** for Farcaster/XMTP native experiences
+- **MiniKit** for Farcaster native experiences
 - **React** with wagmi/viem for custom onchain UIs
 
 ### Example: OnchainKit Integration
@@ -161,7 +161,7 @@ npm run dev
 cd agent
 npm run dev
 
-# The agent will send http://localhost:3000 via XMTP
+# The agent will send http://localhost:3000 via messaging channel
 ```
 
 ## Deployment
@@ -181,4 +181,3 @@ export MINIAPP_URL=https://your-miniapp.vercel.app
 - Learn about [Tools Standard Library](/tools) for extending agent capabilities
 - Explore [Behaviors](/agent/behaviors) for message processing
 - Check out [Blockchain Tools](/tools/blockchain) for crypto functionality
-- See [XMTP Tools](/tools/xmtp) for messaging features

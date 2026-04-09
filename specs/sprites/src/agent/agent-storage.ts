@@ -23,7 +23,6 @@ import type {
   EncryptResponse,
   DecryptResponse,
   SignResponse,
-  XmtpIdentityResponse,
   SessionData,
 } from '../shared/types.js';
 
@@ -137,13 +136,6 @@ export class VaultClient {
   async sign(message: string): Promise<string> {
     const result = await this.request<SignResponse>('/sign', { message });
     return result.signature;
-  }
-  
-  /**
-   * Get XMTP identity
-   */
-  async getXmtpIdentity(walletAddress: string): Promise<XmtpIdentityResponse> {
-    return this.request<XmtpIdentityResponse>('/xmtp/identity', { walletAddress });
   }
   
   /**
@@ -436,30 +428,6 @@ export class AgentStorage {
     } catch {
       return null;
     }
-  }
-  
-  // ==================== XMTP Data ====================
-  
-  /**
-   * Store XMTP data
-   */
-  async saveXmtpData(key: string, data: string): Promise<void> {
-    await this.set(`xmtp.${key}`, data);
-  }
-  
-  /**
-   * Load XMTP data
-   */
-  async loadXmtpData(key: string): Promise<string | null> {
-    return this.get(`xmtp.${key}`);
-  }
-  
-  /**
-   * Get XMTP identity from vault
-   */
-  async getXmtpIdentity(walletAddress: string): Promise<XmtpIdentityResponse> {
-    await this.requireReady();
-    return this.client.getXmtpIdentity(walletAddress);
   }
   
   // ==================== Utilities ====================

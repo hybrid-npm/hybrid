@@ -10,7 +10,7 @@ export default function (plop) {
 			const dirs = fs.readdirSync(packagesDir)
 
 			// Add any package names or folder names you want to skip
-			const skip = ["@hybrd/xmtp", "xmtp"]
+			const skip = []
 
 			const actions = []
 

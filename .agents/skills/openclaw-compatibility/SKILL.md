@@ -301,7 +301,7 @@ Periodic tasks. Empty file means no heartbeat:
 ## Context
 
 - Working on: Hybrid agent framework
-- Tech stack: TypeScript, XMTP, SQLite
+- Tech stack: TypeScript, SQLite
 
 ## Notes
 
@@ -425,7 +425,6 @@ if (role === "owner") {
 | **Atomic facts + decay tiers** | ❌ | ✅ |
 | **Fact supersession** | ❌ | ✅ |
 | **Multi-user ACL (wallet-based)** | ❌ | ✅ |
-| **XMTP native messaging** | ❌ | ✅ |
 | **Channel adapter framework** | ❌ | ✅ |
 | **ENS + Basename resolution** | ❌ | ✅ |
 
@@ -469,8 +468,7 @@ skill-command --option value
 ```
 .hybrid/skills/
 ├── core/                    # Built-in skills
-│   ├── memory/SKILL.md
-│   └── xmtp/SKILL.md
+│   └── memory/SKILL.md
 └── ext/                     # User-installed skills
     └── my-skill/SKILL.md
 ```
@@ -555,28 +553,12 @@ cp -r /path/to/openclaw/skills ./skills
 cp .env.example .env
 # Edit .env:
 # OPENROUTER_API_KEY=your_key
-# AGENT_WALLET_KEY=0x...
-# XMTP_ENV=production
 ```
 
-### 3. Register and Run
+### 3. Run
 
 ```bash
-hybrid register    # One-time XMTP registration
 hybrid dev         # Start development server
-```
-
-### 4. Add XMTP Identity (New)
-
-```bash
-# Generate wallet key
-openssl rand -hex 32 | sed 's/^/0x/'
-
-# Set in .env
-AGENT_WALLET_KEY=0x...
-
-# Register on XMTP network
-hybrid register
 ```
 
 ---
@@ -597,7 +579,7 @@ hybrid register
 - ACL.md for owner/guest roles
 - PARA system in `.hybrid/memory/life/`
 - Atomic facts with decay tiers
-- XMTP messaging via channel adapters
+- Channel adapters for messaging integration
 
 ### Not Implemented
 

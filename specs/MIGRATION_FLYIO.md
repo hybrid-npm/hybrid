@@ -2,9 +2,9 @@
 
 ## Current State
 
-- **Agent**: `agent/Dockerfile` - Node.js app using `@xmtp/agent-sdk`, hono, @anthropic-ai/claude-code
+- **Agent**: `agent/Dockerfile` - Node.js app using hono, @anthropic-ai/claude-code
 - **Currently deployed**: Cloudflare Workers + Containers
-- **Architecture**: Gateway (Worker) + Server (Container) + Sidecar (XMTP)
+- **Architecture**: Gateway (Worker) + Server (Container)
 
 ## Completed Setup
 
@@ -14,7 +14,7 @@
   - Agent Storage (`src/agent/agent-storage.ts`) - Encrypted storage wrapper
   - Agent Entry (`src/agent/agent.ts`) - Example agent implementation
   - Provision Script (`src/shared/provision.ts`) - User onboarding
-  - XMTP Integration (`src/shared/xmtp.ts`) - XMTP messaging
+   - Channel Integration - Messaging
   - Sprites Client (`src/shared/sprites-client.ts`) - Sprites SDK wrapper
 - Installed `@fly/sprites` SDK
 
@@ -27,7 +27,7 @@
 fly deploy --depot=false
 
 # Set secrets
-fly secrets set AGENT_WALLET_KEY=xxx XMTP_ENV=production OPENROUTER_API_KEY=xxx
+fly secrets set OPENROUTER_API_KEY=xxx
 ```
 
 ### Option B: Sprites (Recommended)

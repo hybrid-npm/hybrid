@@ -4,10 +4,9 @@ The runtime agent package for deployed Hybrid AI agents. Not published to npm �
 
 ## Overview
 
-The agent package runs two concurrent processes:
+The agent package runs:
 
 1. **Agent Server** — A Hono HTTP server that accepts chat requests, drives the Claude Code SDK to generate responses, and streams Server-Sent Events (SSE) back to callers.
-2. **XMTP Sidecar** — Connects to the XMTP messaging network, bridges inbound messages to the agent server, and exposes an HTTP endpoint for outbound message delivery.
 
 ## Architecture
 
@@ -30,20 +29,6 @@ The agent package runs two concurrent processes:
 │  │  claude-agent-sdk query() → SSE stream                       │  │
 │  │  { text, tool-call-start, tool-call-delta, tool-call-end,    │  │
 │  │    usage, error }                                             │  │
-│  └─────────────────────────────────────────────────────────────┘  │
-│                                                                    │
-│  ┌─────────────────────────────────────────────────────────────┐  │
-│  │               XMTP Sidecar (port 8455)                       │  │
-│  │                                                               │  │
-│  │  XMTP network → Agent.create() → "text" events              │  │
-│  │       ↓                                                       │  │
-│  │  Fetch conversation history (up to 20 msgs)                  │  │
-│  │       ↓                                                       │  │
-│  │  POST /api/chat (agent server)                               │  │
-│  │       ↓                                                       │  │
-│  │  Assemble SSE stream → conversation.send(reply)              │  │
-│  │                                                               │  │
-│  │  POST /api/send  ← scheduler outbound delivery               │  │
 │  └─────────────────────────────────────────────────────────────┘  │
 │                                                                    │
 └──────────────────────────────────────────────────────────────────┘
@@ -132,22 +117,6 @@ data: [DONE]
 
 ```json
 { "status": "healthy" }
-```
-
-### XMTP Sidecar (port 8455)
-
-#### `POST /api/send`
-
-Deliver an outbound message from the scheduler to a specific XMTP conversation:
-
-```http
-POST http://localhost:8455/api/send
-Content-Type: application/json
-
-{
-  "conversationId": "conv-abc",
-  "message": "Your scheduled reminder"
-}
 ```
 
 ## Agent Prompt Construction
@@ -250,7 +219,7 @@ The agent provides OpenClaw-compatible file operation tools:
 
 The `SchedulerService` is initialized on startup and backed by SQLite. Job callbacks:
 - **Run**: POSTs to `/api/chat` with the job's payload as the user message
-- **Delivery**: Routes outbound messages to the XMTP sidecar via `POST /api/send`
+- **Delivery**: Routes outbound messages to channel adapters
 
 ## Model Configuration
 
@@ -273,26 +242,13 @@ Skills are markdown files (`SKILL.md`) that provide tools and context to the age
 ```
 .hybrid/
 ├── skills/
-│   ├── core/          # Built-in skills (memory, xmtp)
-│   │   ├── memory/SKILL.md
-│   │   └── xmtp/SKILL.md
+│   ├── core/          # Built-in skills (memory)
+│   │   └── memory/SKILL.md
 │   └── ext/           # User-installed skills
 │       └── my-skill/SKILL.md
 ```
 
 Skills are injected into the agent's system prompt as available tools/capabilities.
-
-## XMTP Installation Limit Handling
-
-The XMTP sidecar automatically handles installation limit errors on connect:
-
-1. Extracts the inbox ID from the error message
-2. Calls `Client.revokeInstallations()` to remove old installations
-3. Retries the connection
-
-## Message Deduplication
-
-The sidecar maintains an in-memory `Set<string>` of processed message IDs with LRU eviction to prevent double-processing in case of restarts or duplicate delivery.
 
 ## Environment Variables
 
@@ -301,8 +257,6 @@ The sidecar maintains an in-memory `Set<string>` of processed message IDs with L
 | `ANTHROPIC_API_KEY` | Anthropic API key |
 | `ANTHROPIC_BASE_URL` | Override Anthropic base URL (auto-set for OpenRouter) |
 | `OPENROUTER_API_KEY` | OpenRouter API key (auto-configures Anthropic client) |
-| `AGENT_WALLET_KEY` | Private key for XMTP wallet |
-| `XMTP_ENV` | XMTP environment: `dev` or `production` |
 | `PROJECT_ROOT` | Override workspace root path |
 | `PORT` | Agent server port (default: `8454`) |
 
@@ -316,7 +270,6 @@ pnpm build
 Outputs to `dist/`:
 - `dist/server/index.cjs` — Full Claude Code SDK agent server
 - `dist/server/simple.cjs` — Lightweight server (OpenAI-compatible, no Claude Code subprocess)
-- `dist/xmtp.cjs` — XMTP sidecar
 
 ## License
 

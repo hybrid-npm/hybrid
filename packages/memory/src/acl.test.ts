@@ -43,7 +43,7 @@ describe("ACL JSON", () => {
 			mkdirSync(credentialsDir, { recursive: true })
 
 			await writeFile(
-				join(credentialsDir, "xmtp-allowFrom.json"),
+				join(credentialsDir, "allowFrom.json"),
 				JSON.stringify({
 					version: 1,
 					allowFrom: ["0x1234567890abcdef1234567890abcdef12345678"]
@@ -274,7 +274,7 @@ describe("ACL Edge Cases", () => {
 		const credentialsDir = join(TEST_DIR, ".hybrid", "credentials")
 		mkdirSync(credentialsDir, { recursive: true })
 
-		writeFileSync(join(credentialsDir, "xmtp-allowFrom.json"), "not valid json")
+		writeFileSync(join(credentialsDir, "allowFrom.json"), "not valid json")
 
 		// Should not throw, return empty
 		const result = await readACLAllowFrom(TEST_DIR)
@@ -288,7 +288,7 @@ describe("ACL Edge Cases", () => {
 		mkdirSync(credentialsDir, { recursive: true })
 
 		writeFileSync(
-			join(credentialsDir, "xmtp-allowFrom.json"),
+			join(credentialsDir, "allowFrom.json"),
 			JSON.stringify({ allowFrom: ["0xowner1"] })
 		)
 

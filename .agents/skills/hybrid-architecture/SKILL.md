@@ -1,27 +1,27 @@
 ---
 name: hybrid-architecture
-description: Deep knowledge of Hybrid's agent runtime architecture, including agent server, XMTP sidecar, memory system, scheduler, and channel adapters. Use when working on core agent infrastructure, understanding data flow, or debugging system-level issues.
+description: Deep knowledge of Hybrid's agent runtime architecture, including agent server, memory system, scheduler, and channel adapters. Use when working on core agent infrastructure, understanding data flow, or debugging system-level issues.
 ---
 
 # Hybrid Architecture
 
-Hybrid is a TypeScript agent runtime with 100% OpenClaw feature parity plus XMTP messaging, PARA memory, and multi-user ACL.
+Hybrid is a TypeScript agent runtime with 100% OpenClaw feature parity plus PARA memory, multi-user ACL, and channel adapters.
 
 ## System Overview
 
 ```
-                     XMTP network • HTTP • Scheduler callbacks
-                                       │
-                                       ▼
-                     ┌─────────────────────────────────┐
-                     │       Channel Adapters           │
-                     │  @hybrd/channels  (port 8455)    │
-                     │  XMTP adapter → HTTP IPC         │
-                     └─────────────────────────────────┘
-                                       │
-                                       ▼
-                     ┌─────────────────────────────────┐
-                     │        Agent Server              │
+                      HTTP • Scheduler callbacks
+                                        │
+                                        ▼
+                      ┌─────────────────────────────────┐
+                      │       Channel Adapters           │
+                      │  @hybrd/channels                 │
+                      │  HTTP IPC                        │
+                      └─────────────────────────────────┘
+                                        │
+                                        ▼
+                      ┌─────────────────────────────────┐
+                      │        Agent Server              │
                      │  hybrid/agent  (port 8454)       │
                      │                                  │
                      │  SOUL.md + AGENTS.md             │
@@ -55,11 +55,10 @@ Hybrid is a TypeScript agent runtime with 100% OpenClaw feature parity plus XMTP
 
 | Package | Purpose | Key Entry Points |
 |---------|---------|-----------------|
-| `hybrid/agent` | Agent runtime | `src/server/index.ts`, `src/xmtp.ts` |
-| `@hybrd/xmtp` | XMTP client | `src/client.ts`, `src/plugin.ts` |
+| `hybrid/agent` | Agent runtime | `src/server/index.ts` |
 | `@hybrd/memory` | PARA memory | `src/index.ts`, `src/para.ts` |
 | `@hybrd/scheduler` | Time-based triggers | `src/index.ts` |
-| `@hybrd/channels` | Channel adapters | `src/adapters/xmtp.ts` |
+| `@hybrd/channels` | Channel adapters | `src/adapters/` |
 | `@hybrd/types` | Shared types | All type definitions |
 | `@hybrd/cli` | CLI commands | `src/index.ts` |
 | `hybrid/gateway` | CF Workers gateway | `src/index.ts` |
@@ -136,45 +135,6 @@ The agent runs a unified MCP server providing:
 - Path traversal (`../`) blocked
 - Symlink escapes prevented
 - Each user has isolated workspace
-
----
-
-## XMTP Sidecar
-
-### Port 8455
-
-The XMTP sidecar bridges XMTP network messages to the agent server.
-
-**Inbound flow:**
-1. XMTP text message arrives
-2. Deduplicates by message ID
-3. Finds conversation, builds reply context
-4. POSTs to `http://localhost:8454/api/chat`
-5. Reads SSE stream, assembles full response
-6. Sends reply via `conversation.send(reply)`
-
-**Outbound flow:**
-1. `POST /api/send` received on sidecar HTTP server
-2. Finds target conversation
-3. Calls `runAgentAndReply()`
-
-### Installation Limit Handling
-
-Automatic recovery when XMTP installation limit is reached:
-
-1. Extract inbox ID from error message
-2. Call `Client.revokeInstallations()`
-3. Retry connection
-
-### Message Deduplication
-
-In-memory `Set<string>` of processed message IDs with LRU eviction. Prevents double-processing during restarts or duplicate delivery.
-
-### Database Persistence
-
-When `XMTP_STORAGE` (R2) is in globalThis:
-1. Download `<inboxId>.db3` from R2 before connect
-2. Upload updated `.db3` after connect complete
 
 ---
 
@@ -340,7 +300,7 @@ interface ChannelAdapter {
 
 ```typescript
 const DEFAULT_ADAPTER_PORTS = {
-  xmtp: 8455
+  telegram: 8456
   // telegram: 8456 (planned)
   // slack: 8457 (planned)
 }
@@ -353,8 +313,8 @@ All communication uses `http://127.0.0.1:{port}/api/trigger`:
 ```typescript
 // Dispatch from scheduler
 await dispatchToChannel({
-  channel: "xmtp",
-  to: "0x...",
+  channel: "telegram",
+  to: "user-123",
   message: "Scheduled reminder"
 })
 ```
@@ -375,12 +335,11 @@ Cloudflare Worker (edge)
     ensureAgentServer()
             │
             ├── sandbox.listProcesses() (wait up to 30s)
-            ├── Check for server + sidecar
+            ├── Check for server
             ├── HTTP health check on port 8454
             └── If unhealthy:
                   kill node processes
                   start server (wait for port 8454)
-                  start sidecar (wait for "Connected to XMTP")
             │
             ▼
     sandbox.containerFetch() → port 8454
@@ -401,8 +360,6 @@ export { Sandbox } from "@cloudflare/sandbox"
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `AGENT_WALLET_KEY` | Yes | XMTP wallet private key |
-| `XMTP_ENV` | Yes | `dev` or `production` |
 | `ANTHROPIC_API_KEY` | Either | For Claude direct |
 | `OPENROUTER_API_KEY` | Either | Auto-configures Anthropic client |
 
@@ -434,9 +391,6 @@ interface BehaviorObject<TRuntimeExtension> {
 
 // Runtime
 interface AgentRuntime {
-  conversation: XmtpConversation
-  message: XmtpMessage
-  xmtpClient: XmtpClient
   scheduler?: unknown
 }
 
@@ -461,9 +415,7 @@ hybrid init [name]           # Create new agent project
 hybrid build [--target]      # Build to .hybrid/
 hybrid dev                   # Start development server
 hybrid deploy [platform]     # Deploy (fly, cf, railway)
-hybrid register              # Register XMTP wallet
-hybrid revoke <inboxId>      # Revoke specific installations
-hybrid revoke-all            # Revoke all installations
+hybrid register              # Register agent identity
 hybrid install <source>      # Install skill (github, npm, local)
 hybrid uninstall <name>      # Remove skill
 hybrid skills                # List installed skills
@@ -551,14 +503,7 @@ agent.use(myPlugin())
 
 ### Conversation History
 
-XMTP sidecar fetches up to 20 recent messages:
-
-```typescript
-const messages = await conversation.messages({ limit: 20 })
-const history = messages
-  .filter(m => m.contentType.sameAs(ContentTypeText))
-  .map(m => ({ role: m.senderInboxId === myInboxId ? "assistant" : "user", content: m.content }))
-```
+Channel adapters fetch recent messages and build conversation context before forwarding to the agent server.
 
 ---
 
@@ -571,8 +516,6 @@ const history = messages
 | `ANTHROPIC_API_KEY` | Anthropic API key |
 | `ANTHROPIC_BASE_URL` | Override base URL (auto-set for OpenRouter) |
 | `OPENROUTER_API_KEY` | OpenRouter key (auto-configures) |
-| `AGENT_WALLET_KEY` | XMTP wallet private key |
-| `XMTP_ENV` | `dev` or `production` |
 | `PROJECT_ROOT` | Override workspace root |
 | `PORT` | Agent server port (default: 8454) |
 
@@ -596,13 +539,6 @@ const history = messages
 ---
 
 ## Troubleshooting
-
-### XMTP Connection Issues
-
-1. Check `AGENT_WALLET_KEY` is valid hex
-2. Check `XMTP_ENV` matches expected network
-3. If installation limit reached, run `hybrid revoke-all`
-4. Check R2 bucket exists if using Cloudflare gateway
 
 ### Memory Search Not Working
 
