@@ -1,7 +1,7 @@
 {
 	"name": "@hybrd/channels",
 	"version": "2.0.0",
-	"keywords": ["channels", "xmtp", "telegram", "slack", "hybrid", "adapter"],
+	"keywords": ["channels", "hybrid", "adapter"],
 	"type": "module",
 	"files": ["dist", "src"],
 	"exports": {
@@ -9,11 +9,6 @@
 			"types": "./dist/index.d.ts",
 			"import": "./dist/index.js",
 			"require": "./dist/index.cjs"
-		},
-		"./adapters/xmtp": {
-			"types": "./dist/adapters/xmtp/index.d.ts",
-			"import": "./dist/adapters/xmtp/index.js",
-			"require": "./dist/adapters/xmtp/index.cjs"
 		}
 	},
 	"scripts": {
@@ -29,11 +24,7 @@
 	},
 	"dependencies": {
 		"@hybrd/types": "workspace:*",
-		"@hybrd/xmtp": "workspace:*",
 		"@hybrd/memory": "workspace:*",
-		"@xmtp/agent-sdk": "0.0.14",
-		"@xmtp/node-bindings": "^1.9.1",
-		"@xmtp/node-sdk": "^4.1.0",
 		"express": "^5.0.0",
 		"hono": "^4.6.12",
 		"picocolors": "^1.1.1",

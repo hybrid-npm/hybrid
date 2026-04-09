@@ -6,10 +6,8 @@ export interface TestScenario {
 
 export interface TestContext {
   agentUrl: string
-  xmtpSidecarUrl: string
   wallets: TestWallet[]
   http: HttpClient
-  xmtp: XmtpTestClient
 }
 
 export interface TestWallet {
@@ -37,23 +35,8 @@ export interface HttpResponse {
   text(): Promise<string>
 }
 
-export interface XmtpTestClient {
-  getWallet(): TestWallet | undefined
-  sendMessage(toAddress: string, content: string): Promise<string>
-  waitForMessage(timeout?: number): Promise<XmtpMessage | null>
-  close(): Promise<void>
-}
-
-export interface XmtpMessage {
-  id: string
-  sender: string
-  content: string
-  timestamp: Date
-}
-
 export interface EvalConfig {
   agentUrl: string
-  xmtpSidecarUrl: string
   walletsPath: string
   resultsPath: string
   timeout?: number

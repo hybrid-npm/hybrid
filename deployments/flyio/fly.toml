@@ -17,7 +17,6 @@ primary_region = 'iad'
 [env]
   AGENT_PORT = '4100'
   DATA_ROOT = '/app/data'
-  XMTP_ENV = 'production'
 
 [metrics]
   path = "/metrics"

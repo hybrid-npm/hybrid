@@ -539,13 +539,12 @@ The current date and time is: ${now.toISOString()}
 
 When scheduling tasks, calculate the target time relative to the current time above.`
 
-	// Sanitize conversationId to prevent prompt injection — only allow
-	// alphanumeric, hyphens, underscores, and colons (typical XMTP conversation IDs)
+	// Sanitize conversationId to prevent prompt injection
 	const sanitizedConversationId = req.conversationId
 		? req.conversationId.replace(/[^a-zA-Z0-9_:=-]/g, "")
 		: undefined
 
-	const channel = req.channel || (sanitizedConversationId ? "xmtp" : "web")
+	const channel = req.channel || "web"
 
 	const conversationContext = sanitizedConversationId
 		? `## Conversation Context
@@ -570,7 +569,7 @@ When scheduling reminders, include delivery info to send the message back to thi
 - Keep it SHORT: "Got it! I'll remind you in 1 minute"`
 		: ""
 
-	const PLAINTEXT_CHANNELS = new Set(["xmtp", "whatsapp", "sms"])
+	const PLAINTEXT_CHANNELS = new Set(["whatsapp", "sms"])
 	const channelFormatting = PLAINTEXT_CHANNELS.has(channel)
 		? `## Channel Formatting (${channel})
 
@@ -690,8 +689,7 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 		"SECRET",
 		"SECRETS_PATH",
 		"DATA_ROOT",
-		"WALLET_KEY",
-		"XMTP_DB_ENCRYPTION"
+		"WALLET_KEY"
 	]
 
 	// Build filtered environment for Claude processes
@@ -1083,7 +1081,6 @@ function printStartup() {
 	console.log()
 	console.log("  ─────────────────────────────────────────────────")
 	console.log()
-	console.log(`  XMTP Net    ${XMTP_ENV}`)
 	if (walletAddress) {
 		console.log(`  Wallet      ${walletAddress}`)
 	} else {

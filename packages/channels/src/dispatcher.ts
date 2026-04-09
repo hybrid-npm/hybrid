@@ -1,7 +1,6 @@
 import type { ChannelId, TriggerRequest, TriggerResponse } from "@hybrd/types"
 
 export const DEFAULT_ADAPTER_PORTS: Record<string, number> = {
-	xmtp: 8455
 	// telegram: 8456,  // future
 	// slack: 8457,     // future
 }
