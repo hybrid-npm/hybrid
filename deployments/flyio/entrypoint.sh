@@ -31,11 +31,7 @@ fi
 # Use file-based secrets instead: fly ssh console, then write to /app/data/secrets/wallet.key
 # Log warning to file (not stdout/stderr) so it doesn't interfere with
 # commands run through the entrypoint while still leaving an audit trail.
-if [ -n "$WALLET_KEY" ]; then
-    mkdir -p /app/data/logs
-    echo "[$(date -Iseconds)] WARNING: WALLET_KEY found in env — scrubbing. Use file-based secrets at $SECRETS_DIR/wallet.key instead." >> /app/data/logs/entrypoint.log 2>/dev/null || true
-fi
-unset WALLET_KEY PRIVATE_KEY 2>/dev/null || true
+unset PRIVATE_KEY 2>/dev/null || true
 
 # Ensure workspaces are writable by claude user (volume mount may reset perms)
 if [ -d "/app/data/workspaces" ]; then
@@ -50,7 +46,7 @@ chmod -R o+rX /app/node_modules /app/dist 2>/dev/null || true
 # Use env -u to guarantee secret vars are stripped from the child process
 # environment. Plain `unset` removes them from the shell, but Docker-injected
 # vars can survive through exec in some runtimes. env -u is belt-and-suspenders.
-ENV_STRIP="env -u WALLET_KEY -u PRIVATE_KEY"
+ENV_STRIP="env -u PRIVATE_KEY"
 
 # If running as root, drop to 'app' user and execute CMD
 if [ "$(id -u)" = "0" ]; then

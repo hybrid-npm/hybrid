@@ -4,8 +4,7 @@ import { serve } from "@hono/node-server"
 import { config } from "dotenv"
 import { Hono } from "hono"
 import pc from "picocolors"
-import { privateKeyToAccount } from "viem/accounts"
-import { getWalletKey, hasSecret, loadSecrets } from "../lib/secret-store.js"
+import { loadSecrets } from "../lib/secret-store.js"
 import { handleAuthVerify } from "./routes/auth.js"
 import {
 	handleAddSkill,
@@ -32,9 +31,7 @@ if (process.env.DEBUG) {
 	console.log(`[server] Project dir: ${projectDir}`)
 	console.log(`[server] .env path: ${envPath}`)
 	console.log(`[server] .env exists: ${fs.existsSync(envPath)}`)
-	console.log(
-		`[server] WALLET_KEY: ${hasSecret("WALLET_KEY") ? "set" : "not set"}`
-	)
+
 }
 
 const AGENT_PORT = Number.parseInt(process.env.AGENT_PORT || "8454")
@@ -56,37 +53,6 @@ function getProviderConfig() {
 		process.env.ANTHROPIC_AUTH_TOKEN || process.env.OPENROUTER_API_KEY
 	const apiKey = process.env.ANTHROPIC_API_KEY
 	return { baseUrl, authToken, apiKey }
-}
-
-function getWalletAddress(): string | null {
-	// Try secret store first (production)
-	if (hasSecret("WALLET_KEY")) {
-		try {
-			const key = getWalletKey()
-			const account = privateKeyToAccount(
-				key.startsWith("0x")
-					? (key as `0x${string}`)
-					: (`0x${key}` as `0x${string}`)
-			)
-			return account.address
-		} catch {
-			return null
-		}
-	}
-
-	// Fall back to env var (development)
-	const key = process.env.WALLET_KEY
-	if (!key) return null
-	try {
-		const account = privateKeyToAccount(
-			key.startsWith("0x")
-				? (key as `0x${string}`)
-				: (`0x${key}` as `0x${string}`)
-		)
-		return account.address
-	} catch {
-		return null
-	}
 }
 
 const app = new Hono()
@@ -359,7 +325,6 @@ function streamError(message: string) {
 
 function printBanner() {
 	const { baseUrl, authToken, apiKey } = getProviderConfig()
-	const walletAddress = getWalletAddress()
 	const isHotReload = process.env.TSX_WATCH === "true"
 
 	console.log("")
@@ -394,9 +359,6 @@ function printBanner() {
 	)
 	console.log(
 		`  ${pc.bold("API Key")}    ${authToken || apiKey ? pc.green("✓ set") : pc.red("✗ not set")}`
-	)
-	console.log(
-		`  ${pc.bold("Wallet")}     ${walletAddress ? pc.cyan(walletAddress) : pc.gray("(not configured)")}`
 	)
 	console.log("")
 	console.log(

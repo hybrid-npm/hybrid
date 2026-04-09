@@ -16,8 +16,7 @@ import {
 import { MemoryIndexManager, resolveMemoryConfig } from "@hybrd/memory"
 import { Hono } from "hono"
 import pc from "picocolors"
-import { privateKeyToAccount } from "viem/accounts"
-import { getWalletKey, hasSecret, loadSecrets } from "../lib/secret-store"
+import { loadSecrets } from "../lib/secret-store"
 import { getOrCreateUserWorkspace } from "../lib/workspace"
 import {
 	isOnboardingComplete,
@@ -69,20 +68,6 @@ const SCHEDULER_POLL_MS = Number.parseInt(
 )
 
 let scheduler: SchedulerService | null = null
-
-function getWalletAddress(): string | null {
-	if (!hasSecret("WALLET_KEY")) return null
-	try {
-		const key = getWalletKey()
-		const keyWithPrefix = key.startsWith("0x")
-			? (key as `0x${string}`)
-			: (`0x${key}` as `0x${string}`)
-		const account = privateKeyToAccount(keyWithPrefix)
-		return account.address
-	} catch {
-		return null
-	}
-}
 
 function getProviderInfo(): { provider: string; model: string } {
 	const baseUrl = process.env.ANTHROPIC_BASE_URL
@@ -684,13 +669,11 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 	// needs them to authenticate with the LLM API. They pass through via safeEnv
 	// and are also explicitly set below for OpenRouter/Anthropic mode.
 	const SENSITIVE_PREFIXES = [
-		"WALLET_KEY",
 		"OPENROUTER_API_KEY",
 		"PRIVATE_KEY",
 		"SECRET",
 		"SECRETS_PATH",
-		"DATA_ROOT",
-		"WALLET_KEY"
+		"DATA_ROOT"
 	]
 
 	// Build filtered environment for Claude processes
@@ -986,7 +969,7 @@ process.on("unhandledRejection", (reason) => {
 })
 
 function printStartup() {
-	const walletAddress = getWalletAddress()
+
 	const { provider, model } = getProviderInfo()
 
 	const baseUrl = process.env.ANTHROPIC_BASE_URL
@@ -1082,11 +1065,6 @@ function printStartup() {
 	console.log()
 	console.log("  ─────────────────────────────────────────────────")
 	console.log()
-	if (walletAddress) {
-		console.log(`  Wallet      ${walletAddress}`)
-	} else {
-		console.log(`  Wallet      (not configured)`)
-	}
 	console.log()
 	console.log("  ─────────────────────────────────────────────────")
 	console.log()

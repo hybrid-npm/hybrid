@@ -740,9 +740,6 @@ ANTHROPIC_API_KEY=your_api_key_here
 # OpenRouter proxy (optional)
 # ANTHROPIC_BASE_URL=https://openrouter.ai/api
 # ANTHROPIC_AUTH_TOKEN=your_openrouter_key
-
-# Agent configuration
-WALLET_KEY=your_private_key_here
 `
 }
 

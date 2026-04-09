@@ -27,8 +27,7 @@
 		"@hybrd/memory": "workspace:*",
 		"express": "^5.0.0",
 		"hono": "^4.6.12",
-		"picocolors": "^1.1.1",
-		"viem": "^2.23.0"
+		"picocolors": "^1.1.1"
 	},
 	"devDependencies": {
 		"@config/biome": "workspace:*",

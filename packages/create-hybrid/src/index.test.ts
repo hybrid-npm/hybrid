@@ -99,7 +99,7 @@ describe("create-hybrid CLI", () => {
 		expect(existsSync(join(PROJECT_DIR, "src", "dev-gateway.ts"))).toBe(true)
 	})
 
-	it("should create .env.example with WALLET_KEY", () => {
+	it("should create .env.example with API key placeholders", () => {
 		execSync(
 			`npx tsx "${CLI_PATH}" --name ${PROJECT_NAME} --agent-name "Test Agent"`,
 			{ cwd: TEMP_DIR, timeout: 15000 }
@@ -109,7 +109,7 @@ describe("create-hybrid CLI", () => {
 		expect(existsSync(envPath)).toBe(true)
 
 		const content = readFileSync(envPath, "utf-8")
-		expect(content).toContain("WALLET_KEY=")
+		expect(content).toContain("ANTHROPIC_API_KEY=")
 	})
 
 	it("should create Dockerfile with all templates", () => {

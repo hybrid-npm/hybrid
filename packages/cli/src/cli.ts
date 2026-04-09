@@ -54,9 +54,8 @@ async function main() {
 	if (command === "build") return build(args[1])
 	if (command === "dev") return dev(args.includes("--docker"))
 	if (command === "start") return start()
-	if (command === "deploy") return deploy(args[1], args.includes("--keygen"))
+	if (command === "deploy") return deploy(args[1])
 	if (command === "init") return init(args[1])
-	if (command === "keygen") return keygen(args[1])
 
 	if (command === "owner") {
 		const subcommand = args[1]
@@ -125,9 +124,6 @@ async function main() {
 	console.log("  build [--target]      Build for deployment (fly, railway)")
 	console.log("  start                 Run built agent")
 	console.log("  deploy [platform]     Deploy (fly, railway)")
-	console.log("")
-	console.log("Wallet:")
-	console.log("  keygen [prefix]       Generate a new wallet")
 	console.log("")
 	console.log("Owner:")
 	console.log("  owner add <address>     Add an owner")
@@ -344,15 +340,6 @@ async function init(name?: string) {
 	// Owner wallet address
 	const ownerAddress = await question("\nEnter your wallet address (owner): ")
 
-	// Wallet key - generate using keygen flow
-	console.log("\n🔑 Generating wallet key...")
-	const { privateKeyToAccount } = await import("viem/accounts")
-	const { randomBytes } = await import("node:crypto")
-	const walletKey = `0x${randomBytes(32).toString("hex")}` as `0x${string}`
-	const account = privateKeyToAccount(walletKey as `0x${string}`)
-	console.log(`   Address: ${account.address}`)
-	console.log(`   Key: ${walletKey.slice(0, 10)}...${walletKey.slice(-8)}`)
-
 	rl.close()
 
 	// Provider picker using prompts
@@ -406,12 +393,6 @@ async function init(name?: string) {
 
 	// Update .env file with generated key and API keys
 	let envContent = readFileSync(envPath, "utf-8")
-
-	// Update wallet key
-	envContent = envContent.replace(
-		/WALLET_KEY=.*/,
-		`WALLET_KEY=${walletKey}`
-	)
 
 	// Update API keys based on provider choice
 	if (anthropicKey) {
@@ -575,7 +556,6 @@ async function build(target?: string) {
 			dotenv: "^16.4.5",
 			hono: "^4.10.8",
 			"sql.js": "^1.11.0",
-			viem: "^2.46.2",
 			zod: "^4.0.0"
 		}
 	}
@@ -771,12 +751,10 @@ async function start() {
 // Deploy
 // ============================================================================
 
-async function deploy(platform?: string, keygen = false) {
+async function deploy(platform?: string) {
 	const { spawn, execSync } = await import("node:child_process")
 	const { existsSync, readFileSync, writeFileSync } = await import("node:fs")
 	const prompts = (await import("prompts")).default
-	const { privateKeyToAccount } = await import("viem/accounts")
-	const { randomBytes } = await import("node:crypto")
 
 	const projectDir = projectRoot
 	const distDir = resolve(projectDir, "dist")
@@ -855,9 +833,6 @@ async function deploy(platform?: string, keygen = false) {
 		if (result.appName) appName = result.appName
 	}
 
-	// Check for wallet key
-	let walletKey = process.env.WALLET_KEY
-
 	// Validate app name to prevent command injection
 	if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(appName)) {
 		console.error(`\n❌ Invalid app name: ${appName}`)
@@ -875,29 +850,10 @@ async function deploy(platform?: string, keygen = false) {
 		// App doesn't exist
 	}
 
-	// Check for OpenRouter key
-	let openRouterKey = process.env.OPENROUTER_API_KEY
-
 	// Only prompt for secrets on first deploy (when app doesn't exist)
 	// On subsequent deploys, secrets are already set on Fly
 	if (!appExists) {
-		// Auto-generate wallet if not set or keygen flag is passed
-			if (!walletKey || keygen) {
-				if (keygen) {
-					console.log("\n🔐 Generating new wallet key...")
-				} else {
-					console.log("\n🔐 No WALLET_KEY found. Generating new wallet...")
-				}
-			walletKey = await generateVanityWallet(
-				"",
-				privateKeyToAccount,
-				randomBytes
-			)
-			const account = privateKeyToAccount(walletKey as `0x${string}`)
-			console.log(`✅ Wallet: ${account.address}\n`)
-		}
-
-		// Prompt for OpenRouter key if not set (required for new apps)
+		let openRouterKey = process.env.OPENROUTER_API_KEY
 		if (!openRouterKey) {
 			console.log("🔑 No OPENROUTER_API_KEY found.")
 			while (true) {
@@ -988,36 +944,22 @@ async function deploy(platform?: string, keygen = false) {
 
 		// Set secrets via fly secrets (doesn't require VM to be running)
 		// Use execFileSync with array args to avoid leaking secrets in the process list
-		if (walletKey) {
-			console.log("\n🔐 Setting wallet key as secret...")
-			try {
-				execFileSync(
-					"fly",
-					["secrets", "set", `WALLET_KEY=${walletKey}`, "--app", appName],
-					{
-						cwd: distDir,
-						stdio: "inherit"
-					}
-				)
-			} catch (e) {
-				console.log("   ⚠️  Could not set secret, skipping...")
-			}
-		}
-
-		// Set OpenRouter secret
-		if (openRouterKey) {
-			console.log("\n🔑 Setting OpenRouter key as secret...")
-			try {
-				execFileSync(
-					"fly",
-					["secrets", "set", `OPENROUTER_API_KEY=${openRouterKey}`, "--app", appName],
-					{
-						cwd: distDir,
-						stdio: "inherit"
-					}
-				)
-			} catch (e) {
-				console.log("   ⚠️  Could not set secret, skipping...")
+		if (!appExists) {
+			const openRouterKey = process.env.OPENROUTER_API_KEY
+			if (openRouterKey) {
+				console.log("\n🔑 Setting OpenRouter key as secret...")
+				try {
+					execFileSync(
+						"fly",
+						["secrets", "set", `OPENROUTER_API_KEY=${openRouterKey}`, "--app", appName],
+						{
+							cwd: distDir,
+							stdio: "inherit"
+						}
+					)
+				} catch (e) {
+					console.log("   ⚠️  Could not set secret, skipping...")
+				}
 			}
 		}
 
@@ -1043,81 +985,6 @@ async function deploy(platform?: string, keygen = false) {
 	console.error(`Unknown platform: ${deployPlatform}`)
 	console.error("Supported: fly, railway")
 	process.exit(1)
-}
-
-// ============================================================================
-// Keygen
-// ============================================================================
-
-async function keygen(prefix?: string) {
-	if (prefix === "-h" || prefix === "--help") {
-		console.log("\nUsage: hybrid keygen [prefix]")
-		console.log("\nGenerate a new wallet key.")
-		console.log(
-			"  prefix    Optional hex prefix for vanity address (max 6 chars)\n"
-		)
-		return
-	}
-
-	const { privateKeyToAccount } = await import("viem/accounts")
-	const { randomBytes } = await import("node:crypto")
-
-	const targetPrefix = prefix?.toLowerCase() || ""
-
-	if (targetPrefix && !/^[0-9a-f]+$/.test(targetPrefix)) {
-		console.error("\n❌ Prefix must be hex characters (0-9, a-f)")
-		process.exit(1)
-	}
-
-	if (targetPrefix.length > 6) {
-		console.error("\n❌ Prefix too long (max 6 characters)")
-		process.exit(1)
-	}
-
-	console.log("\n🔑 Generating wallet...")
-	if (targetPrefix) console.log(`   Looking for 0x${targetPrefix}...`)
-
-	const walletKey = await generateVanityWallet(
-		targetPrefix,
-		privateKeyToAccount,
-		randomBytes
-	)
-	const account = privateKeyToAccount(walletKey as `0x${string}`)
-
-	console.log(`\n✅ Wallet generated!`)
-	console.log(`   Address: ${account.address}`)
-	console.log(`   Private key: ${walletKey}\n`)
-	console.log("⚠️  Save this key securely!")
-	console.log(`   Add to .env: WALLET_KEY=${walletKey}\n`)
-}
-
-async function generateVanityWallet(
-	prefix: string,
-	privateKeyToAccount: (key: `0x${string}`) => { address: string },
-	randomBytes: (size: number) => Buffer
-): Promise<string> {
-	let attempts = 0
-	const max = prefix ? 1000000 : 1
-
-	while (attempts < max) {
-		attempts++
-		const key = `0x${randomBytes(32).toString("hex")}` as `0x${string}`
-		if (!prefix) return key
-
-		const { address } = privateKeyToAccount(key)
-		if (address.toLowerCase().startsWith(`0x${prefix}`)) {
-			console.log(`   Found in ${attempts} attempts!`)
-			return key
-		}
-
-		if (attempts % 1000 === 0) {
-			process.stdout.write(
-				`\r   Searching${".".repeat((attempts / 1000) % 4)}${" ".repeat(3)}${attempts}\r`
-			)
-		}
-	}
-
-	throw new Error(`No vanity address found after ${max} attempts`)
 }
 
 // ============================================================================
