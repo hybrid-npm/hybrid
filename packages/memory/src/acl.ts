@@ -17,10 +17,6 @@ export interface ACLConfig {
 	identityProvider?: IdentityProvider
 }
 
-export interface ACLConfig {
-	identityProvider?: IdentityProvider
-}
-
 export interface PairingRequest {
 	id: string
 	code: string

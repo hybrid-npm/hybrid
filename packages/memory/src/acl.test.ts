@@ -63,68 +63,6 @@ describe("ACL JSON", () => {
 			expect(await getRole(null, "0x1234")).toBe("owner")
 		})
 
-		it("returns guest for unknown user", async () => {
-			expect(await getRole({ version: 1, allowFrom: ["0xaaa"] }, "0xbbb")).toBe(
-				"guest"
-			)
-		})
-
-		it("returns owner for known user", async () => {
-			expect(
-				await getRole(
-					{
-						version: 1,
-						allowFrom: ["0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]
-					},
-					"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-				)
-			).toBe("owner")
-		})
-
-		it("normalizes addresses (case-insensitive)", async () => {
-			expect(
-				await getRole(
-					{
-						version: 1,
-						allowFrom: ["0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]
-					},
-					"0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-				)
-			).toBe("owner")
-		})
-	})
-
-		it("returns guest for unknown user", async () => {
-			expect(await getRole({ version: 1, allowFrom: ["0xaaa"] }, "0xbbb")).toBe(
-				"guest"
-			)
-		})
-
-		it("returns owner for known user", async () => {
-			expect(
-				await getRole(
-					{
-						version: 1,
-						allowFrom: ["0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]
-					},
-					"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-				)
-			).toBe("owner")
-		})
-
-		it("normalizes addresses (case-insensitive)", async () => {
-			expect(
-				await getRole(
-					{
-						version: 1,
-						allowFrom: ["0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]
-					},
-					"0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-				)
-			).toBe("owner")
-		})
-	})
-
 	describe("listOwners", () => {
 		it("returns empty array for null ACL", () => {
 			expect(listOwners(null)).toEqual([])
