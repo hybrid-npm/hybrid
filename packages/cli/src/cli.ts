@@ -758,7 +758,6 @@ async function deploy(platform?: string) {
 
 	const projectDir = projectRoot
 	let openRouterKey: string | undefined
-	let openRouterKey: string | undefined
 	const distDir = resolve(projectDir, "dist")
 
 	// Prompt for platform if not specified
@@ -854,6 +853,96 @@ async function deploy(platform?: string) {
 
 	// Only prompt for secrets on first deploy (when app doesn't exist)
 	// On subsequent deploys, secrets are already set on Fly
+	if (!appExists) {
+		openRouterKey = process.env.OPENROUTER_API_KEY
+		if (!openRouterKey) {
+			console.log("🔑 No OPENROUTER_API_KEY found.")
+			while (true) {
+				const result = await prompts({
+					type: "password",
+					name: "key",
+					message: "Paste OpenRouter API key:"
+				})
+				const key = result.key?.trim()
+				if (key && key.length > 0) {
+					openRouterKey = key
+					break
+				}
+				console.log("   OpenRouter API key is required. Please enter a value.")
+			}
+		}
+
+		// Set up owner ACL
+		const aclPath = resolve(projectDir, "credentials", "allowFrom.json")
+		if (!existsSync(aclPath)) {
+			const result = await prompts({
+				type: "text",
+				name: "owner",
+				message: "Your wallet address (owner):",
+				validate: (v: string) =>
+					/^0x[a-fA-F0-9]{40}$/.test(v) ||
+					"Enter a valid Ethereum address (0x...)"
+			})
+			if (result.owner) {
+				const { mkdirSync } = await import("node:fs")
+				mkdirSync(resolve(projectDir, "credentials"), { recursive: true })
+				writeFileSync(
+					aclPath,
+					JSON.stringify(
+						{ version: 1, allowFrom: [result.owner.toLowerCase()] },
+						null,
+						"\t"
+					)
+				)
+				console.log(`✅ Owner set: ${result.owner}\n`)
+			}
+		}
+	}
+
+	// Build first
+	await build(deployPlatform)
+
+	if (deployPlatform === "fly") {
+		console.log("\n🚀 Deploying to Fly.io...")
+
+		// Ensure fly.toml exists with correct app name
+		if (existsSync(projectFlyToml)) {
+			// Copy project fly.toml to dist
+			const { cpSync } = await import("node:fs")
+			cpSync(projectFlyToml, resolve(distDir, "fly.toml"))
+		} else {
+			// Generate fly.toml with correct app name
+			const flyTomlContent = `app = "${appName}"\n\n[build]\n  builder = "paketobuildpacks/builder:base"\n\n[env]\n  PORT = "8454"\n`
+			writeFileSync(resolve(distDir, "fly.toml"), flyTomlContent)
+		}
+
+		if (!appExists) {
+			console.log(`📦 Creating Fly.io app: ${appName}`)
+			try {
+				execFileSync("fly", ["apps", "create", appName], {
+					cwd: distDir,
+					stdio: "inherit"
+				})
+			} catch {
+				console.log(`   App may already exist, continuing...`)
+			}
+		}
+
+		// Deploy
+		await new Promise<void>((resolve, reject) => {
+			const deploy = spawn("fly", ["deploy", "--config", "fly.toml"], {
+				cwd: distDir,
+				stdio: "inherit"
+			})
+			deploy.on("error", (err) =>
+				reject(new Error(`Deploy failed: ${err.message}`))
+			)
+			deploy.on("close", (code) =>
+				code === 0 ? resolve() : reject(new Error(`Exit ${code}`))
+			)
+		})
+
+		// Set secrets via fly secrets (doesn't require VM to be running)
 		if (!appExists) {
 			if (openRouterKey) {
 				console.log("\n🔑 Setting OpenRouter key as secret...")
