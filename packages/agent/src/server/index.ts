@@ -1080,6 +1080,28 @@ Promise.all([initMemory(), initScheduler()]).then(async () => {
 		},
 		config.chatSdk
 	)
+
+	if (config.chatSdk?.enabled) {
+		console.log()
+		console.log(`  ${pc.bold("Chat SDK Webhooks (local)")}`)
+		console.log(`  ${pc.gray("─────────────────────────────────")}`)
+		if (config.chatSdk.providers?.slack?.enabled) {
+			console.log(`  Slack    http://localhost:${AGENT_PORT}/api/webhooks/slack`)
+		}
+		if (config.chatSdk.providers?.discord?.enabled) {
+			console.log(`  Discord  http://localhost:${AGENT_PORT}/api/webhooks/discord`)
+		}
+		if (config.chatSdk.providers?.linear?.enabled) {
+			console.log(`  Linear   http://localhost:${AGENT_PORT}/api/webhooks/linear`)
+		}
+		console.log()
+		console.log(`  ${pc.bold("ngrok tunnel (for external webhooks)")}`)
+		console.log(`  ${pc.gray("─────────────────────────────────")}`)
+		console.log(`  ngrok http ${AGENT_PORT}`)
+		console.log(`  Then set webhook URLs on platforms to: https://<ngrok-id>.ngrok-free.app/api/webhooks/<channel>`)
+		console.log()
+	}
+
 	serve({ hostname: "0.0.0.0", port: AGENT_PORT, fetch: app.fetch })
 })
 
