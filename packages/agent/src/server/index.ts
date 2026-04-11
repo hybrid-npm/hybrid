@@ -576,7 +576,7 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 	const USER_MD = loadUserMarkdown(req.userId)
 
 	const bootstrapContext =
-		BOOTSTRAP_EXISTS && shouldRunOnboarding(req.userId)
+		BOOTSTRAP_EXISTS && (await shouldRunOnboarding(req.userId))
 			? `\n\n## BOOTSTRAP.md\n\n${BOOTSTRAP_MD}`
 			: ""
 
