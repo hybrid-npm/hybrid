@@ -33,7 +33,6 @@ fi
 # commands run through the entrypoint while still leaving an audit trail.
 unset PRIVATE_KEY 2>/dev/null || true
 unset WALLET_KEY 2>/dev/null || true
-unset WALLET_KEY 2>/dev/null || true
 
 # Ensure workspaces are writable by claude user (volume mount may reset perms)
 if [ -d "/app/data/workspaces" ]; then
