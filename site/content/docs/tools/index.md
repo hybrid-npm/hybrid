@@ -169,54 +169,45 @@ const estimate = await agent.call("estimateGas", {
 
 ## Creating Custom Tools
 
-Extend your agent with custom tools using `createTool`. Here's a real-world example of a tool that launches a miniapp:
+Extend your agent with custom tools using `createTool`. Here's an example of a weather tool:
 
 ```typescript
 import { Agent, createTool } from "hybrid"
 import { z } from "zod"
 
-/**
- * Launch Miniapp Tool
- * 
- * Launches a Base miniapp by sending its URL via message.
- * This enables agents to deliver and launch miniapps from chat conversations.
- */
-const launchMiniappTool = createTool({
-  description: "Launch a Base miniapp by sending its URL. Only ever call this tool once.",
+const weatherTool = createTool({
+  description: "Get the current weather for a location",
   
   inputSchema: z.object({
-    message: z.string()
-      .optional()
-      .describe("Optional accompanying message text")
+    location: z.string().describe("City name or coordinates")
   }),
   
   outputSchema: z.object({
     success: z.boolean(),
-    messageId: z.string().optional(),
-    content: z.string(),
+    temperature: z.number().optional(),
+    conditions: z.string().optional(),
     error: z.string().optional()
   }),
   
-  execute: async ({ input, runtime }) => {
-    const miniappUrl = process.env.MINIAPP_URL || "http://localhost:3000"
+  execute: async ({ input }) => {
+    const { location } = input
     
     try {
-      const { message } = input
-      const { conversation } = runtime
-      
-      // Send miniapp URL to conversation
-      await conversation.send(miniappUrl)
+      const response = await fetch(
+        `https://api.weather.example.com?q=${encodeURIComponent(location)}`
+      )
+      const data = await response.json()
       
       return {
         success: true,
-        content: message ?? "Opening miniapp..."
+        temperature: data.temperature,
+        conditions: data.conditions
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       
       return {
         success: false,
-        content: "Error opening miniapp",
         error: errorMessage
       }
     }
@@ -225,12 +216,12 @@ const launchMiniappTool = createTool({
 
 // Add custom tool to agent
 const agent = new Agent({
-  name: "Miniapp Agent",
+  name: "Weather Agent",
   model: yourModel,
   tools: {
-    launchMiniappTool
+    weatherTool
   },
-  instructions: `You can launch miniapps for users when requested.`
+  instructions: `You are a helpful weather assistant.`
 })
 ```
 

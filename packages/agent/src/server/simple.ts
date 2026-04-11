@@ -1,5 +1,3 @@
-import fs from "node:fs"
-import path from "node:path"
 import { serve } from "@hono/node-server"
 import { config } from "dotenv"
 import { Hono } from "hono"
@@ -11,14 +9,13 @@ import {
 	handleListSkills,
 	handleRemoveSkill
 } from "./routes/skills.js"
-import { serveMiniApp } from "./static.js"
 
 // Resolve project directory (where hybrid dev was called from)
 const projectDir = process.env.AGENT_PROJECT_ROOT || process.cwd()
 
 // Load .env files from project directory FIRST (before any other code)
-const envLocalPath = path.join(projectDir, ".env.local")
-const envPath = path.join(projectDir, ".env")
+const envLocalPath = `${projectDir}/.env.local`
+const envPath = `${projectDir}/.env`
 
 config({ path: envLocalPath, override: true })
 config({ path: envPath })
@@ -75,9 +72,6 @@ app.post("/api/skills/remove", handleRemoveSkill)
 
 // Auth routes
 app.post("/api/auth/verify", handleAuthVerify)
-
-// Mini app static files
-app.use("*", serveMiniApp)
 
 app.get("/sidecar-logs", (c) => {
 	try {

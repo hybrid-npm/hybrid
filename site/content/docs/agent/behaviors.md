@@ -414,4 +414,3 @@ function customFilter(): BehaviorObject {
 - Learn about [Tools](/tools) for messaging capabilities
 - Explore [Blockchain Tools](/tools/blockchain) for crypto functionality
 - Check out [Tools](/tools) for creating custom agent capabilities
-- See [Mini Apps](/howto/mini-apps) for mini app integration

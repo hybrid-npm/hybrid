@@ -75,8 +75,7 @@ packages/core/
 │   │   └── threaded-reply.ts
 │   ├── tools/               # Built-in tools
 │   │   ├── index.ts
-│   │   ├── blockchain/
-│   │   └── mini-apps/
+│   │   └── blockchain/
 │   ├── types/               # Type definitions
 │   │   ├── agent.ts
 │   │   ├── behavior.ts
