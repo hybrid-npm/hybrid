@@ -1,7 +1,15 @@
 import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 
-export type SecretName = never
+export type SecretName =
+	| "slack-bot-token"
+	| "slack-signing-secret"
+	| "discord-bot-token"
+	| "discord-public-key"
+	| "discord-application-id"
+	| "linear-api-key"
+	| "linear-webhook-secret"
+	| "relay-secret"
 
 const secrets = new Map<SecretName, string>()
 
@@ -18,7 +26,16 @@ function getSecretPaths(): Record<SecretName, string> {
 	if (!secretsDir) {
 		return {} as Record<SecretName, string>
 	}
-	return {} as Record<SecretName, string>
+	return {
+		"slack-bot-token": join(secretsDir, "slack-bot-token"),
+		"slack-signing-secret": join(secretsDir, "slack-signing-secret"),
+		"discord-bot-token": join(secretsDir, "discord-bot-token"),
+		"discord-public-key": join(secretsDir, "discord-public-key"),
+		"discord-application-id": join(secretsDir, "discord-application-id"),
+		"linear-api-key": join(secretsDir, "linear-api-key"),
+		"linear-webhook-secret": join(secretsDir, "linear-webhook-secret"),
+		"relay-secret": join(secretsDir, "relay-secret")
+	} as Record<SecretName, string>
 }
 
 export function loadSecrets(): void {

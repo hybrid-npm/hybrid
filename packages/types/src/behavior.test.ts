@@ -5,9 +5,6 @@ describe("Behavior Types", () => {
 	it("should define BehaviorContext interface", () => {
 		const context: BehaviorContext = {
 			runtime: {} as any,
-			client: {} as any,
-			conversation: {} as any,
-			message: {} as any,
 			sendOptions: {
 				threaded: true,
 				contentType: "text/plain"
@@ -20,10 +17,7 @@ describe("Behavior Types", () => {
 
 	it("should allow optional sendOptions", () => {
 		const context: BehaviorContext = {
-			runtime: {} as any,
-			client: {} as any,
-			conversation: {} as any,
-			message: {} as any
+			runtime: {} as any
 		}
 
 		expect(context.sendOptions).toBeUndefined()

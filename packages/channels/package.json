@@ -19,7 +19,7 @@
 		"lint": "biome lint --unsafe",
 		"lint:fix": "biome lint --write --unsafe",
 		"format": "biome format --write",
-		"test": "vitest run",
+		"test": "vitest run --passWithNoTests",
 		"test:watch": "vitest"
 	},
 	"dependencies": {

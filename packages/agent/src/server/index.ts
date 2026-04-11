@@ -3,19 +3,20 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import {
 	type Options,
-	createSdkMcpServer,
 	query
 } from "@anthropic-ai/claude-agent-sdk"
 import { serve } from "@hono/node-server"
 import {
 	type SchedulerExecutor,
 	SchedulerService,
-	createSchedulerTools,
 	createSqliteStore
 } from "@hybrd/scheduler"
 import { MemoryIndexManager, resolveMemoryConfig } from "@hybrd/memory"
 import { Hono } from "hono"
 import pc from "picocolors"
+import { loadHybridConfig } from "../config/index.js"
+import { createMcpServersFromConfig } from "./mcp-factory.js"
+import { resolveUserRole } from "../memory-tools.js"
 import { loadSecrets } from "../lib/secret-store"
 import { getOrCreateUserWorkspace } from "../lib/workspace"
 import {
@@ -23,8 +24,11 @@ import {
 	recordBootstrapSeeded,
 	recordOnboardingCompleted
 } from "../lib/workspace-state"
-import { createMemoryMcpServer, resolveUserRole } from "../memory-tools"
-import { createSkillMcpServer } from "../skills/tools"
+import {
+	initChatSdk,
+	getChatInstance,
+	shutdownChatSdk
+} from "./chat-sdk.js"
 
 const _dirname =
 	typeof __dirname !== "undefined"
@@ -705,30 +709,16 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 		envVars.ANTHROPIC_API_KEY = apiKey
 	}
 
-	const { role, acl } = resolveUserRole(PROJECT_ROOT, req.userId)
-	const memoryMcpServer = createMemoryMcpServer(
-		PROJECT_ROOT,
-		req.userId || "anonymous",
-		role,
-		acl,
-		PROJECT_ROOT
+	const { config } = await loadHybridConfig(PROJECT_ROOT)
+
+	const mcpServers = await createMcpServersFromConfig(
+		{
+			projectRoot: PROJECT_ROOT,
+			userId: req.userId || "anonymous",
+			scheduler
+		},
+		config?.mcpServers
 	)
-
-	const mcpServers: Options["mcpServers"] = {
-		memory: memoryMcpServer
-	}
-
-	if (scheduler) {
-		const schedulerTools = createSchedulerTools(scheduler)
-		const schedulerMcpServer = createSdkMcpServer({
-			name: "scheduler",
-			tools: schedulerTools
-		})
-		mcpServers.scheduler = schedulerMcpServer
-	}
-
-	const skillMcpServer = createSkillMcpServer(req.userId || "anonymous")
-	mcpServers.skills = skillMcpServer
 
 	const options: Options = {
 		abortController,
@@ -958,6 +948,24 @@ app.post(AGENT_ENDPOINT, async (c) => {
 	})
 })
 
+app.all("/api/webhooks/slack", async (c) => {
+	const bot = getChatInstance()
+	if (!bot) return c.json({ error: "chat-sdk not initialized" }, 503)
+	return bot.webhooks.slack(c.req.raw)
+})
+
+app.all("/api/webhooks/discord", async (c) => {
+	const bot = getChatInstance()
+	if (!bot) return c.json({ error: "chat-sdk not initialized" }, 503)
+	return bot.webhooks.discord(c.req.raw)
+})
+
+app.all("/api/webhooks/linear", async (c) => {
+	const bot = getChatInstance()
+	if (!bot) return c.json({ error: "chat-sdk not initialized" }, 503)
+	return bot.webhooks.linear(c.req.raw)
+})
+
 process.on("uncaughtException", (err) => {
 	console.error("[agent] uncaughtException:", err)
 	process.exit(1)
@@ -985,52 +993,6 @@ function printStartup() {
 	console.log(`  Server      http://localhost:${AGENT_PORT}`)
 	console.log(`  Health      http://localhost:${AGENT_PORT}/health`)
 	console.log(`  Chat        http://localhost:${AGENT_PORT}${AGENT_ENDPOINT}`)
-	console.log()
-	console.log("  ─────────────────────────────────────────────────")
-	console.log()
-	console.log(`  Provider    ${provider}`)
-	console.log(`  Model       ${model}`)
-
-	console.log()
-	console.log("  Environment Variables:")
-	console.log(
-		`    OPENROUTER_API_KEY    ${process.env.OPENROUTER_API_KEY ? "✓ set" : "✗ not set"}`
-	)
-	console.log(`    ANTHROPIC_API_KEY     ${apiKey ? "✓ set" : "✗ not set"}`)
-	console.log(`    ANTHROPIC_AUTH_TOKEN  ${authToken ? "✓ set" : "✗ not set"}`)
-	console.log(`    ANTHROPIC_BASE_URL    ${baseUrl || "(default Anthropic)"}`)
-	console.log(`    DEBUG                 ${DEBUG ? "✓ enabled" : "✗ disabled"}`)
-
-	console.log()
-	console.log("  ─────────────────────────────────────────────────")
-	console.log()
-	console.log("  Configuration Files:")
-	console.log(`    Project root          ${PROJECT_ROOT}`)
-	console.log(
-		`    IDENTITY.md           ${IDENTITY_MD ? "✓ loaded" : "✗ not found"}`
-	)
-	console.log(
-		`    SOUL.md               ${SOUL_MD ? "✓ loaded" : "✗ not found"}`
-	)
-	console.log(
-		`    AGENTS.md             ${AGENTS_MD ? "✓ loaded" : "✗ not found"}`
-	)
-	console.log(
-		`    TOOLS.md              ${TOOLS_MD ? "✓ loaded" : "✗ not found"}`
-	)
-	console.log(
-		`    USER.md               ${loadMarkdownFile("USER.md") ? "✓ loaded" : "✗ not found"}`
-	)
-	console.log(
-		`    BOOT.md               ${BOOT_MD ? "✓ loaded" : "✗ not found"}`
-	)
-	console.log(
-		`    BOOTSTRAP.md          ${BOOTSTRAP_MD ? "✓ ONBOARDING MODE" : "✗ not found"}`
-	)
-	if (BOOTSTRAP_EXISTS) {
-		console.log("    ⚠️  Agent waiting for owner to complete onboarding")
-		console.log("    ⚠️  Non-owner requests will be rejected")
-	}
 	console.log(
 		`    HEARTBEAT.md          ${HEARTBEAT_MD ? "✓ loaded" : "✗ not found"}`
 	)
@@ -1080,7 +1042,44 @@ function printStartup() {
 }
 
 printStartup()
-Promise.all([initMemory(), initScheduler()]).then(() => {
+Promise.all([initMemory(), initScheduler()]).then(async () => {
+	const { config } = await loadHybridConfig(PROJECT_ROOT)
+	await initChatSdk(
+		{
+			projectRoot: PROJECT_ROOT,
+			agentName: AGENT_NAME,
+			runAgentTurn: async (params) => {
+				const agentReq: ContainerRequest = {
+					messages: params.messages as ContainerRequest["messages"],
+					chatId: params.chatId,
+					userId: params.userId,
+					conversationId: params.conversationId,
+					channel: params.channel
+				}
+				const stream = await runAgent(agentReq)
+				const reader = stream.getReader()
+				const decoder = new TextDecoder()
+				return (async function* () {
+					while (true) {
+						const { done, value } = await reader.read()
+						if (done) break
+						const text = decoder.decode(value)
+						for (const line of text.split("\n")) {
+							if (line.startsWith("data: ") && line !== "data: [DONE]") {
+								try {
+									const parsed = JSON.parse(line.slice(6))
+									if (parsed.type === "text" && parsed.content) {
+										yield parsed.content
+									}
+								} catch {}
+							}
+						}
+					}
+				})()
+			}
+		},
+		config.chatSdk
+	)
 	serve({ hostname: "0.0.0.0", port: AGENT_PORT, fetch: app.fetch })
 })
 

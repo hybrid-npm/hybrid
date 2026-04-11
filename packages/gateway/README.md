@@ -1,14 +1,26 @@
 # hybrid/gateway
 
+> **DEPRECATED** — This package is deprecated as part of HYBRID-137 (Core Decoupling).
+> The Cloudflare Workers gateway is no longer the recommended deployment target.
+> Use Fly.io, Railway, or Sprites instead. See `packages/cli/src/cli.ts` for supported deploy targets.
+
+## Status
+
+This package will be removed in a future release. No new features will be added.
+
+## Migration
+
+If you are currently using this gateway, migrate to one of the supported deployment targets:
+
+- **Fly.io**: `hybrid deploy fly`
+- **Railway**: `hybrid deploy railway` (coming soon)
+- **Sprites**: `hybrid deploy sprites` (coming soon)
+
+## Original Documentation
+
 Production Cloudflare Workers gateway for Hybrid AI agents. Routes web requests to the agent container, manages container lifecycle, and persists data to Cloudflare R2.
 
-## Overview
-
-The gateway is the entry point for all production traffic. It runs as a Cloudflare Worker and uses a Durable Object (`Sandbox`) to manage a Docker container running the agent server.
-
-This package is the **Cloudflare deployment target** for the full Hybrid agent stack. It is deployed via `hybrid deploy cf` or `wrangler deploy`.
-
-## Architecture
+### Architecture
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -39,53 +51,17 @@ This package is the **Cloudflare deployment target** for the full Hybrid agent s
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-## HTTP Routes
+### HTTP Routes
 
-### `POST /api/chat`
+#### `POST /api/chat`
 
 Main chat endpoint. Ensures the agent server is running in the container, then proxies the request as a streaming SSE passthrough.
 
-```http
-POST https://your-agent.workers.dev/api/chat
-Content-Type: application/json
-
-{
-  "messages": [{ "id": "1", "role": "user", "content": "Hello" }],
-  "chatId": "conv-123",
-  "userId": "0xalice..."
-}
-```
-
-Response: Server-Sent Events stream (forwarded from agent server)
-
-### `GET /health`
+#### `GET /health`
 
 Checks the full stack: gateway, container processes, and agent server HTTP health.
 
-```json
-{
-  "status": "healthy",
-  "gateway": true,
-  "container": true,
-  "sidecar": true,
-  "server": true,
-  "timestamp": "2026-03-02T15:30:00.000Z"
-}
-```
-
-## Container Lifecycle
-
-The `ensureAgentServer()` function manages container process health:
-
-1. **Wait for container**: Polls `sandbox.listProcesses()` up to 30 seconds (1s intervals)
-2. **Check processes**: Looks for `server/index.js` (agent server)
-3. **Health check**: HTTP GET to port 8454 on the container
-4. **If unhealthy**:
-   - Kills all `node` processes in the container
-   - Starts agent server: `node /app/dist/server/index.cjs` — waits for TCP port 8454
-   - Final health check loop (10 retries, 500ms intervals)
-
-## Environment Variables
+### Environment Variables
 
 | Variable | Description |
 |----------|-------------|
@@ -93,77 +69,3 @@ The `ensureAgentServer()` function manages container process health:
 | `ANTHROPIC_BASE_URL` | Override Anthropic base URL (auto-set for OpenRouter) |
 | `ANTHROPIC_AUTH_TOKEN` | Auth token (auto-set from `OPENROUTER_API_KEY`) |
 | `OPENROUTER_API_KEY` | OpenRouter API key (auto-configures Anthropic client) |
-
-If `OPENROUTER_API_KEY` is set, the gateway automatically sets:
-- `ANTHROPIC_BASE_URL=https://openrouter.ai/api`
-- `ANTHROPIC_AUTH_TOKEN={OPENROUTER_API_KEY}`
-
-## Wrangler Configuration
-
-```jsonc
-// wrangler.jsonc
-{
-  "name": "hybrid-agent",
-  "durable_objects": {
-    "bindings": [
-      { "name": "AgentContainer", "class_name": "Sandbox" }
-    ]
-  },
-  "containers": [
-    {
-      "class_name": "Sandbox",
-      "instance_type": "standard-1",
-      "max_instances": 50
-    }
-  ],
-  "r2_buckets": [
-    { "binding": "AGENT_STORAGE", "bucket_name": "hybrid-agent-storage" }
-  ]
-}
-```
-
-## R2 Data Persistence
-
-The gateway binds an `AGENT_STORAGE` R2 bucket for persisting agent data across container restarts.
-
-## Durable Object
-
-The `Sandbox` Durable Object is exported from `@cloudflare/sandbox` and re-exported from this package. Each `teamId` gets its own `Sandbox` instance (and therefore its own container).
-
-```typescript
-export { Sandbox } from "@cloudflare/sandbox"
-```
-
-## TypeScript Interface
-
-```typescript
-export interface GatewayEnv {
-  AgentContainer: DurableObjectNamespace
-  AGENT_STORAGE: R2Bucket
-  ANTHROPIC_API_KEY?: string
-  ANTHROPIC_BASE_URL?: string
-  ANTHROPIC_AUTH_TOKEN?: string
-  OPENROUTER_API_KEY?: string
-}
-```
-
-## Deploying
-
-```bash
-# Via the CLI (builds agent + deploys gateway)
-hybrid deploy cf
-
-# Or directly
-cd packages/gateway
-wrangler deploy
-```
-
-## Relation to Other Packages
-
-- Runs `packages/agent/dist/server/index.cjs` inside the container
-- R2 storage provides persistent data across container restarts
-- `packages/cli` (`hybrid deploy cf`) builds the agent then calls `wrangler deploy` in this package
-
-## License
-
-MIT

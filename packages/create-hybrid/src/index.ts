@@ -733,8 +733,11 @@ You are ${data.agentName}. Be accurate, concise, and practical.
 `
 }
 
-function envExample() {
-	return `# Anthropic API (or use OpenRouter below)
+function envExample(templateData: { name: string }) {
+	return `# ${templateData.name} Agent
+AGENT_NAME=${templateData.name}
+
+# Anthropic API (or use OpenRouter below)
 ANTHROPIC_API_KEY=your_api_key_here
 
 # OpenRouter proxy (optional)

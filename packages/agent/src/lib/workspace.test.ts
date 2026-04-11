@@ -1,4 +1,4 @@
-import { symlinkSync } from "node:fs"
+import { realpathSync, symlinkSync } from "node:fs"
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -11,7 +11,7 @@ describe("workspace validation", () => {
 
 	beforeEach(async () => {
 		tempDir = await mkdtemp(join(tmpdir(), "workspace-test-"))
-		workspaceRoot = tempDir
+		workspaceRoot = realpathSync(tempDir)
 	})
 
 	afterEach(async () => {

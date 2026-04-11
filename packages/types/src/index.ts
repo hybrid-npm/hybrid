@@ -69,3 +69,13 @@ export type {
 	PaginatedResult,
 	SchedulerEvent
 } from "./schedule"
+
+// Identity types
+export type {
+	Identity,
+	IdentityType,
+	IdentityProvider,
+	WalletIdentityProvider,
+	ApiKeyIdentityProvider,
+	OAuthIdentityProvider
+} from "./identity"

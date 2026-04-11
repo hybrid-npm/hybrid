@@ -21,6 +21,7 @@ import {
 	searchFacts,
 	upsertACLPendingRequest
 } from "@hybrd/memory"
+import type { IdentityProvider } from "@hybrd/types"
 import { z } from "zod"
 import { createFileTools } from "./tools/file.js"
 
@@ -29,7 +30,8 @@ export function createMemoryMcpServer(
 	userId: string,
 	role: Role,
 	acl: ACL | null,
-	projectRoot: string
+	projectRoot: string,
+	identityProvider?: IdentityProvider
 ) {
 	const memorySaveTool = tool(
 		"MemorySave",
@@ -115,11 +117,11 @@ Categories:
 
 	const aclAddOwnerTool = tool(
 		"ACLAddOwner",
-		`Add a wallet address as an owner. Owners have full access to all memory sources.
+		`Add an identity as an owner. Owners have full access to all memory sources.
 Only current owners can use this tool.
-Wallet address must be a full Ethereum address (0x + 40 hex characters).`,
+${identityProvider ? `Identity format: ${identityProvider.name}` : "Identity must be a valid identifier."}`,
 		{
-			walletAddress: z.string().describe("Full Ethereum wallet address (0x...)")
+			identity: z.string().describe("Identity identifier to add as owner")
 		},
 		async (args) => {
 			if (role !== "owner") {
@@ -135,7 +137,23 @@ Wallet address must be a full Ethereum address (0x + 40 hex characters).`,
 			}
 
 			try {
-				const result = await addOwner(workspaceDir, args.walletAddress)
+				let identityToAdd = args.identity
+				if (identityProvider) {
+					const identity = await identityProvider.validate(args.identity)
+					if (!identity) {
+						return {
+							content: [
+								{
+									type: "text",
+									text: `Invalid identity for ${identityProvider.name}`
+								}
+							],
+							isError: true
+						}
+					}
+					identityToAdd = identityProvider.format(identity)
+				}
+				const result = await addOwner(workspaceDir, identityToAdd)
 				return {
 					content: [{ type: "text", text: result.message }]
 				}
@@ -155,11 +173,10 @@ Wallet address must be a full Ethereum address (0x + 40 hex characters).`,
 
 	const aclRemoveOwnerTool = tool(
 		"ACLRemoveOwner",
-		`Remove a wallet address from owners.
-Only current owners can use this tool.
-Wallet address must be a full Ethereum address (0x + 40 hex characters).`,
+		`Remove an identity from owners.
+Only current owners can use this tool.`,
 		{
-			walletAddress: z.string().describe("Full Ethereum wallet address (0x...)")
+			identity: z.string().describe("Identity identifier to remove from owners")
 		},
 		async (args) => {
 			if (role !== "owner") {
@@ -175,7 +192,23 @@ Wallet address must be a full Ethereum address (0x + 40 hex characters).`,
 			}
 
 			try {
-				const result = await removeOwner(workspaceDir, args.walletAddress)
+				let identityToRemove = args.identity
+				if (identityProvider) {
+					const identity = await identityProvider.validate(args.identity)
+					if (!identity) {
+						return {
+							content: [
+								{
+									type: "text",
+									text: `Invalid identity for ${identityProvider.name}`
+								}
+							],
+							isError: true
+						}
+					}
+					identityToRemove = identityProvider.format(identity)
+				}
+				const result = await removeOwner(workspaceDir, identityToRemove)
 				return {
 					content: [{ type: "text", text: result.message }]
 				}
@@ -195,7 +228,7 @@ Wallet address must be a full Ethereum address (0x + 40 hex characters).`,
 
 	const aclListOwnersTool = tool(
 		"ACLListOwners",
-		"List all wallet addresses that have owner role.",
+		"List all identities that have owner role.",
 		{},
 		async () => {
 			const owners = listOwners(acl)
@@ -727,7 +760,8 @@ Decay Tiers:
 
 export function resolveUserRole(
 	workspaceDir: string,
-	userId: string | undefined
+	userId: string | undefined,
+	identityProvider?: IdentityProvider
 ): { role: Role; acl: ACL | null } {
 	const acl = parseACL(workspaceDir)
 
@@ -735,6 +769,7 @@ export function resolveUserRole(
 		return { role: "guest", acl }
 	}
 
-	const role = getRole(acl, userId)
+	const role = getRole(acl, userId, identityProvider)
 	return { role, acl }
 }
+

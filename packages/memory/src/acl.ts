@@ -2,6 +2,7 @@ import { randomInt } from "node:crypto"
 import { existsSync, mkdirSync, readFileSync } from "node:fs"
 import { readFile, writeFile } from "node:fs/promises"
 import { join } from "node:path"
+import type { IdentityProvider } from "@hybrd/types"
 import { getCredentialsPath } from "./paths.js"
 import { isValidWalletAddress, normalizeWalletAddress } from "./validate.js"
 
@@ -10,6 +11,14 @@ export type Role = "owner" | "guest"
 export interface ACL {
 	version: 1
 	allowFrom: string[]
+}
+
+export interface ACLConfig {
+	identityProvider?: IdentityProvider
+}
+
+export interface ACLConfig {
+	identityProvider?: IdentityProvider
 }
 
 export interface PairingRequest {
@@ -190,9 +199,11 @@ export function parseACL(workspaceDir: string): ACL | null {
 	}
 }
 
-export function getRole(acl: ACL | null, userId: string): Role {
-	// If no ACL is configured (null), allow access for initial onboarding
-	// Once ACL is set up, only allowFrom addresses become owners
+export async function getRole(
+	acl: ACL | null,
+	userId: string,
+	identityProvider?: IdentityProvider
+): Promise<Role> {
 	if (!acl) {
 		return "owner"
 	}
@@ -201,14 +212,22 @@ export function getRole(acl: ACL | null, userId: string): Role {
 		return "guest"
 	}
 
-	// Validate that userId is a wallet address format
-	// Non-wallet identifiers are not allowed in ACL
-	const normalizedUserId = normalizeWalletAddress(userId)
-	if (!isValidWalletAddress(normalizedUserId)) {
-		return "guest"
+	let normalizedId = userId
+
+	if (identityProvider) {
+		const identity = await identityProvider.validate(userId)
+		if (!identity) {
+			return "guest"
+		}
+		normalizedId = identityProvider.format(identity)
+	} else {
+		normalizedId = normalizeWalletAddress(userId)
+		if (!isValidWalletAddress(normalizedId)) {
+			return "guest"
+		}
 	}
 
-	if (acl.allowFrom.includes(normalizedUserId)) {
+	if (acl.allowFrom.includes(normalizedId)) {
 		return "owner"
 	}
 
