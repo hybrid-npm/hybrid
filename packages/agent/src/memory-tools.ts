@@ -758,18 +758,18 @@ Decay Tiers:
 	})
 }
 
-export function resolveUserRole(
+export async function resolveUserRole(
 	workspaceDir: string,
 	userId: string | undefined,
 	identityProvider?: IdentityProvider
-): { role: Role; acl: ACL | null } {
+): Promise<{ role: Role; acl: ACL | null }> {
 	const acl = parseACL(workspaceDir)
 
 	if (!userId) {
 		return { role: "guest", acl }
 	}
 
-	const role = getRole(acl, userId, identityProvider)
+	const role = await getRole(acl, userId, identityProvider)
 	return { role, acl }
 }
 

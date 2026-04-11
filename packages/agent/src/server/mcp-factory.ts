@@ -21,7 +21,7 @@ export async function createMcpServersFromConfig(
 	mcpConfigs?: McpServerConfig[]
 ): Promise<Options["mcpServers"]> {
 	const { projectRoot, userId, scheduler, identityProvider } = params
-	const { role, acl } = resolveUserRole(projectRoot, userId, identityProvider)
+	const { role, acl } = await resolveUserRole(projectRoot, userId, identityProvider)
 
 	const mcpServers: Options["mcpServers"] = {}
 
@@ -42,7 +42,7 @@ export async function createMcpServersFromConfig(
 		})
 	}
 
-	mcpServers.skills = createSkillMcpServer(userId)
+	mcpServers.skills = await createSkillMcpServer(userId)
 
 	if (mcpConfigs) {
 		for (const config of mcpConfigs) {

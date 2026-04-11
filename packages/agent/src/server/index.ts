@@ -214,14 +214,14 @@ const BOOTSTRAP_EXISTS = BOOTSTRAP_MD.length > 0
 
 const AGENT_NAME = process.env.AGENT_NAME || "hybrid-agent"
 
-function shouldRunOnboarding(userId?: string): boolean {
+async function shouldRunOnboarding(userId?: string): Promise<boolean> {
 	if (!BOOTSTRAP_EXISTS) return false
 
 	// Check if onboarding has already been completed — prevents bootstrap
 	// context from being injected forever after recordOnboardingCompleted() is called
 	if (isOnboardingComplete(PROJECT_ROOT, BOOTSTRAP_EXISTS)) return false
 
-	const { role } = resolveUserRole(PROJECT_ROOT, userId || "anonymous")
+	const { role } = await resolveUserRole(PROJECT_ROOT, userId || "anonymous")
 	return role === "owner"
 }
 
@@ -493,7 +493,7 @@ function extractTextDelta(msg: any): string | null {
 async function runAgent(
 	req: ContainerRequest
 ): Promise<ReadableStream<Uint8Array>> {
-	if (isAgentOnboardingMode() && !shouldRunOnboarding(req.userId)) {
+	if (isAgentOnboardingMode() && !(await shouldRunOnboarding(req.userId))) {
 		const message =
 			"This agent is currently being set up. Please try again later."
 		console.log(
@@ -508,7 +508,7 @@ async function runAgent(
 		})
 	}
 
-	if (BOOTSTRAP_EXISTS && shouldRunOnboarding(req.userId)) {
+	if (BOOTSTRAP_EXISTS && (await shouldRunOnboarding(req.userId))) {
 		recordBootstrapSeeded(PROJECT_ROOT)
 	}
 
@@ -852,7 +852,7 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 					controller.enqueue(encodeDone())
 					controller.close()
 
-					if (BOOTSTRAP_EXISTS && shouldRunOnboarding(req.userId)) {
+	if (BOOTSTRAP_EXISTS && (await shouldRunOnboarding(req.userId))) {
 						const bootstrapStillExists =
 							loadMarkdownFile("BOOTSTRAP.md").length > 0
 						if (!bootstrapStillExists) {

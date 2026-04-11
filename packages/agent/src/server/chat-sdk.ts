@@ -178,6 +178,17 @@ function createStateAdapter(
 		})
 	}
 
+	if (stateConfig?.type === "memory") {
+		console.log(`${pc.yellow("[chat-sdk]")} using memory state adapter (dev only)`)
+		return createMemoryState()
+	}
+
+	if (stateConfig?.type === "redis") {
+		throw new Error(
+			"Redis state adapter not yet implemented. Use postgres or memory."
+		)
+	}
+
 	const pgUrl = process.env.POSTGRES_URL ?? process.env.DATABASE_URL
 	if (pgUrl) {
 		console.log(`${pc.yellow("[chat-sdk]")} using postgres state adapter`)
