@@ -61,8 +61,8 @@ describe("Memory Integration Eval", () => {
 		)
 
 		const acl = parseACL(tempDir)
-		const userARole = getRole(acl, "0xuserA")
-		const userBRole = getRole(acl, "0xuserB")
+		const userARole = await getRole(acl, "0xuserA")
+		const userBRole = await getRole(acl, "0xuserB")
 
 		expect(userARole).toBe("owner")
 		expect(userBRole).toBe("guest")
