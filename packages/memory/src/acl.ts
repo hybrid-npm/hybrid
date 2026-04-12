@@ -66,33 +66,6 @@ function migrateOldFiles(workspaceDir: string): void {
 	}
 }
 
-function getOldAllowFromPath(workspaceDir: string): string {
-	return join(getCredentialsPath(workspaceDir), "xmtp-allowFrom.json")
-}
-
-function getPairingPath(workspaceDir: string): string {
-	return join(getCredentialsPath(workspaceDir), "pairing.json")
-}
-
-function getOldPairingPath(workspaceDir: string): string {
-	return join(getCredentialsPath(workspaceDir), "xmtp-pairing.json")
-}
-
-function migrateOldFiles(workspaceDir: string): void {
-	const credentialsDir = getCredentialsPath(workspaceDir)
-	const newAllowFrom = getAllowFromPath(workspaceDir)
-	const oldAllowFrom = getOldAllowFromPath(workspaceDir)
-	const newPairing = getPairingPath(workspaceDir)
-	const oldPairing = getOldPairingPath(workspaceDir)
-
-	if (!existsSync(newAllowFrom) && existsSync(oldAllowFrom)) {
-		renameSync(oldAllowFrom, newAllowFrom)
-	}
-	if (!existsSync(newPairing) && existsSync(oldPairing)) {
-		renameSync(oldPairing, newPairing)
-	}
-}
-
 function randomCode(): string {
 	let out = ""
 	for (let i = 0; i < PAIRING_CODE_LENGTH; i++) {
