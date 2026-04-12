@@ -145,15 +145,6 @@ export class TestRunner {
 			.replace(/'/g, "&apos;")
 	}
 
-	private escapeXml(str: string): string {
-		return str
-			.replace(/&/g, "&amp;")
-			.replace(/</g, "&lt;")
-			.replace(/>/g, "&gt;")
-			.replace(/"/g, "&quot;")
-			.replace(/'/g, "&apos;")
-	}
-
 	private generateJUnitXml(): string {
 		let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<testsuites>\n'
 		xml += `  <testsuite name="evals" tests="${this.results.length}" failures="${this.results.filter((r) => r.status === "failed").length}">\n`

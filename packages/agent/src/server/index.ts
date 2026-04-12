@@ -1089,15 +1089,35 @@ Promise.all([initMemory(), initScheduler()]).then(async () => {
 				const stream = await runAgent(agentReq)
 				const reader = stream.getReader()
 				const decoder = new TextDecoder()
+				let buffer = ""
 				return (async function* () {
 					while (true) {
 						const { done, value } = await reader.read()
-						if (done) break
-						const text = decoder.decode(value)
-						for (const line of text.split("\n")) {
-							if (line.startsWith("data: ") && line !== "data: [DONE]") {
+						if (done) {
+							// Flush remaining buffer
+							if (buffer.trim()) {
+								const line = buffer.trim()
+								if (line.startsWith("data: ") && line !== "data: [DONE]") {
+									try {
+										const parsed = JSON.parse(line.slice(6))
+										if (parsed.type === "text" && parsed.content) {
+											yield parsed.content
+										}
+									} catch {}
+								}
+							}
+							break
+						}
+						const text = decoder.decode(value, { stream: true })
+						buffer += text
+						const lines = buffer.split("\n")
+						// Keep the last (possibly incomplete) line in the buffer
+						buffer = lines.pop() || ""
+						for (const line of lines) {
+							const trimmed = line.trim()
+							if (trimmed.startsWith("data: ") && trimmed !== "data: [DONE]") {
 								try {
-									const parsed = JSON.parse(line.slice(6))
+									const parsed = JSON.parse(trimmed.slice(6))
 									if (parsed.type === "text" && parsed.content) {
 										yield parsed.content
 									}
