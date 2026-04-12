@@ -162,13 +162,6 @@ export class TestRunner {
 		xml += "  </testsuite>\n</testsuites>"
 		return xml
 	}
-
-			xml += "    </testcase>\n"
-		}
-
-		xml += "  </testsuite>\n</testsuites>"
-		return xml
-	}
 }
 
 export function createTestRunner(): TestRunner {

@@ -1,5 +1,5 @@
 import { randomInt } from "node:crypto"
-import { existsSync, mkdirSync, readFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, renameSync } from "node:fs"
 import { readFile, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import type { IdentityProvider } from "@hybrd/types"
@@ -39,8 +39,58 @@ function getAllowFromPath(workspaceDir: string): string {
 	return join(getCredentialsPath(workspaceDir), "allowFrom.json")
 }
 
+function getOldAllowFromPath(workspaceDir: string): string {
+	return join(getCredentialsPath(workspaceDir), "xmtp-allowFrom.json")
+}
+
 function getPairingPath(workspaceDir: string): string {
 	return join(getCredentialsPath(workspaceDir), "pairing.json")
+}
+
+function getOldPairingPath(workspaceDir: string): string {
+	return join(getCredentialsPath(workspaceDir), "xmtp-pairing.json")
+}
+
+function migrateOldFiles(workspaceDir: string): void {
+	const credentialsDir = getCredentialsPath(workspaceDir)
+	const newAllowFrom = getAllowFromPath(workspaceDir)
+	const oldAllowFrom = getOldAllowFromPath(workspaceDir)
+	const newPairing = getPairingPath(workspaceDir)
+	const oldPairing = getOldPairingPath(workspaceDir)
+
+	if (!existsSync(newAllowFrom) && existsSync(oldAllowFrom)) {
+		renameSync(oldAllowFrom, newAllowFrom)
+	}
+	if (!existsSync(newPairing) && existsSync(oldPairing)) {
+		renameSync(oldPairing, newPairing)
+	}
+}
+
+function getOldAllowFromPath(workspaceDir: string): string {
+	return join(getCredentialsPath(workspaceDir), "xmtp-allowFrom.json")
+}
+
+function getPairingPath(workspaceDir: string): string {
+	return join(getCredentialsPath(workspaceDir), "pairing.json")
+}
+
+function getOldPairingPath(workspaceDir: string): string {
+	return join(getCredentialsPath(workspaceDir), "xmtp-pairing.json")
+}
+
+function migrateOldFiles(workspaceDir: string): void {
+	const credentialsDir = getCredentialsPath(workspaceDir)
+	const newAllowFrom = getAllowFromPath(workspaceDir)
+	const oldAllowFrom = getOldAllowFromPath(workspaceDir)
+	const newPairing = getPairingPath(workspaceDir)
+	const oldPairing = getOldPairingPath(workspaceDir)
+
+	if (!existsSync(newAllowFrom) && existsSync(oldAllowFrom)) {
+		renameSync(oldAllowFrom, newAllowFrom)
+	}
+	if (!existsSync(newPairing) && existsSync(oldPairing)) {
+		renameSync(oldPairing, newPairing)
+	}
 }
 
 function randomCode(): string {
@@ -174,6 +224,7 @@ async function writeJsonFileAtomic(
 }
 
 export function parseACL(workspaceDir: string): ACL | null {
+	migrateOldFiles(workspaceDir)
 	const aclPath = getAllowFromPath(workspaceDir)
 
 	if (!existsSync(aclPath)) {
