@@ -1068,10 +1068,47 @@ Promise.all([initMemory(), initScheduler()]).then(async () => {
 	const mcpServers = await createMcpServersFromConfig(
 		{
 			projectRoot: PROJECT_ROOT,
-			userId: req.userId || "anonymous",
+			userId: "anonymous",
 			scheduler
 		},
 		config?.mcpServers
+	)
+
+	await initChatSdk(
+		{
+			projectRoot: PROJECT_ROOT,
+			agentName: AGENT_NAME,
+			runAgentTurn: async (params) => {
+				const agentReq: ContainerRequest = {
+					messages: params.messages as ContainerRequest["messages"],
+					chatId: params.chatId,
+					userId: params.userId,
+					conversationId: params.conversationId,
+					channel: params.channel
+				}
+				const stream = await runAgent(agentReq)
+				const reader = stream.getReader()
+				const decoder = new TextDecoder()
+				return (async function* () {
+					while (true) {
+						const { done, value } = await reader.read()
+						if (done) break
+						const text = decoder.decode(value)
+						for (const line of text.split("\n")) {
+							if (line.startsWith("data: ") && line !== "data: [DONE]") {
+								try {
+									const parsed = JSON.parse(line.slice(6))
+									if (parsed.type === "text" && parsed.content) {
+										yield parsed.content
+									}
+								} catch {}
+							}
+						}
+					}
+				})()
+			}
+		},
+		config.chatSdk
 	)
 
 	if (config.chatSdk?.enabled) {

@@ -1,3 +1,5 @@
+import fs from "node:fs"
+import path from "node:path"
 import { serve } from "@hono/node-server"
 import { config } from "dotenv"
 import { Hono } from "hono"

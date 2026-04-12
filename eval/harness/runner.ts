@@ -136,16 +136,41 @@ export class TestRunner {
 		writeFileSync(resultsPath, JSON.stringify(this.results, null, 2))
 	}
 
+	private escapeXml(str: string): string {
+		return str
+			.replace(/&/g, "&amp;")
+			.replace(/</g, "&lt;")
+			.replace(/>/g, "&gt;")
+			.replace(/"/g, "&quot;")
+			.replace(/'/g, "&apos;")
+	}
+
+	private escapeXml(str: string): string {
+		return str
+			.replace(/&/g, "&amp;")
+			.replace(/</g, "&lt;")
+			.replace(/>/g, "&gt;")
+			.replace(/"/g, "&quot;")
+			.replace(/'/g, "&apos;")
+	}
+
 	private generateJUnitXml(): string {
 		let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<testsuites>\n'
 		xml += `  <testsuite name="evals" tests="${this.results.length}" failures="${this.results.filter((r) => r.status === "failed").length}">\n`
 
 		for (const result of this.results) {
-			xml += `    <testcase name="${result.scenario}" time="${result.duration / 1000}">\n`
+			xml += `    <testcase name="${this.escapeXml(result.scenario)}" time="${result.duration / 1000}">\n`
 
 			if (result.status === "failed") {
-				xml += `      <failure message="${result.error ?? "failed"}"/>\n`
+				xml += `      <failure message="${this.escapeXml(result.error ?? "failed")}"/>\n`
 			}
+
+			xml += "    </testcase>\n"
+		}
+
+		xml += "  </testsuite>\n</testsuites>"
+		return xml
+	}
 
 			xml += "    </testcase>\n"
 		}
