@@ -179,13 +179,14 @@ function createStateAdapter(
 	}
 
 	if (stateConfig?.type === "memory") {
-		console.log(`${pc.yellow("[chat-sdk]")} using memory state adapter (dev only)`)
-		return createMemoryState()
+		throw new Error(
+			"Memory state adapter not yet implemented. Use postgres or set POSTGRES_URL/DATABASE_URL."
+		)
 	}
 
 	if (stateConfig?.type === "redis") {
 		throw new Error(
-			"Redis state adapter not yet implemented. Use postgres or memory."
+			"Redis state adapter not yet implemented. Use postgres or set POSTGRES_URL/DATABASE_URL."
 		)
 	}
 
@@ -195,64 +196,7 @@ function createStateAdapter(
 		return createPostgresState({ url: pgUrl })
 	}
 
-	console.log(`${pc.yellow("[chat-sdk]")} no database URL, using memory state (dev only)`)
-	return createMemoryState()
-}
-
-function createMemoryState(): StateAdapter {
-	const subscriptions = new Map<string, Set<string>>()
-	const locks = new Map<string, { expiresAt: number }>()
-	const cache = new Map<string, { value: unknown; expiresAt: number }>()
-
-	return {
-		async connect() {
-			console.log(`${pc.yellow("[chat-sdk]")} memory state connected (volatile)`)
-		},
-		async disconnect() {
-			subscriptions.clear()
-			locks.clear()
-			cache.clear()
-		},
-		async subscribe(threadId: string, userId: string) {
-			const existing = subscriptions.get(threadId)
-			if (!existing) {
-				subscriptions.set(threadId, new Set())
-			}
-			subscriptions.get(threadId)?.add(userId)
-		},
-		async unsubscribe(threadId: string, userId: string) {
-			subscriptions.get(threadId)?.delete(userId)
-		},
-		async getSubscriptions(threadId: string) {
-			return subscriptions.get(threadId) || new Set()
-		},
-		async getAllSubscriptions() {
-			const result: Array<{ threadId: string; userIds: string[] }> = []
-			for (const [threadId, userIds] of subscriptions) {
-				result.push({ threadId, userIds: Array.from(userIds) })
-			}
-			return result
-		},
-		async acquireLock(threadId: string, ttlMs = 30_000) {
-			const now = Date.now()
-			const existing = locks.get(threadId)
-			if (existing && existing.expiresAt > now) return false
-			locks.set(threadId, { expiresAt: now + ttlMs })
-			return true
-		},
-		async releaseLock(threadId: string) {
-			locks.delete(threadId)
-		},
-		async getCache(key: string) {
-			const entry = cache.get(key)
-			if (entry && entry.expiresAt > Date.now()) return entry.value
-			return null
-		},
-		async setCache(key: string, value: unknown, ttlMs = 60_000) {
-			cache.set(key, { value, expiresAt: Date.now() + ttlMs })
-		},
-		async clearCache() {
-			cache.clear()
-		}
-	}
+	throw new Error(
+		"Chat SDK requires a state adapter. Set POSTGRES_URL or DATABASE_URL, or configure chatSdk.state in hybrid.config.ts"
+	)
 }

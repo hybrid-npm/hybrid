@@ -53,7 +53,7 @@ export async function loadHybridConfig(
 
 	if (!result.success) {
 		throw new Error(
-			`Invalid hybrid.config.ts:\n${result.error.errors
+			`Invalid hybrid.config.ts:\n${result.error.issues
 				.map((e) => `  ${e.path.join(".")}: ${e.message}`)
 				.join("\n")}`
 		)

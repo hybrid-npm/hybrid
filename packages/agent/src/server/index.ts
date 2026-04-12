@@ -735,7 +735,7 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 		{
 			projectRoot: PROJECT_ROOT,
 			userId: req.userId || "anonymous",
-			scheduler
+			scheduler: scheduler ?? undefined
 		},
 		config?.mcpServers
 	)
@@ -1069,7 +1069,7 @@ Promise.all([initMemory(), initScheduler()]).then(async () => {
 		{
 			projectRoot: PROJECT_ROOT,
 			userId: "anonymous",
-			scheduler
+			scheduler: scheduler ?? undefined
 		},
 		config?.mcpServers
 	)

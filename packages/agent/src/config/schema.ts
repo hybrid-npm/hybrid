@@ -4,19 +4,19 @@ const mcpStdioTransportSchema = z.object({
 	type: z.literal("stdio"),
 	command: z.string(),
 	args: z.array(z.string()).optional(),
-	env: z.record(z.string()).optional()
+	env: z.record(z.string(), z.string()).optional()
 })
 
 const mcpSseTransportSchema = z.object({
 	type: z.literal("sse"),
 	url: z.string(),
-	headers: z.record(z.string()).optional()
+	headers: z.record(z.string(), z.string()).optional()
 })
 
 const mcpStreamableHttpTransportSchema = z.object({
 	type: z.literal("streamable-http"),
 	url: z.string(),
-	headers: z.record(z.string()).optional()
+	headers: z.record(z.string(), z.string()).optional()
 })
 
 const mcpTransportSchema = z.discriminatedUnion("type", [
@@ -34,7 +34,7 @@ const mcpServerSchema = z.object({
 const channelSchema = z.object({
 	id: z.string(),
 	enabled: z.boolean().optional().default(true),
-	config: z.record(z.unknown()).optional()
+	config: z.record(z.string(), z.unknown()).optional()
 })
 
 const channelsSchema = z.object({
@@ -76,7 +76,7 @@ const channelsSchema = z.object({
 const identitySchema = z.object({
 	type: z.enum(["wallet", "api-key", "oauth", "email", "custom"]),
 	provider: z.string().optional(),
-	config: z.record(z.unknown()).optional()
+	config: z.record(z.string(), z.unknown()).optional()
 })
 
 export const hybridConfigSchema = z.object({
