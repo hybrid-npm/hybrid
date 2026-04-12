@@ -284,3 +284,5 @@ describe("ACL Edge Cases", () => {
 		expect(allowFrom2).toContain("0xowner2")
 	})
 })
+})
+})
