@@ -602,7 +602,7 @@ Fact Categories:
 					getAreasPath,
 					getResourcesPath,
 					getArchivesPath
-				} = await import("@hybrid/memory")
+				} = await import("@hybrd/memory")
 
 				let entityPath: string
 				if (args.bucket === "projects") {

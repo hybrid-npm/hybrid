@@ -60,7 +60,7 @@ export async function createMcpServersFromConfig(
 async function createExternalMcpServer(
 	name: string,
 	transport: McpTransportConfig
-): Promise<Options["mcpServers"][string]> {
+): Promise<NonNullable<Options["mcpServers"]>[string]> {
 	switch (transport.type) {
 		case "stdio":
 			return createSdkMcpServer({
