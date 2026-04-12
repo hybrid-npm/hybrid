@@ -2,7 +2,7 @@
 
 This package is part of the Hybrid monorepo.
 
-Hybrid makes it easy for developers to create intelligent agents that can understand natural language, process messages, and respond through XMTP's decentralized messaging protocol.
+Hybrid makes it easy for developers to create intelligent agents that can understand natural language, process messages, and respond through pluggable channel adapters.
 
 See [hybrid.dev](https://hybrid.dev) for more information.
 
@@ -29,30 +29,10 @@ Add it to your `.env` file:
 OPENROUTER_API_KEY=your_openrouter_api_key_here
 ```
 
-### 3. Generate XMTP keys
-
-```bash
-hybrid keys
-```
-
-or automatically add it to your `.env` file:  
-
-```bash
-hybrid keys --write
-```
-
-### 4. Register your wallet with XMTP
-
-```bash
-hybrid register
-```
-
-This generates secure wallet and encryption keys for your XMTP agent.
-
-  ### 5. Start developing
+### 3. Start developing
 
 ```bash
 hybrid dev
 ```
 
-Your agent will start listening for XMTP messages and you're ready to build!
+Your agent will start running and you're ready to build!

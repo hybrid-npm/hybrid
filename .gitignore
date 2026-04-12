@@ -23,6 +23,9 @@ build
 .DS_Store
 *.pem
 
+# ai data
+data
+
 # generated files
 site/.source/
 
@@ -49,9 +52,7 @@ yarn-error.log*
 .trigger
 tsconfig.tsbuildinfo
 
-# xmtp local 
-xmtp-production-*
-xmtp-development-*
+# local data
 .data/
 *.db3
 *.db3-shm
@@ -64,7 +65,6 @@ xmtp-development-*
 
 # hybrid build output
 .hybrid/
-
 sandbox/
 workspace/
 scratchpad.md

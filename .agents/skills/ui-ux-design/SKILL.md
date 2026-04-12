@@ -24,7 +24,6 @@ site/
 │       │   └── contributing.md
 │       ├── tools/
 │       │   ├── index.md
-│       │   ├── xmtp.md
 │       │   └── blockchain.md
 │       └── blockchain/
 │           └── multi-chain.md
@@ -64,7 +63,7 @@ Use fenced code blocks with language:
 
 ````markdown
 ```typescript
-const client = await createXMTPClient(key)
+const agent = await createAgent(config)
 ```
 
 ```bash

@@ -1,11 +1,11 @@
 ---
 title: Tools Standard Library
-description: Built-in tools for blockchain operations, XMTP messaging, and extensible agent functionality
+description: Built-in tools for blockchain operations and extensible agent functionality
 ---
 
 # Tools Standard Library
 
-Hybrid includes a comprehensive standard library of tools that enable your agents to interact with blockchain networks, send messages through XMTP, and perform crypto-native operations. These tools are production-ready, type-safe, and designed to work seamlessly with AI language models.
+Hybrid includes a comprehensive standard library of tools that enable your agents to interact with blockchain networks and perform crypto-native operations. These tools are production-ready, type-safe, and designed to work seamlessly with AI language models.
 
 ## Overview
 
@@ -17,19 +17,6 @@ Native blockchain interactions for multi-chain operations:
 - **Block Data** - Access blockchain state and transaction history
 
 [View Blockchain Tools →](/tools/blockchain)
-
-### 💬 XMTP Tools
-Decentralized messaging capabilities (automatically included):
-- **Message Sending** - Send messages to XMTP conversations
-- **Threaded Replies** - Reply to specific messages in context
-- **Reactions** - Add emoji reactions for quick acknowledgments
-- **Message Retrieval** - Query message details and history
-
-:::info
-XMTP tools are automatically included when your agent starts listening for messages. No manual configuration required.
-:::
-
-[View XMTP Tools →](/tools/xmtp)
 
 ## Quick Start
 
@@ -66,23 +53,6 @@ const agent = new Agent({
 })
 
 await agent.listen({ port: "8454" })
-```
-
-### XMTP Tools (Automatic)
-
-```typescript
-import { Agent } from "hybrid"
-
-const agent = new Agent({
-  name: "Messaging Agent",
-  model: yourModel,
-  instructions: "You can send messages and replies through XMTP."
-})
-
-// XMTP tools are automatically available once listening starts
-await agent.listen({ port: "8454" })
-
-// Your agent can now use: sendMessage, sendReply, sendReaction, getMessage
 ```
 
 ## Tool Architecture
@@ -199,54 +169,45 @@ const estimate = await agent.call("estimateGas", {
 
 ## Creating Custom Tools
 
-Extend your agent with custom tools using `createTool`. Here's a real-world example of a tool that launches a miniapp:
+Extend your agent with custom tools using `createTool`. Here's an example of a weather tool:
 
 ```typescript
 import { Agent, createTool } from "hybrid"
 import { z } from "zod"
 
-/**
- * Launch Miniapp Tool
- * 
- * Launches a Base miniapp by sending its URL via XMTP message.
- * This enables agents to deliver and launch miniapps from chat conversations.
- */
-const launchMiniappTool = createTool({
-  description: "Launch a Base miniapp by sending its URL via XMTP. Only ever call this tool once.",
+const weatherTool = createTool({
+  description: "Get the current weather for a location",
   
   inputSchema: z.object({
-    message: z.string()
-      .optional()
-      .describe("Optional accompanying message text")
+    location: z.string().describe("City name or coordinates")
   }),
   
   outputSchema: z.object({
     success: z.boolean(),
-    messageId: z.string().optional(),
-    content: z.string(),
+    temperature: z.number().optional(),
+    conditions: z.string().optional(),
     error: z.string().optional()
   }),
   
-  execute: async ({ input, runtime }) => {
-    const miniappUrl = process.env.MINIAPP_URL || "http://localhost:3000"
+  execute: async ({ input }) => {
+    const { location } = input
     
     try {
-      const { message } = input
-      const { conversation } = runtime
-      
-      // Send miniapp URL to conversation
-      await conversation.send(miniappUrl)
+      const response = await fetch(
+        `https://api.weather.example.com?q=${encodeURIComponent(location)}`
+      )
+      const data = await response.json()
       
       return {
         success: true,
-        content: message ?? "Opening miniapp..."
+        temperature: data.temperature,
+        conditions: data.conditions
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       
       return {
         success: false,
-        content: "Error opening miniapp",
         error: errorMessage
       }
     }
@@ -255,12 +216,12 @@ const launchMiniappTool = createTool({
 
 // Add custom tool to agent
 const agent = new Agent({
-  name: "Miniapp Agent",
+  name: "Weather Agent",
   model: yourModel,
   tools: {
-    launchMiniappTool
+    weatherTool
   },
-  instructions: `You can launch miniapps for users when requested.`
+  instructions: `You are a helpful weather assistant.`
 })
 ```
 
@@ -339,10 +300,10 @@ async function sendWithOptimalGas(params: any) {
 }
 ```
 
-### XMTP Message Automation
+### Message Automation
 
 ```typescript
-// XMTP tools are automatically available
+// Messaging tools are available through channel adapters
 async function notifyUsers(users: string[], message: string) {
   for (const user of users) {
     await agent.call("sendMessage", {
@@ -362,7 +323,6 @@ async function notifyUsers(users: string[], message: string) {
 ## Next Steps
 
 - **[Blockchain Tools](/tools/blockchain)** - Complete blockchain tool reference
-- **[XMTP Tools](/tools/xmtp)** - XMTP messaging capabilities
 - **[Agent Configuration](/agent/prompts)** - Configure your agent
 - **[Behaviors](/agent/behaviors)** - Message processing behaviors
 - **[Custom Tools](/tools#creating-custom-tools)** - Build your own tools

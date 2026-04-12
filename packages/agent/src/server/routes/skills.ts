@@ -55,7 +55,7 @@ export async function handleAddSkill(c: Context) {
 			return c.json({ error: "FID required" }, 400)
 		}
 
-		if (!isOwner(fid)) {
+		if (!await isOwner(fid)) {
 			return c.json({ error: "Only owners can add skills" }, 403)
 		}
 
@@ -85,7 +85,7 @@ export async function handleRemoveSkill(c: Context) {
 			return c.json({ error: "FID required" }, 400)
 		}
 
-		if (!isOwner(fid)) {
+		if (!await isOwner(fid)) {
 			return c.json({ error: "Only owners can remove skills" }, 403)
 		}
 

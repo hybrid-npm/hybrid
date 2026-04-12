@@ -48,6 +48,6 @@
 			"cache": false
 		}
 	},
-	"globalEnv": ["CONTRACT_ADDRESS", "NETWORK_ENV", "TUNNEL_URL", "XMTP_ENV"],
+	"globalEnv": ["CONTRACT_ADDRESS", "NETWORK_ENV", "TUNNEL_URL"],
 	"globalPassThroughEnv": ["*_ENV", "CI", "VERCEL_*"]
 }

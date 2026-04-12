@@ -5,7 +5,7 @@ description: Access conversation context and extend runtime with custom data
 
 # Runtime
 
-The runtime provides your agent's tools and behaviors with access to the current conversation context. It includes XMTP message data and can be extended with custom properties for your application.
+The runtime provides your agent's tools and behaviors with access to the current conversation context. It includes message data and can be extended with custom properties for your application.
 
 ## What is Runtime?
 
@@ -13,8 +13,7 @@ Runtime is a context object passed to every tool execution and behavior. It cont
 
 ```typescript
 interface AgentRuntime {
-  conversation: XmtpConversation  // The XMTP conversation
-  message: XmtpMessage             // The current message
+  // Message and conversation context
 }
 ```
 
@@ -35,12 +34,8 @@ const myTool = createTool({
     // Access conversation context
     const { conversation, message } = runtime
     
-    // Use XMTP data
-    console.log(`Sender: ${message.senderInboxId}`)
-    console.log(`Conversation ID: ${conversation.id}`)
-    
-    // Send additional messages if needed
-    await conversation.send(`Processing: ${input.query}`)
+    // Use message data
+    console.log(`Processing: ${input.query}`)
     
     return { success: true }
   }
@@ -415,5 +410,5 @@ createRuntime: (runtime) => {
 - Learn about [Tools](/tools) to create custom capabilities
 - Explore [Behaviors](/agent/behaviors) for message processing
 - Check out [Prompts](/agent/prompts) for dynamic instructions
-- See [XMTP Tools](/tools/xmtp) for messaging capabilities
+- See [Tools](/tools) for messaging capabilities
 

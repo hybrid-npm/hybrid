@@ -38,11 +38,11 @@ await agent.listen({
 
 ### Behavior Lifecycle
 
-1. **Message received** from XMTP
+1. **Message received** from channel
 2. **Before hooks** run (filterMessages, reactWith)
 3. **AI processing** (if not filtered out)
 4. **After hooks** run (threadedReply)
-5. **Response sent** to XMTP
+5. **Response sent** to channel
 
 ## Message Filtering with `filterMessages`
 
@@ -366,9 +366,9 @@ The `BehaviorContext` provides access to:
 ```typescript
 interface BehaviorContext {
   runtime: AgentRuntime     // The base runtime context
-  message: XmtpMessage      // The incoming XMTP message
-  conversation: XmtpConversation // The XMTP conversation
-  client: XmtpClient        // The XMTP client instance
+  message: unknown          // The incoming message
+  conversation: unknown     // The current conversation
+  client: unknown           // The messaging client instance
   response?: string         // The agent's response (available in after hooks)
   sendOptions?: {
     threaded?: boolean      // Set by threadedReply
@@ -411,7 +411,6 @@ function customFilter(): BehaviorObject {
 
 ## Next Steps
 
-- Learn about [XMTP Tools](/tools/xmtp) for messaging capabilities
+- Learn about [Tools](/tools) for messaging capabilities
 - Explore [Blockchain Tools](/tools/blockchain) for crypto functionality
 - Check out [Tools](/tools) for creating custom agent capabilities
-- See [Mini Apps](/howto/mini-apps) for mini app integration

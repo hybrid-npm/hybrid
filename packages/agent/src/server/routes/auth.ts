@@ -39,11 +39,11 @@ export async function handleAuthVerify(c: Context) {
 
 		// Check ACL to determine role
 		const acl = parseACL(PROJECT_ROOT)
-		const role = getRole(acl, fid)
+		const role = await getRole(acl, fid)
 
 		const response: AuthVerifyResponse = {
 			fid,
-			role,
+			role: role as "owner" | "guest",
 			authenticated: true
 		}
 
@@ -139,8 +139,8 @@ async function verifyQuickAuthToken(
 	}
 }
 
-export function isOwner(fid: string): boolean {
+export async function isOwner(fid: string): Promise<boolean> {
 	const acl = parseACL(PROJECT_ROOT)
-	const role = getRole(acl, fid)
+	const role = await getRole(acl, fid)
 	return role === "owner"
 }

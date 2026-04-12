@@ -32,8 +32,8 @@ import {
 const env = getCloudflareEnvironment()
 // { isCloudflare: boolean, platform: 'pages' | 'workers' | 'local', storagePath: string }
 
-// Returns '/tmp/xmtp' on Cloudflare, '.data/xmtp' locally
-const storagePath = getCloudflareStoragePath("xmtp")
+// Returns '/tmp/agent' on Cloudflare, '.data/agent' locally
+const storagePath = getCloudflareStoragePath("data")
 
 // Returns CF_PAGES_URL, CF_WORKER_URL, or 'http://localhost:3000'
 const serviceUrl = getCloudflareServiceUrl(3000)
@@ -55,12 +55,12 @@ formatRelativeDate(lastYear)              // "Feb 23, 2025"
 
 ### Logger
 
-Environment-aware logger. Debug output is suppressed unless `DEBUG` or `XMTP_DEBUG` is set:
+Environment-aware logger. Debug output is suppressed unless `DEBUG` is set:
 
 ```typescript
 import { logger } from "@hybrd/utils"
 
-logger.debug("Verbose detail")    // Only logs if DEBUG or XMTP_DEBUG env var is set
+logger.debug("Verbose detail")    // Only logs if DEBUG env var is set
 logger.log("General message")
 logger.info("Info message")
 logger.warn("Warning")
@@ -96,7 +96,7 @@ Auto-detects the available storage backend and returns an adapter:
 import { createStorageAdapter } from "@hybrd/utils"
 
 const adapter = createStorageAdapter()
-// Returns R2StorageAdapter if globalThis.XMTP_STORAGE exists (Cloudflare)
+// Returns R2StorageAdapter if globalThis.AGENT_STORAGE exists (Cloudflare)
 // Returns null if no storage is configured (local dev)
 
 if (adapter) {
@@ -109,12 +109,12 @@ if (adapter) {
 
 #### R2StorageAdapter
 
-Used automatically on Cloudflare Workers when `globalThis.XMTP_STORAGE` is bound:
+Used automatically on Cloudflare Workers when `globalThis.AGENT_STORAGE` is bound:
 
 ```typescript
 import { R2StorageAdapter } from "@hybrd/utils"
 
-const adapter = new R2StorageAdapter(env.XMTP_STORAGE)
+const adapter = new R2StorageAdapter(env.AGENT_STORAGE)
 await adapter.uploadFile(localPath, remotePath)
 await adapter.downloadFile(remotePath, localPath)
 ```
@@ -160,7 +160,6 @@ Uses the `uuid` package rather than `node:crypto.randomUUID` for compatibility w
 | Variable | Description |
 |----------|-------------|
 | `DEBUG` | Enable debug logging |
-| `XMTP_DEBUG` | Enable debug logging (XMTP-specific alias) |
 | `AGENT_URL` | Override agent service base URL |
 | `RAILWAY_PUBLIC_DOMAIN` | Railway deployment domain (auto-set by Railway) |
 | `CF_PAGES_BRANCH` | Set by Cloudflare Pages (used for environment detection) |

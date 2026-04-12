@@ -72,15 +72,14 @@ The build:
 ├── dist/                    # Compiled agent code
 │   ├── server/index.cjs     # Full Claude Code SDK server
 │   ├── server/simple.cjs    # Lightweight server
-│   └── xmtp.cjs             # XMTP sidecar
 ├── skills/
-│   ├── core/                # Built-in skills (memory, xmtp)
+│   ├── core/                # Built-in skills (memory)
 │   ├── ext/                 # User-installed skills
 │   └── skills_lock.json
 ├── package.json
 ├── Dockerfile
 ├── fly.toml                 # (Fly.io targets only)
-└── start.sh                 # Starts server + sidecar concurrently
+└── start.sh                 # Starts server
 ```
 
 ### `hybrid dev`
@@ -104,28 +103,10 @@ hybrid deploy railway  # Railway (builds only, manual deploy)
 
 ### `hybrid register`
 
-Register the agent wallet on the XMTP network:
+Register the agent identity:
 
 ```bash
 hybrid register
-```
-
-Delegates to `@hybrd/xmtp`'s register script via `pnpm --filter @hybrd/xmtp register`.
-
-### `hybrid revoke <inboxId>`
-
-Revoke XMTP installations for a specific inbox ID:
-
-```bash
-hybrid revoke 0xabc123...
-```
-
-### `hybrid revoke-all`
-
-Auto-detect the inbox ID from the installation limit error and revoke all installations:
-
-```bash
-hybrid revoke-all
 ```
 
 ### `hybrid install <source>`
@@ -183,11 +164,10 @@ CMD ["sh", "start.sh"]
 
 ### `start.sh`
 
-Runs the agent server and XMTP sidecar concurrently:
+Runs the agent server:
 
 ```bash
-node dist/server/simple.cjs &
-node dist/xmtp.cjs
+node dist/server/simple.cjs
 ```
 
 ### `fly.toml`
@@ -259,7 +239,7 @@ hybrid deploy cf
 
 - Builds `packages/agent` via `pnpm --filter`
 - Deploys `packages/gateway` for Cloudflare Workers target
-- Delegates `register`/`revoke` commands to `@hybrd/xmtp` scripts
+- Delegates `register` command to agent identity scripts
 - The output `.hybrid/` directory is what `packages/gateway` runs inside its Docker container
 
 ## License

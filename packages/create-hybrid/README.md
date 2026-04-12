@@ -17,7 +17,7 @@ npx create-hybrid my-agent --env production --agent-name "My Bot"
 | Flag | Description | Default |
 |------|-------------|---------|
 | `<name>` | Project directory name | Required |
-| `--env` | XMTP environment: `dev` or `production` | Prompted interactively |
+| `--env` | Environment: `dev` or `production` | Prompted interactively |
 | `--agent-name` | Display name for the agent | Prompted interactively |
 
 ## Generated Project Structure
@@ -164,7 +164,7 @@ pnpm deploy
 ## Relation to Other Packages
 
 - The generated `src/server/index.ts` uses `@anthropic-ai/claude-agent-sdk` directly — same pattern as `packages/agent/src/server/index.ts`
-- The generated `src/gateway/index.ts` is a simplified version of `packages/gateway/src/index.ts` (without XMTP sidecar management)
+- The generated `src/gateway/index.ts` is a simplified version of `packages/gateway/src/index.ts`
 - The generated project is standalone — no dependencies on `@hybrd/*` packages
 - `packages/cli`'s `hybrid init` command delegates to this package
 

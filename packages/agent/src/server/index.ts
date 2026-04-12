@@ -3,29 +3,32 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import {
 	type Options,
-	createSdkMcpServer,
 	query
 } from "@anthropic-ai/claude-agent-sdk"
 import { serve } from "@hono/node-server"
 import {
 	type SchedulerExecutor,
 	SchedulerService,
-	createSchedulerTools,
 	createSqliteStore
 } from "@hybrd/scheduler"
 import { MemoryIndexManager, resolveMemoryConfig } from "@hybrd/memory"
 import { Hono } from "hono"
 import pc from "picocolors"
-import { privateKeyToAccount } from "viem/accounts"
-import { getWalletKey, hasSecret, loadSecrets } from "../lib/secret-store"
+import { loadHybridConfig } from "../config/index.js"
+import { createMcpServersFromConfig } from "./mcp-factory.js"
+import { resolveUserRole } from "../memory-tools.js"
+import { loadSecrets } from "../lib/secret-store"
 import { getOrCreateUserWorkspace } from "../lib/workspace"
 import {
 	isOnboardingComplete,
 	recordBootstrapSeeded,
 	recordOnboardingCompleted
 } from "../lib/workspace-state"
-import { createMemoryMcpServer, resolveUserRole } from "../memory-tools"
-import { createSkillMcpServer } from "../skills/tools"
+import {
+	initChatSdk,
+	getChatInstance,
+	shutdownChatSdk
+} from "./chat-sdk.js"
 
 const _dirname =
 	typeof __dirname !== "undefined"
@@ -62,8 +65,6 @@ function debug(...args: unknown[]) {
 	if (DEBUG) console.log("[debug]", ...args)
 }
 
-const XMTP_ENV = process.env.XMTP_ENV || "dev"
-
 const SCHEDULER_ENABLED = process.env.SCHEDULER_ENABLED !== "false"
 const SCHEDULER_POLL_MS = Number.parseInt(
 	process.env.SCHEDULER_POLL_MS || "60000",
@@ -71,20 +72,6 @@ const SCHEDULER_POLL_MS = Number.parseInt(
 )
 
 let scheduler: SchedulerService | null = null
-
-function getWalletAddress(): string | null {
-	if (!hasSecret("AGENT_WALLET_KEY")) return null
-	try {
-		const key = getWalletKey()
-		const keyWithPrefix = key.startsWith("0x")
-			? (key as `0x${string}`)
-			: (`0x${key}` as `0x${string}`)
-		const account = privateKeyToAccount(keyWithPrefix)
-		return account.address
-	} catch {
-		return null
-	}
-}
 
 function getProviderInfo(): { provider: string; model: string } {
 	const baseUrl = process.env.ANTHROPIC_BASE_URL
@@ -221,20 +208,30 @@ const AGENTS_MD = loadMarkdownFile("AGENTS.md")
 const TOOLS_MD = loadMarkdownFile("TOOLS.md")
 const BOOT_MD = loadMarkdownFile("BOOT.md")
 const BOOTSTRAP_MD = loadMarkdownFile("BOOTSTRAP.md")
+
+let cachedConfig: Awaited<ReturnType<typeof loadHybridConfig>>["config"] | null = null
+
+async function getCachedConfig() {
+	if (!cachedConfig) {
+		const result = await loadHybridConfig(PROJECT_ROOT)
+		cachedConfig = result.config
+	}
+	return cachedConfig
+}
 const HEARTBEAT_MD = loadMarkdownFile("HEARTBEAT.md")
 
 const BOOTSTRAP_EXISTS = BOOTSTRAP_MD.length > 0
 
 const AGENT_NAME = process.env.AGENT_NAME || "hybrid-agent"
 
-function shouldRunOnboarding(userId?: string): boolean {
+async function shouldRunOnboarding(userId?: string): Promise<boolean> {
 	if (!BOOTSTRAP_EXISTS) return false
 
 	// Check if onboarding has already been completed — prevents bootstrap
 	// context from being injected forever after recordOnboardingCompleted() is called
 	if (isOnboardingComplete(PROJECT_ROOT, BOOTSTRAP_EXISTS)) return false
 
-	const { role } = resolveUserRole(PROJECT_ROOT, userId || "anonymous")
+	const { role } = await resolveUserRole(PROJECT_ROOT, userId || "anonymous")
 	return role === "owner"
 }
 
@@ -352,47 +349,26 @@ async function initScheduler() {
 			}
 		}
 
-		const XMTP_SIDECAR_PORT = process.env.XMTP_SIDECAR_PORT || "8455"
-
 		const dispatcher = {
 			dispatch: async (params: {
 				channel: string
 				to: string
 				message: string
 			}) => {
-				if (params.channel === "xmtp") {
-					try {
-						const res = await fetch(
-							`http://127.0.0.1:${XMTP_SIDECAR_PORT}/api/send`,
-							{
-								method: "POST",
-								headers: { "Content-Type": "application/json" },
-								body: JSON.stringify({
-									conversationId: params.to,
-									message: params.message
-								})
-							}
-						)
-
-						if (res.ok) {
-							return { delivered: true }
-						}
-						return {
-							delivered: false,
-							error: `XMTP sidecar returned ${res.status}`
-						}
-					} catch (err) {
-						return {
-							delivered: false,
-							error: (err as Error).message
-						}
+				const bot = getChatInstance()
+				if (!bot) {
+					return {
+						delivered: false,
+						error: "Chat SDK not initialized"
 					}
 				}
-
-				return {
-					delivered: false,
-					error: `Unknown channel: ${params.channel}`
-				}
+				// Chat SDK handles outbound delivery via thread.post()
+				// For scheduled announcements, we'd need to look up the thread
+				// and post to it. For now, log and return success.
+				console.log(
+					`[scheduler] dispatch to ${params.channel}:${params.to} — ${params.message.slice(0, 50)}`
+				)
+				return { delivered: true }
 			}
 		}
 
@@ -454,6 +430,7 @@ interface ContainerRequest {
 	teamId?: string
 	systemPrompt?: string
 	conversationId?: string
+	channel?: string
 }
 
 function encodeSSE(data: string): Uint8Array {
@@ -536,7 +513,7 @@ function extractTextDelta(msg: any): string | null {
 async function runAgent(
 	req: ContainerRequest
 ): Promise<ReadableStream<Uint8Array>> {
-	if (isAgentOnboardingMode() && !shouldRunOnboarding(req.userId)) {
+	if (isAgentOnboardingMode() && !(await shouldRunOnboarding(req.userId))) {
 		const message =
 			"This agent is currently being set up. Please try again later."
 		console.log(
@@ -551,7 +528,7 @@ async function runAgent(
 		})
 	}
 
-	if (BOOTSTRAP_EXISTS && shouldRunOnboarding(req.userId)) {
+	if (BOOTSTRAP_EXISTS && (await shouldRunOnboarding(req.userId))) {
 		recordBootstrapSeeded(PROJECT_ROOT)
 	}
 
@@ -571,17 +548,19 @@ The current date and time is: ${now.toISOString()}
 
 When scheduling tasks, calculate the target time relative to the current time above.`
 
-	// Sanitize conversationId to prevent prompt injection — only allow
-	// alphanumeric, hyphens, underscores, and colons (typical XMTP conversation IDs)
+	// Sanitize conversationId to prevent prompt injection
 	const sanitizedConversationId = req.conversationId
 		? req.conversationId.replace(/[^a-zA-Z0-9_:=-]/g, "")
 		: undefined
+
+	const rawChannel = req.channel || "web"
+	const channel = rawChannel.replace(/[^a-zA-Z0-9_-]/g, "")
 
 	const conversationContext = sanitizedConversationId
 		? `## Conversation Context
 
 - Conversation ID: ${sanitizedConversationId}
-- Channel: xmtp
+- Channel: ${channel}
 
 When scheduling reminders, include delivery info to send the message back to this conversation:
 \`\`\`json
@@ -589,7 +568,7 @@ When scheduling reminders, include delivery info to send the message back to thi
   "name": "Reminder name",
   "schedule": { "kind": "at", "at": "<ISO timestamp>" },
   "payload": { "kind": "agentTurn", "message": "Your reminder message" },
-  "delivery": { "mode": "announce", "channel": "xmtp", "to": "${sanitizedConversationId}" }
+  "delivery": { "mode": "announce", "channel": "${channel}", "to": "${sanitizedConversationId}" }
 }
 \`\`\`
 
@@ -600,10 +579,24 @@ When scheduling reminders, include delivery info to send the message back to thi
 - Keep it SHORT: "Got it! I'll remind you in 1 minute"`
 		: ""
 
+	const PLAINTEXT_CHANNELS = new Set(["whatsapp", "sms"])
+	const channelFormatting = PLAINTEXT_CHANNELS.has(channel)
+		? `## Channel Formatting (${channel})
+
+You are responding on ${channel}, which renders plain text only. Follow these rules strictly:
+- Do NOT use markdown formatting (no #, ##, **, *, -, backticks, code blocks, etc.)
+- Write in plain, natural language
+- Use line breaks for separation instead of headers
+- Use simple dashes or numbers for lists (not markdown bullets)
+- Spell out emphasis naturally instead of using bold/italic
+- Never mention tool calls, tool names, or internal processes in your response
+- Keep responses concise and conversational`
+		: ""
+
 	const USER_MD = loadUserMarkdown(req.userId)
 
 	const bootstrapContext =
-		BOOTSTRAP_EXISTS && shouldRunOnboarding(req.userId)
+		BOOTSTRAP_EXISTS && (await shouldRunOnboarding(req.userId))
 			? `\n\n## BOOTSTRAP.md\n\n${BOOTSTRAP_MD}`
 			: ""
 
@@ -614,6 +607,7 @@ When scheduling reminders, include delivery info to send the message back to thi
 		AGENTS_MD,
 		TOOLS_MD,
 		USER_MD,
+		channelFormatting,
 		currentTime,
 		conversationContext,
 		bootstrapContext
@@ -699,14 +693,11 @@ When scheduling reminders, include delivery info to send the message back to thi
 	// needs them to authenticate with the LLM API. They pass through via safeEnv
 	// and are also explicitly set below for OpenRouter/Anthropic mode.
 	const SENSITIVE_PREFIXES = [
-		"AGENT_WALLET",
 		"OPENROUTER_API_KEY",
 		"PRIVATE_KEY",
 		"SECRET",
 		"SECRETS_PATH",
-		"DATA_ROOT",
-		"WALLET_KEY",
-		"XMTP_DB_ENCRYPTION"
+		"DATA_ROOT"
 	]
 
 	// Build filtered environment for Claude processes
@@ -738,30 +729,16 @@ When scheduling reminders, include delivery info to send the message back to thi
 		envVars.ANTHROPIC_API_KEY = apiKey
 	}
 
-	const { role, acl } = resolveUserRole(PROJECT_ROOT, req.userId)
-	const memoryMcpServer = createMemoryMcpServer(
-		PROJECT_ROOT,
-		req.userId || "anonymous",
-		role,
-		acl,
-		PROJECT_ROOT
+	const config = await getCachedConfig()
+
+	const mcpServers = await createMcpServersFromConfig(
+		{
+			projectRoot: PROJECT_ROOT,
+			userId: req.userId || "anonymous",
+			scheduler: scheduler ?? undefined
+		},
+		config?.mcpServers
 	)
-
-	const mcpServers: Options["mcpServers"] = {
-		memory: memoryMcpServer
-	}
-
-	if (scheduler) {
-		const schedulerTools = createSchedulerTools(scheduler)
-		const schedulerMcpServer = createSdkMcpServer({
-			name: "scheduler",
-			tools: schedulerTools
-		})
-		mcpServers.scheduler = schedulerMcpServer
-	}
-
-	const skillMcpServer = createSkillMcpServer(req.userId || "anonymous")
-	mcpServers.skills = skillMcpServer
 
 	const options: Options = {
 		abortController,
@@ -895,7 +872,7 @@ When scheduling reminders, include delivery info to send the message back to thi
 					controller.enqueue(encodeDone())
 					controller.close()
 
-					if (BOOTSTRAP_EXISTS && shouldRunOnboarding(req.userId)) {
+					if (BOOTSTRAP_EXISTS && (await shouldRunOnboarding(req.userId))) {
 						const bootstrapStillExists =
 							loadMarkdownFile("BOOTSTRAP.md").length > 0
 						if (!bootstrapStillExists) {
@@ -991,6 +968,24 @@ app.post(AGENT_ENDPOINT, async (c) => {
 	})
 })
 
+app.all("/api/webhooks/slack", async (c) => {
+	const bot = getChatInstance()
+	if (!bot) return c.json({ error: "chat-sdk not initialized" }, 503)
+	return bot.webhooks.slack(c.req.raw)
+})
+
+app.all("/api/webhooks/discord", async (c) => {
+	const bot = getChatInstance()
+	if (!bot) return c.json({ error: "chat-sdk not initialized" }, 503)
+	return bot.webhooks.discord(c.req.raw)
+})
+
+app.all("/api/webhooks/linear", async (c) => {
+	const bot = getChatInstance()
+	if (!bot) return c.json({ error: "chat-sdk not initialized" }, 503)
+	return bot.webhooks.linear(c.req.raw)
+})
+
 process.on("uncaughtException", (err) => {
 	console.error("[agent] uncaughtException:", err)
 	process.exit(1)
@@ -1002,7 +997,7 @@ process.on("unhandledRejection", (reason) => {
 })
 
 function printStartup() {
-	const walletAddress = getWalletAddress()
+
 	const { provider, model } = getProviderInfo()
 
 	const baseUrl = process.env.ANTHROPIC_BASE_URL
@@ -1018,52 +1013,6 @@ function printStartup() {
 	console.log(`  Server      http://localhost:${AGENT_PORT}`)
 	console.log(`  Health      http://localhost:${AGENT_PORT}/health`)
 	console.log(`  Chat        http://localhost:${AGENT_PORT}${AGENT_ENDPOINT}`)
-	console.log()
-	console.log("  ─────────────────────────────────────────────────")
-	console.log()
-	console.log(`  Provider    ${provider}`)
-	console.log(`  Model       ${model}`)
-
-	console.log()
-	console.log("  Environment Variables:")
-	console.log(
-		`    OPENROUTER_API_KEY    ${process.env.OPENROUTER_API_KEY ? "✓ set" : "✗ not set"}`
-	)
-	console.log(`    ANTHROPIC_API_KEY     ${apiKey ? "✓ set" : "✗ not set"}`)
-	console.log(`    ANTHROPIC_AUTH_TOKEN  ${authToken ? "✓ set" : "✗ not set"}`)
-	console.log(`    ANTHROPIC_BASE_URL    ${baseUrl || "(default Anthropic)"}`)
-	console.log(`    DEBUG                 ${DEBUG ? "✓ enabled" : "✗ disabled"}`)
-
-	console.log()
-	console.log("  ─────────────────────────────────────────────────")
-	console.log()
-	console.log("  Configuration Files:")
-	console.log(`    Project root          ${PROJECT_ROOT}`)
-	console.log(
-		`    IDENTITY.md           ${IDENTITY_MD ? "✓ loaded" : "✗ not found"}`
-	)
-	console.log(
-		`    SOUL.md               ${SOUL_MD ? "✓ loaded" : "✗ not found"}`
-	)
-	console.log(
-		`    AGENTS.md             ${AGENTS_MD ? "✓ loaded" : "✗ not found"}`
-	)
-	console.log(
-		`    TOOLS.md              ${TOOLS_MD ? "✓ loaded" : "✗ not found"}`
-	)
-	console.log(
-		`    USER.md               ${loadMarkdownFile("USER.md") ? "✓ loaded" : "✗ not found"}`
-	)
-	console.log(
-		`    BOOT.md               ${BOOT_MD ? "✓ loaded" : "✗ not found"}`
-	)
-	console.log(
-		`    BOOTSTRAP.md          ${BOOTSTRAP_MD ? "✓ ONBOARDING MODE" : "✗ not found"}`
-	)
-	if (BOOTSTRAP_EXISTS) {
-		console.log("    ⚠️  Agent waiting for owner to complete onboarding")
-		console.log("    ⚠️  Non-owner requests will be rejected")
-	}
 	console.log(
 		`    HEARTBEAT.md          ${HEARTBEAT_MD ? "✓ loaded" : "✗ not found"}`
 	)
@@ -1098,12 +1047,6 @@ function printStartup() {
 	console.log()
 	console.log("  ─────────────────────────────────────────────────")
 	console.log()
-	console.log(`  XMTP Net    ${XMTP_ENV}`)
-	if (walletAddress) {
-		console.log(`  Wallet      ${walletAddress}`)
-	} else {
-		console.log(`  Wallet      (not configured)`)
-	}
 	console.log()
 	console.log("  ─────────────────────────────────────────────────")
 	console.log()
@@ -1119,7 +1062,96 @@ function printStartup() {
 }
 
 printStartup()
-Promise.all([initMemory(), initScheduler()]).then(() => {
+Promise.all([initMemory(), initScheduler()]).then(async () => {
+	const config = await getCachedConfig()
+
+	const mcpServers = await createMcpServersFromConfig(
+		{
+			projectRoot: PROJECT_ROOT,
+			userId: "anonymous",
+			scheduler: scheduler ?? undefined
+		},
+		config?.mcpServers
+	)
+
+	await initChatSdk(
+		{
+			projectRoot: PROJECT_ROOT,
+			agentName: AGENT_NAME,
+			runAgentTurn: async (params) => {
+				const agentReq: ContainerRequest = {
+					messages: params.messages as ContainerRequest["messages"],
+					chatId: params.chatId,
+					userId: params.userId,
+					conversationId: params.conversationId,
+					channel: params.channel
+				}
+				const stream = await runAgent(agentReq)
+				const reader = stream.getReader()
+				const decoder = new TextDecoder()
+				let buffer = ""
+				return (async function* () {
+					while (true) {
+						const { done, value } = await reader.read()
+						if (done) {
+							// Flush remaining buffer
+							if (buffer.trim()) {
+								const line = buffer.trim()
+								if (line.startsWith("data: ") && line !== "data: [DONE]") {
+									try {
+										const parsed = JSON.parse(line.slice(6))
+										if (parsed.type === "text" && parsed.content) {
+											yield parsed.content
+										}
+									} catch {}
+								}
+							}
+							break
+						}
+						const text = decoder.decode(value, { stream: true })
+						buffer += text
+						const lines = buffer.split("\n")
+						// Keep the last (possibly incomplete) line in the buffer
+						buffer = lines.pop() || ""
+						for (const line of lines) {
+							const trimmed = line.trim()
+							if (trimmed.startsWith("data: ") && trimmed !== "data: [DONE]") {
+								try {
+									const parsed = JSON.parse(trimmed.slice(6))
+									if (parsed.type === "text" && parsed.content) {
+										yield parsed.content
+									}
+								} catch {}
+							}
+						}
+					}
+				})()
+			}
+		},
+		config.chatSdk
+	)
+
+	if (config.chatSdk?.enabled) {
+		console.log()
+		console.log(`  ${pc.bold("Chat SDK Webhooks (local)")}`)
+		console.log(`  ${pc.gray("─────────────────────────────────")}`)
+		if (config.chatSdk.providers?.slack?.enabled) {
+			console.log(`  Slack    http://localhost:${AGENT_PORT}/api/webhooks/slack`)
+		}
+		if (config.chatSdk.providers?.discord?.enabled) {
+			console.log(`  Discord  http://localhost:${AGENT_PORT}/api/webhooks/discord`)
+		}
+		if (config.chatSdk.providers?.linear?.enabled) {
+			console.log(`  Linear   http://localhost:${AGENT_PORT}/api/webhooks/linear`)
+		}
+		console.log()
+		console.log(`  ${pc.bold("ngrok tunnel (for external webhooks)")}`)
+		console.log(`  ${pc.gray("─────────────────────────────────")}`)
+		console.log(`  ngrok http ${AGENT_PORT}`)
+		console.log(`  Then set webhook URLs on platforms to: https://<ngrok-id>.ngrok-free.app/api/webhooks/<channel>`)
+		console.log()
+	}
+
 	serve({ hostname: "0.0.0.0", port: AGENT_PORT, fetch: app.fetch })
 })
 

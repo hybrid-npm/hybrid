@@ -7,9 +7,6 @@ export { Sandbox }
 
 export interface GatewayEnv {
 	AgentContainer: DurableObjectNamespace
-	XMTP_STORAGE: R2Bucket
-	AGENT_WALLET_KEY: string
-	XMTP_ENV: string
 	ANTHROPIC_API_KEY?: string
 	ANTHROPIC_BASE_URL?: string
 	ANTHROPIC_AUTH_TOKEN?: string
@@ -29,16 +26,11 @@ app.get("/health", async (c) => {
 	try {
 		const sandbox = getSandboxInstance(env, teamId) as any
 
-		// Check processes
 		const processes = await sandbox.listProcesses()
 		const serverRunning = processes.some((p: any) =>
 			p.command?.includes("server/index.js")
 		)
-		const sidecarRunning = processes.some((p: any) =>
-			p.command?.includes("sidecar/index.js")
-		)
 
-		// Check server health
 		let serverHealthy = false
 		try {
 			const health = await sandbox.containerFetch(
@@ -49,13 +41,12 @@ app.get("/health", async (c) => {
 			serverHealthy = health.ok
 		} catch {}
 
-		const allHealthy = serverHealthy && serverRunning && sidecarRunning
+		const allHealthy = serverHealthy && serverRunning
 
 		return c.json({
 			status: allHealthy ? "healthy" : "unhealthy",
 			gateway: true,
 			container: serverRunning,
-			sidecar: sidecarRunning,
 			server: serverHealthy,
 			timestamp: new Date().toISOString()
 		})
@@ -125,7 +116,6 @@ function getSandboxInstance(env: GatewayEnv, teamId: string): SandboxStub {
 async function ensureAgentServer(sandbox: SandboxStub, env: GatewayEnv) {
 	const AGENT_PORT = 8454
 
-	// First, wait for the container to be ready
 	console.log("[gateway] Waiting for container to be ready...")
 	for (let i = 0; i < 30; i++) {
 		try {
@@ -138,16 +128,11 @@ async function ensureAgentServer(sandbox: SandboxStub, env: GatewayEnv) {
 		}
 	}
 
-	// Check if server is already running and sidecar is running
 	const processes = await sandbox.listProcesses()
 	const serverRunning = processes.some((p) =>
 		p.command?.includes("server/index.js")
 	)
-	const sidecarRunning = processes.some((p) =>
-		p.command?.includes("sidecar/index.js")
-	)
 
-	// Check server health
 	let serverHealthy = false
 	try {
 		const health = await sandbox.containerFetch(
@@ -160,18 +145,11 @@ async function ensureAgentServer(sandbox: SandboxStub, env: GatewayEnv) {
 		console.log(`[gateway] Server health check failed: ${err}`)
 	}
 
-	if (serverHealthy && sidecarRunning) {
-		console.log("[gateway] Server and sidecar already running")
+	if (serverHealthy) {
+		console.log("[gateway] Server already running")
 		return
 	}
 
-	if (serverHealthy && !sidecarRunning) {
-		console.log(
-			"[gateway] Server running but sidecar missing, restarting both..."
-		)
-	}
-
-	// Kill any existing node processes
 	for (const p of processes) {
 		if (p.command?.includes("node")) {
 			console.log(`[gateway] Killing process ${p.id}`)
@@ -180,8 +158,6 @@ async function ensureAgentServer(sandbox: SandboxStub, env: GatewayEnv) {
 	}
 
 	const processEnv = {
-		AGENT_WALLET_KEY: env.AGENT_WALLET_KEY ?? "",
-		XMTP_ENV: env.XMTP_ENV ?? "dev",
 		ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY ?? "",
 		ANTHROPIC_BASE_URL:
 			env.ANTHROPIC_BASE_URL ??
@@ -207,7 +183,6 @@ async function ensureAgentServer(sandbox: SandboxStub, env: GatewayEnv) {
 		processEnv.ANTHROPIC_AUTH_TOKEN ? "SET" : "NOT SET"
 	)
 
-	// Start the agent server
 	console.log("[gateway] Starting agent server...")
 	const serverProc = await sandbox.startProcess(
 		"node /app/dist/server/index.cjs",
@@ -223,36 +198,10 @@ async function ensureAgentServer(sandbox: SandboxStub, env: GatewayEnv) {
 	)
 	console.log(`[gateway] Server started with ID: ${serverProc.id}`)
 
-	// Wait for the port to be ready
 	console.log(`[gateway] Waiting for port ${AGENT_PORT}...`)
 	await serverProc.waitForPort(AGENT_PORT, { mode: "tcp" })
 	console.log(`[gateway] Port ${AGENT_PORT} is ready`)
 
-	// Start the XMTP sidecar
-	console.log("[gateway] Starting XMTP sidecar...")
-	const sidecarProc = await sandbox.startProcess(
-		"node /app/dist/sidecar/index.cjs",
-		{
-			env: processEnv,
-			onOutput: (stream, data) => {
-				console.log(`[gateway] sidecar[${stream}]: ${data}`)
-			},
-			onExit: (code) => {
-				console.log(`[gateway] sidecar exited with code ${code}`)
-			}
-		}
-	)
-	console.log(`[gateway] Sidecar started with ID: ${sidecarProc.id}`)
-
-	// Wait for sidecar to confirm XMTP connection
-	try {
-		await sidecarProc.waitForLog("Connected to XMTP", 30000)
-		console.log("[gateway] Sidecar connected to XMTP")
-	} catch (err) {
-		console.log(`[gateway] Sidecar waitForLog timeout or error: ${err}`)
-	}
-
-	// Verify with health check
 	for (let i = 0; i < 10; i++) {
 		try {
 			const health = await sandbox.containerFetch(

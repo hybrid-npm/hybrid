@@ -9,8 +9,6 @@ describe('Agent Server Integration Eval', () => {
 
   beforeAll(async () => {
     process.env.ANTHROPIC_API_KEY = 'test-key'
-    process.env.XMTP_ENV = 'dev'
-    process.env.AGENT_WALLET_KEY = '0x00000000000000000000000000000000000000000000000000000000000000aa'
 
     server = createServer()
     

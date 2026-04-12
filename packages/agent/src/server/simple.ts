@@ -4,22 +4,20 @@ import { serve } from "@hono/node-server"
 import { config } from "dotenv"
 import { Hono } from "hono"
 import pc from "picocolors"
-import { privateKeyToAccount } from "viem/accounts"
-import { getWalletKey, hasSecret, loadSecrets } from "../lib/secret-store.js"
+import { loadSecrets } from "../lib/secret-store.js"
 import { handleAuthVerify } from "./routes/auth.js"
 import {
 	handleAddSkill,
 	handleListSkills,
 	handleRemoveSkill
 } from "./routes/skills.js"
-import { serveMiniApp } from "./static.js"
 
 // Resolve project directory (where hybrid dev was called from)
 const projectDir = process.env.AGENT_PROJECT_ROOT || process.cwd()
 
 // Load .env files from project directory FIRST (before any other code)
-const envLocalPath = path.join(projectDir, ".env.local")
-const envPath = path.join(projectDir, ".env")
+const envLocalPath = `${projectDir}/.env.local`
+const envPath = `${projectDir}/.env`
 
 config({ path: envLocalPath, override: true })
 config({ path: envPath })
@@ -32,9 +30,7 @@ if (process.env.DEBUG) {
 	console.log(`[server] Project dir: ${projectDir}`)
 	console.log(`[server] .env path: ${envPath}`)
 	console.log(`[server] .env exists: ${fs.existsSync(envPath)}`)
-	console.log(
-		`[server] AGENT_WALLET_KEY: ${process.env.AGENT_WALLET_KEY ? "set" : "not set"}`
-	)
+
 }
 
 const AGENT_PORT = Number.parseInt(process.env.AGENT_PORT || "8454")
@@ -58,37 +54,6 @@ function getProviderConfig() {
 	return { baseUrl, authToken, apiKey }
 }
 
-function getWalletAddress(): string | null {
-	// Try secret store first (production)
-	if (hasSecret("AGENT_WALLET_KEY")) {
-		try {
-			const key = getWalletKey()
-			const account = privateKeyToAccount(
-				key.startsWith("0x")
-					? (key as `0x${string}`)
-					: (`0x${key}` as `0x${string}`)
-			)
-			return account.address
-		} catch {
-			return null
-		}
-	}
-
-	// Fall back to env var (development)
-	const key = process.env.AGENT_WALLET_KEY
-	if (!key) return null
-	try {
-		const account = privateKeyToAccount(
-			key.startsWith("0x")
-				? (key as `0x${string}`)
-				: (`0x${key}` as `0x${string}`)
-		)
-		return account.address
-	} catch {
-		return null
-	}
-}
-
 const app = new Hono()
 
 app.get("/health", (c) => {
@@ -109,9 +74,6 @@ app.post("/api/skills/remove", handleRemoveSkill)
 
 // Auth routes
 app.post("/api/auth/verify", handleAuthVerify)
-
-// Mini app static files
-app.use("*", serveMiniApp)
 
 app.get("/sidecar-logs", (c) => {
 	try {
@@ -139,8 +101,8 @@ app.get("/db/download", async (c) => {
 		}
 		const data = await response.arrayBuffer()
 		const filename = key.split("/").pop() || key
-		const localPath = `/app/data/xmtp/${filename}`
-		fs.mkdirSync("/app/data/xmtp", { recursive: true })
+		const localPath = `/app/data/${filename}`
+		fs.mkdirSync("/app/data", { recursive: true })
 		fs.writeFileSync(localPath, new Uint8Array(data))
 		return c.json({ ok: true, bytes: data.byteLength, path: localPath })
 	} catch (err) {
@@ -359,7 +321,6 @@ function streamError(message: string) {
 
 function printBanner() {
 	const { baseUrl, authToken, apiKey } = getProviderConfig()
-	const walletAddress = getWalletAddress()
 	const isHotReload = process.env.TSX_WATCH === "true"
 
 	console.log("")
@@ -394,9 +355,6 @@ function printBanner() {
 	)
 	console.log(
 		`  ${pc.bold("API Key")}    ${authToken || apiKey ? pc.green("✓ set") : pc.red("✗ not set")}`
-	)
-	console.log(
-		`  ${pc.bold("Wallet")}     ${walletAddress ? pc.cyan(walletAddress) : pc.gray("(not configured)")}`
 	)
 	console.log("")
 	console.log(

@@ -38,16 +38,6 @@ export interface SignResponse {
   signature: string;
 }
 
-export interface XmtpIdentityRequest {
-  walletAddress: string;
-}
-
-export interface XmtpIdentityResponse {
-  privateKey: string;
-  publicKey: string;
-  inboxId: string;
-}
-
 export interface DeriveKeyRequest {
   purpose: string;
 }

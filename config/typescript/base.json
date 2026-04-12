@@ -23,8 +23,7 @@
 	"references": [
 		{ "@hybrd/cli": "packages/cli" },
 		{ "@hybrd/types": "packages/types" },
-		{ "@hybrd/utils": "packages/utils" },
-		{ "@hybrd/xmtp": "packages/xmtp" }
+		{ "@hybrd/utils": "packages/utils" }
 	],
 	"exclude": [
 		"node_modules",

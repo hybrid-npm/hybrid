@@ -25,8 +25,6 @@ export {
 	generateChallenge
 } from "./shared/provision.js"
 
-export { XmtpManager, createXmtpManager } from "./shared/xmtp.js"
-
 // Sprites client exports
 export {
 	HybridSpritesClient,

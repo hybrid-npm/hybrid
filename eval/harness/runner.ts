@@ -1,15 +1,13 @@
-import { existsSync, mkdirSync, writeFileSync } from "fs"
-import { dirname, join } from "path"
-import { fileURLToPath } from "url"
+import { existsSync, mkdirSync, writeFileSync } from "node:fs"
+import { dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
 import { createHttpClient, waitForAgent } from "./client.js"
 import type {
 	EvalConfig,
 	TestContext,
 	TestResult,
-	TestScenario,
-	XmtpTestClient
+	TestScenario
 } from "./types.js"
-import { createXmtpClient, loadTestWallets } from "./xmtp-client.js"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -25,19 +23,12 @@ export class TestRunner {
 		console.log("Starting eval harness...\n")
 
 		const http = createHttpClient(config.agentUrl)
-		const wallets = existsSync(config.walletsPath)
-			? loadTestWallets(config.walletsPath)
-			: []
 
-		console.log(`Found ${wallets.length} test wallets`)
 		console.log(`Agent URL: ${config.agentUrl}\n`)
 
 		const agentReady = await waitForAgent(config.agentUrl, 10000)
 		if (!agentReady) {
 			console.log("Agent not available at", config.agentUrl)
-			console.log("\nTo run evals:")
-			console.log("  1. Start agent: cd packages/agent && pnpm dev")
-			console.log("  2. Run evals:   pnpm evals:run\n")
 
 			for (const scenario of this.scenarios) {
 				this.results.push({
@@ -52,28 +43,17 @@ export class TestRunner {
 
 			this.saveResults(config.resultsPath)
 			console.log(
-				"\nResults: 0 passed, 0 failed, " +
-					this.scenarios.length +
-					" skipped (offline mode)"
+				`\nResults: 0 passed, 0 failed, ${this.scenarios.length} skipped (offline mode)`
 			)
 			return this.results
 		}
 
 		console.log("Agent is healthy\n")
 
-		let xmtp: XmtpTestClient | undefined
-		if (wallets.length > 0) {
-			const env = config.agentUrl.includes("dev") ? "dev" : "production"
-			xmtp = createXmtpClient(wallets[0], env)
-			console.log("XMTP client initialized (stub mode)\n")
-		}
-
 		const ctx: TestContext = {
 			agentUrl: config.agentUrl,
-			xmtpSidecarUrl: config.xmtpSidecarUrl,
-			wallets,
-			http,
-			xmtp: xmtp!
+			wallets: [],
+			http
 		}
 
 		for (const scenario of this.scenarios) {
@@ -95,10 +75,6 @@ export class TestRunner {
 			if (result.error && result.status !== "skipped") {
 				console.log(`  Error: ${result.error}\n`)
 			}
-		}
-
-		if (xmtp) {
-			await xmtp.close()
 		}
 
 		this.saveResults(config.resultsPath)
@@ -160,26 +136,24 @@ export class TestRunner {
 		writeFileSync(resultsPath, JSON.stringify(this.results, null, 2))
 	}
 
+	private escapeXml(str: string): string {
+		return str
+			.replace(/&/g, "&amp;")
+			.replace(/</g, "&lt;")
+			.replace(/>/g, "&gt;")
+			.replace(/"/g, "&quot;")
+			.replace(/'/g, "&apos;")
+	}
+
 	private generateJUnitXml(): string {
 		let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<testsuites>\n'
-		xml +=
-			'  <testsuite name="evals" tests="' +
-			this.results.length +
-			'" failures="' +
-			this.results.filter((r) => r.status === "failed").length +
-			'">\n'
+		xml += `  <testsuite name="evals" tests="${this.results.length}" failures="${this.results.filter((r) => r.status === "failed").length}">\n`
 
 		for (const result of this.results) {
-			const status = result.status === "passed" ? "pass" : result.status
-			xml +=
-				'    <testcase name="' +
-				result.scenario +
-				'" time="' +
-				result.duration / 1000 +
-				'">\n'
+			xml += `    <testcase name="${this.escapeXml(result.scenario)}" time="${result.duration / 1000}">\n`
 
 			if (result.status === "failed") {
-				xml += '      <failure message="' + (result.error ?? "failed") + '"/>\n'
+				xml += `      <failure message="${this.escapeXml(result.error ?? "failed")}"/>\n`
 			}
 
 			xml += "    </testcase>\n"

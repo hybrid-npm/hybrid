@@ -110,40 +110,6 @@ Health check endpoint.
 
 ---
 
-## XMTP Sidecar API
-
-**Base URL:** `http://localhost:8455`
-
-### `POST /api/send`
-
-Send outbound message from scheduler.
-
-#### Request
-
-```typescript
-interface SendRequest {
-  conversationId: string
-  message: string
-  metadata?: {
-    accountId?: string
-    threadId?: string
-    replyToId?: string
-  }
-}
-```
-
-#### Response
-
-```typescript
-interface SendResponse {
-  delivered: boolean
-  messageId?: string
-  error?: string
-}
-```
-
----
-
 ## SSE Streaming Pattern
 
 ### Encoding
@@ -348,12 +314,10 @@ import { dispatchToChannel } from "@hybrd/channels"
 
 // Called from scheduler
 await dispatchToChannel({
-  channel: "xmtp",
-  to: "0xalice",
+  channel: "telegram",
+  to: "user-123",
   message: "Your scheduled reminder"
 })
-
-// Internally: POST http://localhost:8455/api/trigger
 ```
 
 ---
@@ -363,25 +327,14 @@ await dispatchToChannel({
 ### Authentication
 
 ```typescript
-// JWT for XMTP tool endpoints
-import { generateXMTPToolsToken, validateXMTPToolsToken } from "@hybrd/xmtp"
-
-// Generate
-const token = generateXMTPToolsToken({
-  action: "send",
-  conversationId: "conv-123"
-})
-
-// Validate
+// JWT for tool endpoints
 app.use("/api/*", async (c, next) => {
-  const token = c.req.header("Authorization")?.slice(7) // "Bearer ..."
-  const payload = validateXMTPToolsToken(token)
+  const token = c.req.header("Authorization")?.slice(7)
   
-  if (!payload) {
+  if (!token) {
     return c.json({ error: "Invalid token" }, 401)
   }
   
-  c.set("payload", payload)
   await next()
 })
 ```
@@ -496,28 +449,6 @@ await fetch(webhookUrl, {
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify(webhook)
-})
-```
-
-### XMTP Webhook
-
-```typescript
-// For platforms that support webhooks
-app.post("/webhooks/xmtp", async (c) => {
-  const signature = c.req.header("X-XMTP-Signature")
-  const body = await c.req.text()
-  
-  // Verify signature
-  if (!verifySignature(signature, body)) {
-    return c.json({ error: "Invalid signature" }, 401)
-  }
-  
-  const event = JSON.parse(body)
-  
-  // Process XMTP event
-  await handleXMTPEvent(event)
-  
-  return c.json({ received: true })
 })
 ```
 

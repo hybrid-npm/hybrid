@@ -2,7 +2,6 @@
 	"name": "@hybrd/types",
 	"version": "2.0.0",
 	"keywords": [
-		"xmtp",
 		"agent",
 		"ai",
 		"hybrid",
@@ -37,12 +36,6 @@
 		"zod": "catalog:stack"
 	},
 	"peerDependencies": {
-		"@xmtp/content-type-group-updated": "*",
-		"@xmtp/content-type-reaction": "*",
-		"@xmtp/content-type-reply": "*",
-		"@xmtp/content-type-transaction-reference": "*",
-		"@xmtp/content-type-wallet-send-calls": "*",
-		"@xmtp/node-sdk": "*",
 		"hono": "*"
 	},
 	"devDependencies": {

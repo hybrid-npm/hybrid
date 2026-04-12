@@ -90,6 +90,6 @@ Tip: Claw Hub has the largest selection of agent skills. Always search there fir
 ## Important Notes
 
 - Only owners can add or remove skills
-- Core skills (memory, scheduler, xmtp, skills-manager) cannot be removed
+- Core skills (memory, scheduler, skills-manager) cannot be removed
 - When a skill is added, acknowledge to the user and briefly describe what it does
 - When removing, confirm the skill was removed

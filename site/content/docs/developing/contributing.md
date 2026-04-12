@@ -57,10 +57,10 @@ pnpm build
 pnpm hybrid dev
 ```
 
-**Working on XMTP integration:**
+**Working on channel integration:**
 ```bash
-# Make your changes in packages/xmtp/src/
-cd packages/xmtp
+# Make your changes in packages/channels/src/
+cd packages/channels
 
 # Build and test
 pnpm build:watch
@@ -73,7 +73,7 @@ hybrid/
 ├── packages/
 │   ├── core/           # Main framework (published as "hybrid")
 │   ├── cli/            # CLI tool (bin: "hybrid")
-│   ├── xmtp/           # XMTP integration (@hybrd/xmtp)
+│   ├── channels/       # Channel adapters (@hybrd/channels)
 │   └── utils/          # Utilities (@hybrd/utils)
 └── site/               # Documentation
 ```
@@ -140,7 +140,7 @@ pnpm build
 2. **Commit format:**
    ```
    feat(core): add new behavior system
-   fix(xmtp): resolve connection timeout
+    fix(channels): resolve connection timeout
    docs(readme): update quickstart guide
    ```
 
@@ -214,12 +214,10 @@ For testing, create `.env` in your project:
 
 ```bash
 OPENROUTER_API_KEY=your_key
-AGENT_WALLET_KEY=0x...
-XMTP_ENV=dev
 PORT=8454
 ```
 
-Generate XMTP keys with: `pnpm hybrid keys --write`
+Generate keys with: `pnpm hybrid keys --write`
 
 ## Code of Conduct
 

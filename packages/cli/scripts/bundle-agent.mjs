@@ -21,9 +21,6 @@ const external = [
 	"hono",
 	"@hono/node-server",
 	"@anthropic-ai/claude-agent-sdk",
-	"@xmtp/agent-sdk",
-	"@xmtp/node-sdk",
-	"@xmtp/node-bindings",
 	"sql.js",
 	"better-sqlite3",
 	"node-llama-cpp",
@@ -47,16 +44,6 @@ await esbuild.build({
 	platform: "node",
 	target: "node20",
 	outfile: resolve(outDir, "server/index.cjs"),
-	format: "cjs",
-	external
-})
-
-await esbuild.build({
-	entryPoints: [resolve(agentDir, "src/xmtp.ts")],
-	bundle: true,
-	platform: "node",
-	target: "node20",
-	outfile: resolve(outDir, "xmtp.cjs"),
 	format: "cjs",
 	external
 })

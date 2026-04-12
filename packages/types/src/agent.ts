@@ -79,7 +79,7 @@ export interface Agent<
 
 	/**
 	 * Creates the complete runtime context by merging base runtime with custom extension.
-	 * @param baseRuntime - The base runtime context containing XMTP properties
+	 * @param baseRuntime - The base runtime context
 	 * @returns Complete runtime context with custom extensions applied
 	 */
 	createRuntimeContext(

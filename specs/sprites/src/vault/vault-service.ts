@@ -288,7 +288,7 @@ app.post('/decrypt', (req: Request, res: Response) => {
 /**
  * POST /sign
  * Sign a message with user's key
- * Used for XMTP identity and other cryptographic operations
+ * Used for cryptographic operations
  * 
  * Request body: { message: "message to sign" }
  * Response: { signature: "hex-signature" }
@@ -323,55 +323,6 @@ app.post('/sign', (req: Request, res: Response) => {
     console.error('Sign error:', err);
     res.status(500).json({
       error: 'signing failed',
-    } as ApiResponse);
-  }
-});
-
-/**
- * POST /xmtp/identity
- * Get XMTP identity derived from wallet address + vault key
- * 
- * Request body: { walletAddress: "0x..." }
- * Response: { privateKey: "...", publicKey: "...", inboxId: "..." }
- */
-app.post('/xmtp/identity', (req: Request, res: Response) => {
-  // Check initialization
-  if (!state.initialized || !state.encryptionKey) {
-    return res.status(401).json({
-      error: 'vault not initialized. Call /init or /reinit first.',
-    } as ApiResponse);
-  }
-  
-  const { walletAddress } = req.body;
-  
-  if (!walletAddress || typeof walletAddress !== 'string') {
-    return res.status(400).json({
-      error: 'walletAddress is required',
-    } as ApiResponse);
-  }
-  
-  try {
-    // Derive identity key from wallet address + vault key
-    const identityMaterial = createHash('sha256')
-      .update(walletAddress.toLowerCase(), 'utf8')
-      .update(state.encryptionKey)
-      .digest();
-    
-    // Generate inbox ID from identity
-    const inboxId = createHash('sha256')
-      .update(identityMaterial)
-      .digest('hex')
-      .substring(0, 24);
-    
-    res.json({
-      privateKey: identityMaterial.toString('base64'),
-      publicKey: identityMaterial.toString('base64'), // Would use proper derivation in production
-      inboxId,
-    } as ApiResponse);
-  } catch (err) {
-    console.error('XMTP identity error:', err);
-    res.status(500).json({
-      error: 'failed to generate XMTP identity',
     } as ApiResponse);
   }
 });
@@ -443,7 +394,6 @@ app.use((_req: Request, res: Response) => {
       'POST /encrypt',
       'POST /decrypt',
       'POST /sign',
-      'POST /xmtp/identity',
       'POST /derive-key',
     ],
   } as ApiResponse);
@@ -480,7 +430,6 @@ app.listen(PORT, '0.0.0.0', () => {
 ║  • POST /encrypt        - Encrypt data                      ║
 ║  • POST /decrypt        - Decrypt data                      ║
 ║  • POST /sign           - Sign message                      ║
-║  • POST /xmtp/identity - Get XMTP identity                 ║
 ║  • POST /derive-key    - Derive sub-key                    ║
 ║                                                               ║
 ║  ⚠️  Keys are stored in MEMORY only!                         ║

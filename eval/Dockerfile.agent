@@ -21,16 +21,14 @@ RUN mkdir -p /app/data/secrets \
     /app/data/memory/life/archives \
     /app/data/memory/logs \
     /app/data/credentials \
-    /app/data/xmtp \
     /app/data/workspaces
 
 COPY deployments/flyio/entrypoint.sh /entrypoint.sh
 RUN chmod 755 /entrypoint.sh
 
 ENV AGENT_PORT=8454
-ENV XMTP_SIDECAR_PORT=8455
 ENV DATA_ROOT=/app/data
 
-EXPOSE 8454 8455
+EXPOSE 8454
 
-CMD ["sh", "-c", "node dist/agent/server/index.cjs & node dist/agent/xmtp.cjs & wait"]
+CMD ["node", "dist/agent/server/index.cjs"]

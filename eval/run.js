@@ -6,12 +6,10 @@ import { createBootstrappingScenarios, createMessagingScenarios, createAclScenar
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 async function main() {
     const agentUrl = process.env.AGENT_URL || 'http://localhost:8454';
-    const xmtpSidecarUrl = process.env.XMTP_SIDECAR_URL || 'http://localhost:8455';
     const walletsPath = process.env.TEST_WALLETS_PATH || resolve(__dirname, 'fixtures/wallets.json');
     const resultsPath = process.env.RESULTS_PATH || resolve(__dirname, 'results/results.json');
     const config = {
         agentUrl,
-        xmtpSidecarUrl,
         walletsPath,
         resultsPath,
         timeout: 60000

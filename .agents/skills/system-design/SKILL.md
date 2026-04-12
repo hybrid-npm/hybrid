@@ -12,7 +12,7 @@ Hybrid is designed for flexible deployment across multiple platforms with statel
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              CLIENTS                                         │
-│         XMTP Clients (xmtp.chat, Wallet Apps) • Web Apps • Farcaster        │
+│         Web Apps • Farcaster • Messaging Clients                        │
 └─────────────────────────────────────────────────────────────────────────────┘
                                       │
                                       ▼
@@ -20,8 +20,8 @@ Hybrid is designed for flexible deployment across multiple platforms with statel
 │                           CHANNEL LAYER                                       │
 │                                                                              │
 │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐   │
-│  │    XMTP     │    │  Telegram   │    │   Slack     │    │  WebSocket  │   │
-│  │  (8455)     │    │  (8456)     │    │  (8457)     │    │  (8458)     │   │
+│  │  Telegram   │    │   Slack     │    │  WebSocket  │    │   Discord   │   │
+│  │  (8456)     │    │  (8457)     │    │  (8458)     │    │  (8459)     │   │
 │  └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘   │
 │                                                                              │
 │  All adapters communicate via HTTP IPC to agent server                      │
@@ -79,16 +79,8 @@ Hybrid is designed for flexible deployment across multiple platforms with statel
 │  │  └─────────────────────────────────────────────────┘    │    │
 │  │                                                           │    │
 │  │  ┌─────────────────────────────────────────────────┐    │    │
-│  │  │  XMTP Sidecar (8455)                            │    │    │
-│  │  │  - XMTP client                                  │    │    │
-│  │  │  - Message deduplication                        │    │    │
-│  │  │  - Conversation history builder                 │    │    │
-│  │  └─────────────────────────────────────────────────┘    │    │
-│  │                                                           │    │
-│  │  ┌─────────────────────────────────────────────────┐    │    │
 │  │  │  Volume (persistent)                             │    │    │
 │  │  │  - .hybrid/memory/                              │    │    │
-│  │  │  - .xmtp/*.db3                                  │    │    │
 │  │  │  - scheduler.db                                │    │    │
 │  │  └─────────────────────────────────────────────────┘    │    │
 │  │                                                           │    │
@@ -136,7 +128,6 @@ hybrid deploy fly
 │  │  ┌─────────────────────────────────────────────────┐    │    │
 │  │  │  Container                                       │    │    │
 │  │  │  - node dist/server/index.cjs                    │    │    │
-│  │  │  - node dist/xmtp.cjs                            │    │    │
 │  │  │  - Processes started on-demand                   │    │    │
 │  │  └─────────────────────────────────────────────────┘    │    │
 │  │                                                           │    │
@@ -145,8 +136,7 @@ hybrid deploy fly
 │                          ▼                                       │
 │  ┌─────────────────────────────────────────────────────────┐    │
 │  │                    R2 Bucket                              │    │
-│  │  - <inboxId>.db3 (XMTP database)                        │    │
-│  │  - Persisted across container restarts                   │    │
+│  │  - Persisted data across container restarts               │    │
 │  └─────────────────────────────────────────────────────────┘    │
 │                                                                  │
 │  wrangler.jsonc:                                                │
@@ -155,7 +145,7 @@ hybrid deploy fly
 │      "bindings": [{ "name": "AgentContainer", "class_name": "Sandbox" }]
 │    },                                                            │
 │    "containers": [{ "class_name": "Sandbox", "max_instances": 50 }],
-│    "r2_buckets": [{ "binding": "XMTP_STORAGE", ... }]          │
+│    "r2_buckets": [{ "binding": "AGENT_STORAGE", ... }]         │
 │  }                                                               │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
@@ -179,20 +169,14 @@ hybrid deploy cf
 │                      Node.js Server                              │
 │                                                                  │
 │  ┌─────────────────────────────────────────────────────────┐    │
-│  │  Process 1: Agent Server (8454)                          │    │
+│  │  Process: Agent Server (8454)                            │    │
 │  │  node dist/server/index.cjs                              │    │
-│  └─────────────────────────────────────────────────────────┘    │
-│                                                                  │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │  Process 2: XMTP Sidecar (8455)                         │    │
-│  │  node dist/xmtp.cjs                                      │    │
 │  └─────────────────────────────────────────────────────────┘    │
 │                                                                  │
 │  Filesystem:                                                    │
 │  .hybrid/                                                       │
 │  ├── dist/                                                      │
 │  ├── memory/                                                    │
-│  ├── .xmtp/                                                     │
 │  └── scheduler.db                                               │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
@@ -247,9 +231,8 @@ async function ensureAgentServer(sandbox: Sandbox): Promise<boolean> {
   const processes = await sandbox.listProcesses()
   if (!processes) return false
   
-  // 2. Check for server process
-  const hasServer = processes.some(p => p.command.includes("server/index"))
-  const hasSidecar = processes.some(p => p.command.includes("xmtp.cjs"))
+   // 2. Check for server process
+   const hasServer = processes.some(p => p.command.includes("server/index"))
   
   // 3. Health check
   const healthy = await healthCheck()
@@ -257,9 +240,8 @@ async function ensureAgentServer(sandbox: Sandbox): Promise<boolean> {
   // 4. If unhealthy, restart
   if (!healthy) {
     await sandbox.killAllProcesses()
-    await sandbox.startProcess("node dist/server/index.cjs")
-    await sandbox.startProcess("node dist/xmtp.cjs")
-    await waitForPort(8454, { timeout: 30000 })
+     await sandbox.startProcess("node dist/server/index.cjs")
+     await waitForPort(8454, { timeout: 30000 })
   }
   
   return true
@@ -274,15 +256,12 @@ async function ensureAgentServer(sandbox: Sandbox): Promise<boolean> {
 
 ```
 .hybrid/
-├── memory/
-│   ├── main.sqlite          # Memory index
+│  ├── memory/
 │   ├── ACL.md               # Access control
 │   ├── MEMORY.md            # Auto memory
 │   ├── users/               # Per-user memory
 │   ├── life/                # PARA graph
 │   └── logs/                 # Daily logs
-├── .xmtp/
-│   └── <inboxId>.db3        # XMTP database
 └── scheduler.db             # Job storage
 ```
 
@@ -295,19 +274,18 @@ fly mounts set data --path /app/.hybrid
 ### R2 for Stateless (Cloudflare)
 
 ```typescript
-// In @hybrd/xmtp client creation
-if (globalThis.XMTP_STORAGE) {
-  // Download existing DB
-  const existing = await globalThis.XMTP_STORAGE.get(`${inboxId}.db3`)
+// Persist agent data across container restarts
+if (globalThis.AGENT_STORAGE) {
+  const existing = await globalThis.AGENT_STORAGE.get(`agent-data.db`)
   if (existing) {
     await writeFile(dbPath, await existing.arrayBuffer())
   }
 }
 
-// After connect, upload to R2
-if (globalThis.XMTP_STORAGE) {
+// After operations, upload to R2
+if (globalThis.AGENT_STORAGE) {
   const dbContent = await readFile(dbPath)
-  await globalThis.XMTP_STORAGE.put(`${inboxId}.db3`, dbContent)
+  await globalThis.AGENT_STORAGE.put(`agent-data.db`, dbContent)
 }
 ```
 
@@ -361,7 +339,6 @@ fly volumes create data --region fra
 | Service | Port | Purpose |
 |---------|------|---------|
 | Agent Server | 8454 | HTTP API |
-| XMTP Sidecar | 8455 | XMTP bridge |
 | Telegram Adapter | 8456 | Telegram bridge (planned) |
 | Slack Adapter | 8457 | Slack bridge (planned) |
 | WebSocket Adapter | 8458 | WebSocket bridge (planned) |
@@ -379,11 +356,10 @@ await fetch("http://localhost:8454/api/chat", {
 
 // Scheduler → Channel adapter
 await dispatchToChannel({
-  channel: "xmtp",
-  to: "0x...",
+  channel: "telegram",
+  to: "user-123",
   message: "Scheduled reminder"
 })
-// Internally: POST http://localhost:8455/api/send
 ```
 
 **Why HTTP IPC?**
@@ -504,20 +480,6 @@ fly status
 
 ## Failover & Recovery
 
-### XMTP Connection Recovery
-
-```typescript
-const manager = new XMTPConnectionManager(key, {
-  maxRetries: 5,
-  reconnectOnFailure: true
-})
-
-// Auto-reconnect on:
-// - Network errors
-// - Installation limits (revokes old)
-// - Identity errors (refreshes)
-```
-
 ### Scheduler Recovery
 
 ```typescript
@@ -548,10 +510,7 @@ await manager.sync({ force: true })
 # Terminal 1: Agent server
 pnpm --filter hybrid/agent dev
 
-# Terminal 2: XMTP sidecar
-pnpm --filter @hybrd/xmtp dev
-
-# Or both:
+# Or:
 hybrid dev
 ```
 
@@ -566,12 +525,11 @@ pnpm --filter @hybrd/memory test  # Single package
 
 ```bash
 # Enable debug logging
-XMTP_DEBUG=true ANTHROPIC_LOG=debug hybrid dev
+ANTHROPIC_LOG=debug hybrid dev
 
 # Check processes
 ps aux | grep node
 
 # Check ports
 lsof -i :8454
-lsof -i :8455
 ```

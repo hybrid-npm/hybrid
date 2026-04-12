@@ -1,9 +1,0 @@
-{
-	"extends": "@config/tsconfig/external-package.json",
-	"compilerOptions": {
-		"emitDeclarationOnly": false,
-		"outDir": "dist"
-	},
-	"include": ["src/**/*.ts", "src/**/*.tsx"],
-	"exclude": ["node_modules", "scripts"]
-}

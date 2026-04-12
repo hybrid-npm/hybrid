@@ -1,7 +1,8 @@
 import { randomInt } from "node:crypto"
-import { existsSync, mkdirSync, readFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, renameSync } from "node:fs"
 import { readFile, writeFile } from "node:fs/promises"
 import { join } from "node:path"
+import type { IdentityProvider } from "@hybrd/types"
 import { getCredentialsPath } from "./paths.js"
 import { isValidWalletAddress, normalizeWalletAddress } from "./validate.js"
 
@@ -10,6 +11,10 @@ export type Role = "owner" | "guest"
 export interface ACL {
 	version: 1
 	allowFrom: string[]
+}
+
+export interface ACLConfig {
+	identityProvider?: IdentityProvider
 }
 
 export interface PairingRequest {
@@ -25,18 +30,40 @@ export interface PairingStore {
 	requests: PairingRequest[]
 }
 
-const CHANNEL = "xmtp"
 const PAIRING_CODE_LENGTH = 8
 const PAIRING_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 const PAIRING_PENDING_TTL_MS = 60 * 60 * 1000
 const PAIRING_PENDING_MAX = 3
 
 function getAllowFromPath(workspaceDir: string): string {
-	return join(getCredentialsPath(workspaceDir), `${CHANNEL}-allowFrom.json`)
+	return join(getCredentialsPath(workspaceDir), "allowFrom.json")
+}
+
+function getOldAllowFromPath(workspaceDir: string): string {
+	return join(getCredentialsPath(workspaceDir), "xmtp-allowFrom.json")
 }
 
 function getPairingPath(workspaceDir: string): string {
-	return join(getCredentialsPath(workspaceDir), `${CHANNEL}-pairing.json`)
+	return join(getCredentialsPath(workspaceDir), "pairing.json")
+}
+
+function getOldPairingPath(workspaceDir: string): string {
+	return join(getCredentialsPath(workspaceDir), "xmtp-pairing.json")
+}
+
+function migrateOldFiles(workspaceDir: string): void {
+	const credentialsDir = getCredentialsPath(workspaceDir)
+	const newAllowFrom = getAllowFromPath(workspaceDir)
+	const oldAllowFrom = getOldAllowFromPath(workspaceDir)
+	const newPairing = getPairingPath(workspaceDir)
+	const oldPairing = getOldPairingPath(workspaceDir)
+
+	if (!existsSync(newAllowFrom) && existsSync(oldAllowFrom)) {
+		renameSync(oldAllowFrom, newAllowFrom)
+	}
+	if (!existsSync(newPairing) && existsSync(oldPairing)) {
+		renameSync(oldPairing, newPairing)
+	}
 }
 
 function randomCode(): string {
@@ -170,6 +197,7 @@ async function writeJsonFileAtomic(
 }
 
 export function parseACL(workspaceDir: string): ACL | null {
+	migrateOldFiles(workspaceDir)
 	const aclPath = getAllowFromPath(workspaceDir)
 
 	if (!existsSync(aclPath)) {
@@ -191,9 +219,11 @@ export function parseACL(workspaceDir: string): ACL | null {
 	}
 }
 
-export function getRole(acl: ACL | null, userId: string): Role {
-	// If no ACL is configured (null), allow access for initial onboarding
-	// Once ACL is set up, only allowFrom addresses become owners
+export async function getRole(
+	acl: ACL | null,
+	userId: string,
+	identityProvider?: IdentityProvider
+): Promise<Role> {
 	if (!acl) {
 		return "owner"
 	}
@@ -202,14 +232,22 @@ export function getRole(acl: ACL | null, userId: string): Role {
 		return "guest"
 	}
 
-	// Validate that userId is a wallet address format
-	// Non-wallet identifiers (e.g., XMTP inbox IDs) are not allowed in ACL
-	const normalizedUserId = normalizeWalletAddress(userId)
-	if (!isValidWalletAddress(normalizedUserId)) {
-		return "guest"
+	let normalizedId = userId
+
+	if (identityProvider) {
+		const identity = await identityProvider.validate(userId)
+		if (!identity) {
+			return "guest"
+		}
+		normalizedId = identityProvider.format(identity)
+	} else {
+		normalizedId = normalizeWalletAddress(userId)
+		if (!isValidWalletAddress(normalizedId)) {
+			return "guest"
+		}
 	}
 
-	if (acl.allowFrom.includes(normalizedUserId)) {
+	if (acl.allowFrom.includes(normalizedId)) {
 		return "owner"
 	}
 

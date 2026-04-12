@@ -25,9 +25,9 @@ async function addSkillFromClawHub(
 	}
 }
 
-export function createSkillMcpServer(userId: string) {
+export async function createSkillMcpServer(userId: string) {
 	const acl = parseACL(PROJECT_ROOT)
-	const role = getRole(acl, userId)
+	const role = await getRole(acl, userId)
 
 	const addSkillTool = tool(
 		"AddSkill",

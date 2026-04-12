@@ -1,4 +1,6 @@
-export type ChannelId = "xmtp" | (string & {})
+import type { ChannelId } from "./runtime"
+
+export type { ChannelId }
 
 export type CronDeliveryMode = "none" | "announce"
 
