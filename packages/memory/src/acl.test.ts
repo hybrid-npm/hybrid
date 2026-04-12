@@ -43,7 +43,7 @@ describe("ACL JSON", () => {
 			mkdirSync(credentialsDir, { recursive: true })
 
 			await writeFile(
-				join(credentialsDir, "allowFrom.json"),
+				join(credentialsDir, "xmtp-allowFrom.json"),
 				JSON.stringify({
 					version: 1,
 					allowFrom: ["0x1234567890abcdef1234567890abcdef12345678"]
@@ -59,9 +59,40 @@ describe("ACL JSON", () => {
 	})
 
 	describe("getRole", () => {
-		it("returns owner for null ACL (allows initial onboarding)", async () => {
+		it("returns owner for null ACL (allows initial onboarding)", async async () => {
 			expect(await getRole(null, "0x1234")).toBe("owner")
 		})
+
+		it("returns guest for unknown user", async async () => {
+			expect(await getRole({ version: 1, allowFrom: ["0xaaa"] }, "0xbbb")).toBe(
+				"guest"
+			)
+		})
+
+		it("returns owner for known user", async async () => {
+			expect(
+				await await getRole(
+					{
+						version: 1,
+						allowFrom: ["0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]
+					},
+					"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+				)
+			).toBe("owner")
+		})
+
+		it("normalizes addresses (case-insensitive)", async async () => {
+			expect(
+				await await getRole(
+					{
+						version: 1,
+						allowFrom: ["0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]
+					},
+					"0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+				)
+			).toBe("owner")
+		})
+	})
 
 	describe("listOwners", () => {
 		it("returns empty array for null ACL", () => {
@@ -243,7 +274,7 @@ describe("ACL Edge Cases", () => {
 		const credentialsDir = join(TEST_DIR, ".hybrid", "credentials")
 		mkdirSync(credentialsDir, { recursive: true })
 
-		writeFileSync(join(credentialsDir, "allowFrom.json"), "not valid json")
+		writeFileSync(join(credentialsDir, "xmtp-allowFrom.json"), "not valid json")
 
 		// Should not throw, return empty
 		const result = await readACLAllowFrom(TEST_DIR)
@@ -257,7 +288,7 @@ describe("ACL Edge Cases", () => {
 		mkdirSync(credentialsDir, { recursive: true })
 
 		writeFileSync(
-			join(credentialsDir, "allowFrom.json"),
+			join(credentialsDir, "xmtp-allowFrom.json"),
 			JSON.stringify({ allowFrom: ["0xowner1"] })
 		)
 
@@ -283,6 +314,4 @@ describe("ACL Edge Cases", () => {
 		expect(allowFrom2).toHaveLength(1)
 		expect(allowFrom2).toContain("0xowner2")
 	})
-})
-})
 })
