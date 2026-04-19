@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { existsSync } from "node:fs"
-import { basename, dirname, resolve } from "node:path"
+import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { config } from "dotenv"
 
@@ -57,7 +57,12 @@ async function main() {
 	}
 	if (command === "dev") return dev(args.includes("--docker"))
 	if (command === "start") return start()
-	if (command === "deploy") return deploy(args[1])
+	if (command === "deploy") return deployCommand(args)
+	if (command === "deploy:sleep") return deploySleepCommand(args)
+	if (command === "deploy:wake") return deployWakeCommand(args)
+	if (command === "deploy:status") return deployStatusCommand(args)
+	if (command === "deploy:logs") return deployLogsCommand(args)
+	if (command === "deploy:teardown") return deployTeardownCommand(args)
 	if (command === "init") return init(args[1])
 
 	if (command === "owner") {
@@ -122,11 +127,24 @@ async function main() {
 	console.log("Usage: hybrid <command>")
 	console.log("")
 	console.log("Commands:")
-	console.log("  init <name>           Initialize a new agent")
-	console.log("  dev                   Start development server")
-	console.log("  build [--target]      Build for deployment (firecracker)")
-	console.log("  start                 Run built agent")
-	console.log("  deploy [platform]     Deploy to Firecracker (Sprite)")
+	console.log("  init <name>               Initialize a new agent")
+	console.log("  dev                       Start development server")
+	console.log("  build [--target]          Build for deployment (firecracker)")
+	console.log("  start                     Run built agent")
+	console.log("  deploy [platform]         Deploy to a Firecracker provider")
+	console.log("  deploy:sleep <name>       Put VM to sleep")
+	console.log("  deploy:wake <name>        Wake VM")
+	console.log("  deploy:status <name>      Show VM status")
+	console.log("  deploy:logs <name>        Stream agent logs")
+	console.log("  deploy:teardown <name>    Destroy VM")
+	console.log("")
+	console.log("Deploy flags:")
+	console.log(
+		"  --provider <name>     Override provider (sprites, e2b, daytona)"
+	)
+	console.log("  --name <name>         Override instance name")
+	console.log("  --force               Recreate VM even if it exists")
+	console.log("  --no-build            Skip build step")
 	console.log("")
 	console.log("Owner:")
 	console.log("  owner add <address>     Add an owner")
@@ -539,9 +557,9 @@ async function build(target?: string) {
 		version: "1.0.0",
 		type: "module",
 		dependencies: {
-		"@anthropic-ai/claude-agent-sdk": "^0.2.38",
-		"@hono/node-server": "^1.13.5",
-		ai: "^6.0.0",
+			"@anthropic-ai/claude-agent-sdk": "^0.2.38",
+			"@hono/node-server": "^1.13.5",
+			ai: "^6.0.0",
 			"better-sqlite3": "^11.0.0",
 			dotenv: "^16.4.5",
 			hono: "^4.10.8",
@@ -554,69 +572,24 @@ async function build(target?: string) {
 		JSON.stringify(deployPkg, null, 2)
 	)
 
-	// Generate Dockerfile
-	writeFileSync(resolve(distDir, "Dockerfile"), generateDockerfile(buildTarget))
+	// Generate Dockerfile (generic Firecracker target)
+	writeFileSync(resolve(distDir, "Dockerfile"), generateDockerfile())
 
-	// Copy or generate fly.toml
-	if (buildTarget === "fly") {
-		const projectFlyToml = resolve(projectDir, "fly.toml")
-		if (existsSync(projectFlyToml)) {
-			cpSync(projectFlyToml, resolve(distDir, "fly.toml"))
-		} else {
-			writeFileSync(resolve(distDir, "fly.toml"), generateFlyToml())
-		}
-	}
-
-	// Generate deploy.sh for Firecracker (Sprite) deployment
-	if (buildTarget === "firecracker") {
-		const spawnScript = [
-			"#!/bin/bash",
-			"set -e",
-			"",
-			'SPRITE_NAME="${SPRITE_NAME:-hybrid-agent-$(date +%s%N)}"',
-			"",
-			'DIST_DIR="$(cd "$(dirname "$0")" && pwd)"',
-			"",
-			'echo "Deploying to Spawn Sprite: $SPRITE_NAME"',
-			"",
-			"# Create sprite if it doesn't exist",
-			'if ! sprite list 2>/dev/null | grep -q "$SPRITE_NAME"; then',
-			'  echo "Creating sprite: $SPRITE_NAME"',
-			'  sprite create -skip-console "$SPRITE_NAME"',
-			"fi",
-			"",
-			"# Wait for sprite to be ready",
-			'echo "Waiting for sprite to be ready..."',
-			"for i in $(seq 1 30); do",
-			'  if sprite exec -s "$SPRITE_NAME" -- echo ready 2>/dev/null; then',
-			"    break",
-			"  fi",
-			"  sleep 2",
-			"done",
-			"",
-			"# Upload build artifacts",
-			'echo "Uploading build artifacts..."',
-			'tar -czf /tmp/hybrid-deploy.tar.gz -C "$DIST_DIR" .',
-			'sprite exec -s "$SPRITE_NAME" -- mkdir -p /app',
-			'sprite exec -s "$SPRITE_NAME" -file "/tmp/hybrid-deploy.tar.gz:/tmp/hybrid-deploy.tar.gz" -- tar -xzf /tmp/hybrid-deploy.tar.gz -C /app',
-			'rm -f /tmp/hybrid-deploy.tar.gz',
-			"",
-			"# Install dependencies and start agent",
-			"sprite exec -s \"$SPRITE_NAME\" -- bash -c '",
-			"  cd /app",
-			"  npm install --production",
-			"  export NODE_ENV=production",
-			"  export AGENT_PORT=8454",
-			"  exec node server/index.cjs",
-			"'",
-			""
-		].join("\n")
-		writeFileSync(
-			resolve(distDir, "deploy.sh"),
-			spawnScript,
-			{ mode: 0o755 }
+	// .hybrid-deploy.json manifest for provider consumption
+	writeFileSync(
+		resolve(distDir, ".hybrid-deploy.json"),
+		JSON.stringify(
+			{
+				version: 1,
+				provider: "firecracker",
+				startCommand: "node server/index.cjs",
+				port: 8454,
+				healthPath: "/health"
+			},
+			null,
+			2
 		)
-	}
+	)
 
 	// Generate start script
 	writeFileSync(
@@ -631,89 +604,20 @@ node server/index.cjs
 	console.log(`   Target: ${buildTarget}`)
 }
 
-function generateDockerfile(target: string): string {
-	if (target === "fly" || target === "railway") {
-		return `FROM node:20
-
+function generateDockerfile(): string {
+	return `FROM node:20-bookworm-slim
 WORKDIR /app
-
-# Copy built agent runtime
-COPY server/ ./server/
-
-# Copy config
-COPY SOUL.md ./
-COPY AGENTS.md ./
-COPY IDENTITY.md ./
-COPY TOOLS.md ./
-COPY BOOTSTRAP.md ./
-COPY HEARTBEAT.md ./
-COPY USER.md ./
-
-# Copy credentials (owner ACL)
-COPY credentials/ ./credentials/
-
-# Copy deployment files
 COPY package.json ./
-COPY start.sh ./
-
-# Install dependencies
 RUN npm install --production
-
-# Create data directories and set ownership
-RUN chown -R node:node /app
-
+COPY server/ ./server/
+COPY SOUL.md AGENTS.md IDENTITY.md TOOLS.md BOOT.md BOOTSTRAP.md HEARTBEAT.md USER.md ./
+COPY credentials/ ./credentials/ 2>/dev/null || true
 ENV AGENT_PORT=8454
 ENV NODE_ENV=production
+ENV DATA_ROOT=/app/data
 EXPOSE 8454
-
 USER node
 CMD ["node", "server/index.cjs"]
-`
-	}
-
-	return `FROM node:20
-WORKDIR /app
-COPY . ./
-RUN npm install --production
-RUN chown -R node:node /app
-USER node
-CMD ["sh", "start.sh"]
-`
-}
-
-function generateFlyToml(appName = "hybrid-agent"): string {
-	return `# Generated by hybrid build
-app = "${appName}"
-primary_region = "iad"
-
-[build]
-  dockerfile = "Dockerfile"
-  context = "."
-
-[deployment]
-  min_machines = 1
-  max_machines = 1
-
-[env]
-  NODE_ENV = "production"
-
-[[services]]
-  protocol = "tcp"
-  internal_port = 8454
-
-  [[services.ports]]
-    port = 80
-    handlers = ["http"]
-    force_https = true
-
-  [[services.ports]]
-    port = 443
-    handlers = ["tls", "http"]
-
-[vm]
-  memory = "1gb"
-  cpu_kind = "shared"
-  cpus = 1
 `
 }
 
@@ -789,267 +693,116 @@ async function start() {
 }
 
 // ============================================================================
-// Deploy
+// Deploy — delegates to deploy/ providers
 // ============================================================================
 
-async function deploy(platform?: string) {
-	const { spawn, execSync, execFileSync } = await import("node:child_process")
-	const { existsSync, readFileSync, writeFileSync } = await import("node:fs")
-	const prompts = (await import("prompts")).default
-
-	const projectDir = projectRoot
-	let openRouterKey: string | undefined
-	const distDir = resolve(projectDir, "dist")
-
-	// Prompt for platform if not specified
-	let deployPlatform = platform
-
-	// Check hybrid.config.ts for saved platform
-	if (!deployPlatform) {
-		const hybridConfig = resolve(projectDir, "hybrid.config.ts")
-		if (existsSync(hybridConfig)) {
-			const configContent = readFileSync(hybridConfig, "utf-8")
-			const match = configContent.match(
-				/deployPlatform\s*[=:]\s*["']([^"']+)["']/
-			)
-			if (match) {
-				deployPlatform = match[1]
-				console.log(`   Using saved platform: ${deployPlatform}`)
-			}
-		}
+let deployModule: typeof import("./deploy/deploy") | null = null
+async function loadDeploy() {
+	if (!deployModule) {
+		deployModule = await import("./deploy/deploy")
 	}
+	return deployModule
+}
 
-	if (!deployPlatform) {
-		const choice = await prompts({
-			type: "select",
-			name: "platform",
-			message: "Where do you want to deploy?",
-			choices: [
-				{ title: "Firecracker (Sprite)", value: "firecracker" }
-			],
-			initial: 0
-		})
-		if (!choice.platform) {
-			console.log("\n  Cancelled.\n")
-			process.exit(0)
-		}
-		deployPlatform = choice.platform
-
-		// Save platform to hybrid.config.ts
-		const hybridConfig = resolve(projectDir, "hybrid.config.ts")
-		let configContent = ""
-		if (existsSync(hybridConfig)) {
-			configContent = readFileSync(hybridConfig, "utf-8")
-		}
-		if (!configContent.includes("deployPlatform")) {
-			const newContent = configContent
-				? configContent.replace(
-						/export default/,
-						`const deployPlatform = "${deployPlatform}"\n\nexport default`
-					)
-				: `const deployPlatform = "${deployPlatform}"\n\nexport default {}`
-			writeFileSync(hybridConfig, newContent)
-		}
+function parseDeployArgs(args: string[]) {
+	const name = args.find(
+		(a, i) => i > 1 && !a.startsWith("--") && !a.startsWith("-")
+	)
+	const platform = args.find(
+		(a, i) =>
+			(i > 1 && a.endsWith(":") === false && args[i - 1] === "--provider") ||
+			(i > 1 && args[i - 1] === "-p")
+	)
+	const providerFlag =
+		args[args.indexOf("--provider") + 1] || args[args.indexOf("-p") + 1]
+	const nameFlag =
+		args[args.indexOf("--name") + 1] || args[args.indexOf("-n") + 1]
+	const skipBuild = args.includes("--no-build")
+	const force = args.includes("--force")
+	const posArg = args[1] && !args[1].startsWith("-") ? args[1] : undefined
+	const follow = !args.includes("--no-follow")
+	return {
+		platform: providerFlag,
+		name: nameFlag || posArg,
+		skipBuild,
+		force,
+		follow
 	}
+}
 
-	const flyTomlPath = resolve(distDir, "fly.toml")
-	const projectFlyToml = resolve(projectDir, "fly.toml")
+async function deployCommand(args: string[]) {
+	const flags = parseDeployArgs(args)
+	const { runDeploy } = await loadDeploy()
+	await runDeploy(
+		{
+			platform: flags.platform,
+			name: flags.name,
+			skipBuild: flags.skipBuild,
+			force: flags.force
+		},
+		projectRoot,
+		packageDir
+	)
+}
 
-	// For firecracker, skip fly-specific checks and go straight to deploy
-	if (deployPlatform === "firecracker") {
-		const projectName = basename(projectDir)
-		const spriteName = process.env.SPRITE_NAME || projectName
-
-		if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(spriteName)) {
-			console.error(`\n❌ Invalid sprite name: ${spriteName}`)
-			console.error("Name must start with a letter/digit and contain only letters, digits, hyphens, and underscores.")
-			process.exit(1)
-		}
-
-		await build("spawn")
-
-		console.log(`\n🚀 Deploying to Spawn (Sprite)...`)
-		console.log(`   Sprite: ${spriteName}`)
-
-		// Check if sprite already exists
-		let spriteExists = false
-		try {
-			const existingSprites = execFileSync("sprite", ["list"], { encoding: "utf-8" })
-			if (existingSprites.includes(spriteName)) {
-				spriteExists = true
-				console.log(`   Using existing sprite: ${spriteName}`)
-			}
-		} catch {
-			// sprite not installed or other error
-		}
-
-		// Create sprite if it doesn't exist
-		if (!spriteExists) {
-			console.log(`\n📦 Creating sprite: ${spriteName}`)
-			try {
-				execFileSync("sprite", ["create", "-skip-console", spriteName], {
-					stdio: "inherit"
-				})
-			} catch {
-				// Sprite may already exist (race condition or cached)
-				console.log(`   Sprite ${spriteName} already exists, using it`)
-			}
-		}
-
-		// Wait for sprite to be ready
-		console.log("\n⏳ Waiting for sprite to be ready...")
-		let ready = false
-		for (let i = 0; i < 30; i++) {
-			try {
-				execFileSync("sprite", ["exec", "-s", spriteName, "--", "echo", "ready"], {
-					stdio: "pipe"
-				})
-				ready = true
-				break
-			} catch {
-				if (i % 5 === 4) {
-					console.log(`   Still waiting... (${i + 1}/30)`)
-				}
-				await new Promise((r) => setTimeout(r, 2000))
-			}
-		}
-
-		if (!ready) {
-			console.error("\n❌ Sprite did not become ready in time.")
-			process.exit(1)
-		}
-
-		console.log("   ✓ Sprite ready")
-
-		// Upload build artifacts
-		console.log("\n📤 Uploading build artifacts...")
-		const { tmpdir } = await import("node:os")
-		const { join } = await import("node:path")
-		const tarPath = join(tmpdir(), `hybrid-deploy-${Date.now()}.tar.gz`)
-
-		execFileSync("tar", ["-czf", tarPath, "-C", distDir, "."], {
-			stdio: "pipe"
-		})
-
-		execFileSync("sprite", ["exec", "-s", spriteName, "--", "mkdir", "-p", "/app"], {
-			stdio: "pipe"
-		})
-
-		// Retry upload up to 3 times (sprite may still be initializing)
-		let uploadSuccess = false
-		for (let attempt = 0; attempt < 3; attempt++) {
-			try {
-				execFileSync(
-					"sprite",
-					[
-						"exec",
-						"-s",
-						spriteName,
-						"-file",
-						`${tarPath}:/tmp/hybrid-deploy.tar.gz`,
-						"--",
-						"tar",
-						"-xzf",
-						"/tmp/hybrid-deploy.tar.gz",
-						"-C",
-						"/app"
-					],
-					{ stdio: "inherit" }
-				)
-				uploadSuccess = true
-				break
-			} catch {
-				if (attempt < 2) {
-					console.log(`   Upload failed, retrying... (${attempt + 1}/3)`)
-					await new Promise((r) => setTimeout(r, 5000))
-				}
-			}
-		}
-
-		if (!uploadSuccess) {
-			console.error("\n❌ Failed to upload build artifacts after 3 attempts.")
-			process.exit(1)
-		}
-
-		// Clean up local tar
-		try {
-			const { unlinkSync } = await import("node:fs")
-			unlinkSync(tarPath)
-		} catch {}
-
-		// Install dependencies
-		console.log("\n📦 Installing dependencies...")
-		execFileSync(
-			"sprite",
-			["exec", "-s", spriteName, "--", "bash", "-c", "cd /app && npm install --production"],
-			{ stdio: "inherit" }
-		)
-
-		// Create startup script
-		console.log("\n🔧 Setting up agent service...")
-		const startupScript = `#!/bin/bash
-cd /app
-export NODE_ENV=production
-export AGENT_PORT=8454
-export OPENROUTER_API_KEY=${openRouterKey || process.env.OPENROUTER_API_KEY || ""}
-exec nohup node server/index.cjs > /app/agent.log 2>&1 &
-echo $! > /app/agent.pid
-`
-		const { tmpdir: osTmpdir } = await import("node:os")
-		const { join: pathJoin } = await import("node:path")
-		const scriptPath = osTmpdir() + `/hybrid-start-${Date.now()}.sh`
-		writeFileSync(scriptPath, startupScript, { mode: 0o755 })
-
-		execFileSync(
-			"sprite",
-			["exec", "-s", spriteName, "-file", `${scriptPath}:/app/start-agent.sh`, "--", "chmod", "+x", "/app/start-agent.sh"],
-			{ stdio: "pipe" }
-		)
-
-		execFileSync(
-			"sprite",
-			["exec", "-s", spriteName, "--", "bash", "/app/start-agent.sh"],
-			{ stdio: "inherit" }
-		)
-
-		try {
-			const { unlinkSync } = await import("node:fs")
-			unlinkSync(scriptPath)
-		} catch {}
-
-		// Wait for agent to start
-		console.log("\n⏳ Waiting for agent to start...")
-		let agentReady = false
-		for (let i = 0; i < 15; i++) {
-			try {
-				const result = execFileSync(
-					"sprite",
-					["exec", "-s", spriteName, "--", "curl", "-s", "http://localhost:8454/health"],
-					{ encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
-				)
-				if (result) {
-					agentReady = true
-					break
-				}
-			} catch {
-				// Agent not ready yet
-			}
-			await new Promise((r) => setTimeout(r, 2000))
-		}
-
-		console.log(`\n   Sprite: ${spriteName}`)
-		console.log(`   URL: https://${spriteName}.sprites.dev`)
-		console.log(`   Health: https://${spriteName}.sprites.dev/health`)
-		console.log(`   Chat: https://${spriteName}.sprites.dev/api/chat`)
-		console.log("\n✅ Deployed!")
-		console.log("\nConnect to the running agent:")
-		console.log(`   sprite exec -s ${spriteName} -tty -- bash`)
-		return
+async function deploySleepCommand(args: string[]) {
+	const flags = parseDeployArgs(args)
+	const name = flags.name
+	if (!name) {
+		console.error("Usage: hybrid deploy:sleep <name>")
+		console.error("Flags: --provider <name>, --name <name>")
+		process.exit(1)
 	}
+	const { runSleep } = await loadDeploy()
+	await runSleep(name, flags.platform, projectRoot)
+}
 
-	console.error(`Unknown platform: ${deployPlatform}`)
-	console.error("Supported: firecracker")
-	process.exit(1)
+async function deployWakeCommand(args: string[]) {
+	const flags = parseDeployArgs(args)
+	const name = flags.name
+	if (!name) {
+		console.error("Usage: hybrid deploy:wake <name>")
+		console.error("Flags: --provider <name>, --name <name>")
+		process.exit(1)
+	}
+	const { runWake } = await loadDeploy()
+	await runWake(name, flags.platform, projectRoot)
+}
+
+async function deployStatusCommand(args: string[]) {
+	const flags = parseDeployArgs(args)
+	const name = flags.name
+	if (!name) {
+		console.error("Usage: hybrid deploy:status <name>")
+		console.error("Flags: --provider <name>, --name <name>")
+		process.exit(1)
+	}
+	const { runStatus } = await loadDeploy()
+	await runStatus(name, flags.platform, projectRoot)
+}
+
+async function deployLogsCommand(args: string[]) {
+	const flags = parseDeployArgs(args)
+	const name = flags.name
+	if (!name) {
+		console.error("Usage: hybrid deploy:logs <name>")
+		console.error("Flags: --provider <name>, --name <name>, --no-follow")
+		process.exit(1)
+	}
+	const { runLogs } = await loadDeploy()
+	await runLogs(name, flags.follow, flags.platform, projectRoot)
+}
+
+async function deployTeardownCommand(args: string[]) {
+	const flags = parseDeployArgs(args)
+	const name = flags.name
+	if (!name) {
+		console.error("Usage: hybrid deploy:teardown <name>")
+		console.error("Flags: --provider <name>, --name <name>, --all")
+		process.exit(1)
+	}
+	const { runTeardown } = await loadDeploy()
+	await runTeardown(name, flags.platform, projectRoot)
 }
 
 // ============================================================================
