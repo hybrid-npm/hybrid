@@ -715,9 +715,23 @@ async function loadDeploy() {
 }
 
 function parseDeployArgs(args: string[]) {
-	const name = args.find(
-		(a, i) => i > 1 && !a.startsWith("--") && !a.startsWith("-"),
-	)
+	// Collect known flag indices so we don't mistake flag values as positional names
+	const skipSet = new Set<number>()
+	const flagNames = [
+		"--provider",
+		"-p",
+		"--name",
+		"-n",
+		"--no-build",
+		"--force",
+		"--no-follow",
+	]
+	for (let i = 0; i < args.length; i++) {
+		if (flagNames.includes(args[i])) {
+			skipSet.add(i)
+			skipSet.add(i + 1)
+		}
+	}
 	const providerIdx = args.indexOf("--provider")
 	const providerAltIdx = args.indexOf("-p")
 	const nameIdx = args.indexOf("--name")
@@ -728,14 +742,29 @@ function parseDeployArgs(args: string[]) {
 	const nameFlag =
 		(nameIdx !== -1 ? args[nameIdx + 1] : undefined) ||
 		(nameAltIdx !== -1 ? args[nameAltIdx + 1] : undefined)
-	const posArg =
-		args[1] && !args[1].startsWith("-") ? args[1] : undefined
+
+	// Find the first positional arg that isn't a flag, flag value, or subcommand
+	const name = args.find(
+		(a, i) =>
+			i > 1 &&
+			!a.startsWith("--") &&
+			!a.startsWith("-") &&
+			!skipSet.has(i) &&
+			a !== "deploy" &&
+			a !== "sleep" &&
+			a !== "wake" &&
+			a !== "status" &&
+			a !== "logs" &&
+			a !== "teardown" &&
+			a !== providerFlag &&
+			a !== nameFlag,
+	)
 	const skipBuild = args.includes("--no-build")
 	const force = args.includes("--force")
 	const follow = !args.includes("--no-follow")
 	return {
 		platform: providerFlag,
-		name: name || posArg || nameFlag,
+		name: name || nameFlag,
 		skipBuild,
 		force,
 		follow,

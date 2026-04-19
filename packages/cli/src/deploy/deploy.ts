@@ -54,11 +54,19 @@ export async function runDeploy(
 	const distDir = resolve(projectRoot, "dist")
 	const instanceName = options.name || provider.defaultName(projectRoot)
 
-	// 6. Provision or reuse
+	// 6. Provision or reuse based on current status
 	console.log(`\n📋 Instance: ${instanceName}`)
 	const existingStatus = await provider.status(instanceName)
 
-	if (existingStatus === "running" && !options.force) {
+	if (options.force) {
+		if (existingStatus === "running" || existingStatus === "sleeping") {
+			await provider.teardown(instanceName)
+		}
+		await provider.provision(instanceName)
+	} else if (existingStatus === "sleeping") {
+		console.log(`   ☀️  Waking sleeping instance...`)
+		await provider.wake(instanceName)
+	} else if (existingStatus === "running") {
 		console.log(`   ⚠️  Instance "${instanceName}" is already running.`)
 		const prompts = (await import("prompts")).default
 		const choice = await prompts({
@@ -68,8 +76,8 @@ export async function runDeploy(
 			choices: [
 				{ title: "Redeploy (overwrite artifacts)", value: "redeploy" },
 				{ title: "Force recreate VM", value: "force" },
-				{ title: "Cancel", value: "cancel" }
-			]
+				{ title: "Cancel", value: "cancel" },
+			],
 		})
 		if (choice.action === "cancel") {
 			console.log("\n  Cancelled.\n")
@@ -80,17 +88,14 @@ export async function runDeploy(
 			await provider.provision(instanceName)
 		}
 		// redeploy: use existing instance, just push new artifacts
-	}
-
-	if (
-		existingStatus === "unknown" ||
-		existingStatus === "stopped" ||
-		options.force
-	) {
-		if (options.force && existingStatus === "running") {
-			await provider.teardown(instanceName)
-		}
+	} else if (existingStatus === "unknown" || existingStatus === "stopped") {
 		await provider.provision(instanceName)
+	} else if (existingStatus === "provisioning") {
+		console.error(`   ⏳ Instance still provisioning, try again shortly.`)
+		process.exit(1)
+	} else if (existingStatus === "error") {
+		console.error(`   ❌ Instance in error state. Run 'hybrid deploy teardown ${instanceName}' then retry.`)
+		process.exit(1)
 	}
 
 	// 7. Deploy artifacts

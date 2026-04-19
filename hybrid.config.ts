@@ -1,3 +1,3 @@
-const deployPlatform = "firecracker"
+const deployPlatform = "sprites"
 
 export default {}
