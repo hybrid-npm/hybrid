@@ -47,18 +47,19 @@ my-agent/
 
 ### `hybrid build [--target]`
 
-Build the agent bundle into `.hybrid/`:
+Build the agent bundle into `./dist/`:
 
 ```bash
 hybrid build                  # Default build
 hybrid build --target fly     # Fly.io target (default)
+hybrid build --target spawn   # Spawn Sprite target
 hybrid build --target railway # Railway target
 hybrid build --target cf      # Cloudflare Workers target
 ```
 
 The build:
 1. Compiles `packages/agent` via `pnpm --filter hybrid/agent build`
-2. Creates `.hybrid/` directory structure
+2. Creates `./dist/` directory structure
 3. Copies compiled `dist/` from the agent package
 4. Copies `SOUL.md`, `AGENTS.md`, and `agent.ts` from your project root
 5. Copies core skills from `packages/agent/skills/` → `.hybrid/skills/core/`
@@ -68,7 +69,7 @@ The build:
 
 **Build output structure:**
 ```
-.hybrid/
+dist/
 ├── dist/                    # Compiled agent code
 │   ├── server/index.cjs     # Full Claude Code SDK server
 │   ├── server/simple.cjs    # Lightweight server
@@ -79,6 +80,34 @@ The build:
 ├── package.json
 ├── Dockerfile
 ├── fly.toml                 # (Fly.io targets only)
+├── spawn.sh                 # (Spawn targets only)
+└── start.sh                 # Starts server
+```
+
+The build:
+1. Compiles `packages/agent` via `pnpm --filter hybrid/agent build`
+2. Creates `./dist/` directory structure
+3. Copies compiled `dist/` from the agent package
+4. Copies `SOUL.md`, `AGENTS.md`, and `agent.ts` from your project root
+5. Copies core skills from `packages/agent/skills/` → `.hybrid/skills/core/`
+6. Copies user skills from `./skills/` → `.hybrid/skills/ext/`
+7. Writes `skills/skills_lock.json` listing all installed skills
+8. Generates deployment files: `package.json`, `Dockerfile`, `fly.toml`, `start.sh`
+
+**Build output structure:**
+```
+dist/
+├── dist/                    # Compiled agent code
+│   ├── server/index.cjs     # Full Claude Code SDK server
+│   ├── server/simple.cjs    # Lightweight server
+├── skills/
+│   ├── core/                # Built-in skills (memory)
+│   ├── ext/                 # User-installed skills
+│   └── skills_lock.json
+├── package.json
+├── Dockerfile
+├── fly.toml                 # (Fly.io targets only)
+├── spawn.sh                 # (Spawn targets only)
 └── start.sh                 # Starts server
 ```
 

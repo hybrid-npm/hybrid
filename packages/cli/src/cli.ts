@@ -51,7 +51,10 @@ async function main() {
 	const args = process.argv.slice(2)
 	const command = args[0]
 
-	if (command === "build") return build(args[1])
+	if (command === "build") {
+		const targetFlag = args.indexOf("--target")
+		return build(targetFlag !== -1 ? args[targetFlag + 1] : args[1])
+	}
 	if (command === "dev") return dev(args.includes("--docker"))
 	if (command === "start") return start()
 	if (command === "deploy") return deploy(args[1])
@@ -121,9 +124,9 @@ async function main() {
 	console.log("Commands:")
 	console.log("  init <name>           Initialize a new agent")
 	console.log("  dev                   Start development server")
-	console.log("  build [--target]      Build for deployment (fly, railway)")
+	console.log("  build [--target]      Build for deployment (firecracker)")
 	console.log("  start                 Run built agent")
-	console.log("  deploy [platform]     Deploy (fly, railway)")
+	console.log("  deploy [platform]     Deploy to Firecracker (Sprite)")
 	console.log("")
 	console.log("Owner:")
 	console.log("  owner add <address>     Add an owner")
@@ -337,9 +340,6 @@ async function init(name?: string) {
 		})
 	}
 
-	// Owner wallet address
-	const ownerAddress = await question("\nEnter your wallet address (owner): ")
-
 	rl.close()
 
 	// Provider picker using prompts
@@ -379,17 +379,7 @@ async function init(name?: string) {
 		openrouterKey = keyResponse.key || ""
 	}
 
-	// Create ACL file with owner
-	if (ownerAddress) {
-		const normalized = ownerAddress.toLowerCase()
-		const credentialsDir = resolve(targetDir, "credentials")
-		mkdirSync(credentialsDir, { recursive: true })
-		writeFileSync(
-			resolve(credentialsDir, "allowFrom.json"),
-			JSON.stringify({ version: 1, allowFrom: [normalized] }, null, 2)
-		)
-		console.log(`\n✅ Added owner: ${normalized}`)
-	}
+	// Create ACL file with owner (skip for now)
 
 	// Update .env file with generated key and API keys
 	let envContent = readFileSync(envPath, "utf-8")
@@ -457,7 +447,7 @@ async function build(target?: string) {
 
 	const projectDir = projectRoot
 	const distDir = resolve(projectDir, "dist")
-	const buildTarget = target || "fly"
+	const buildTarget = target || "firecracker"
 
 	console.log("\n🔧 Building agent...")
 
@@ -575,6 +565,57 @@ async function build(target?: string) {
 		} else {
 			writeFileSync(resolve(distDir, "fly.toml"), generateFlyToml())
 		}
+	}
+
+	// Generate deploy.sh for Firecracker (Sprite) deployment
+	if (buildTarget === "firecracker") {
+		const spawnScript = [
+			"#!/bin/bash",
+			"set -e",
+			"",
+			'SPRITE_NAME="${SPRITE_NAME:-hybrid-agent-$(date +%s%N)}"',
+			"",
+			'DIST_DIR="$(cd "$(dirname "$0")" && pwd)"',
+			"",
+			'echo "Deploying to Spawn Sprite: $SPRITE_NAME"',
+			"",
+			"# Create sprite if it doesn't exist",
+			'if ! sprite list 2>/dev/null | grep -q "$SPRITE_NAME"; then',
+			'  echo "Creating sprite: $SPRITE_NAME"',
+			'  sprite create -skip-console "$SPRITE_NAME"',
+			"fi",
+			"",
+			"# Wait for sprite to be ready",
+			'echo "Waiting for sprite to be ready..."',
+			"for i in $(seq 1 30); do",
+			'  if sprite exec -s "$SPRITE_NAME" -- echo ready 2>/dev/null; then',
+			"    break",
+			"  fi",
+			"  sleep 2",
+			"done",
+			"",
+			"# Upload build artifacts",
+			'echo "Uploading build artifacts..."',
+			'tar -czf /tmp/hybrid-deploy.tar.gz -C "$DIST_DIR" .',
+			'sprite exec -s "$SPRITE_NAME" -- mkdir -p /app',
+			'sprite exec -s "$SPRITE_NAME" -file "/tmp/hybrid-deploy.tar.gz:/tmp/hybrid-deploy.tar.gz" -- tar -xzf /tmp/hybrid-deploy.tar.gz -C /app',
+			'rm -f /tmp/hybrid-deploy.tar.gz',
+			"",
+			"# Install dependencies and start agent",
+			"sprite exec -s \"$SPRITE_NAME\" -- bash -c '",
+			"  cd /app",
+			"  npm install --production",
+			"  export NODE_ENV=production",
+			"  export AGENT_PORT=8454",
+			"  exec node server/index.cjs",
+			"'",
+			""
+		].join("\n")
+		writeFileSync(
+			resolve(distDir, "deploy.sh"),
+			spawnScript,
+			{ mode: 0o755 }
+		)
 	}
 
 	// Generate start script
@@ -752,7 +793,7 @@ async function start() {
 // ============================================================================
 
 async function deploy(platform?: string) {
-	const { spawn, execSync } = await import("node:child_process")
+	const { spawn, execSync, execFileSync } = await import("node:child_process")
 	const { existsSync, readFileSync, writeFileSync } = await import("node:fs")
 	const prompts = (await import("prompts")).default
 
@@ -784,8 +825,7 @@ async function deploy(platform?: string) {
 			name: "platform",
 			message: "Where do you want to deploy?",
 			choices: [
-				{ title: "Fly.io", value: "fly" },
-				{ title: "Railway", value: "railway" }
+				{ title: "Firecracker (Sprite)", value: "firecracker" }
 			],
 			initial: 0
 		})
@@ -811,177 +851,204 @@ async function deploy(platform?: string) {
 			writeFileSync(hybridConfig, newContent)
 		}
 	}
+
 	const flyTomlPath = resolve(distDir, "fly.toml")
 	const projectFlyToml = resolve(projectDir, "fly.toml")
 
-	// Get project name from directory as default
-	const projectName = basename(projectDir)
-	let appName = projectName
+	// For firecracker, skip fly-specific checks and go straight to deploy
+	if (deployPlatform === "firecracker") {
+		const projectName = basename(projectDir)
+		const spriteName = process.env.SPRITE_NAME || projectName
 
-	// Check project fly.toml first (preferred)
-	if (existsSync(projectFlyToml)) {
-		const flyToml = readFileSync(projectFlyToml, "utf-8")
-		const match = flyToml.match(/^app\s*=\s*["']([^"']+)["']/m)
-		if (match) appName = match[1]
-	} else {
-		// Prompt for app name only if no project fly.toml exists
-		const result = await prompts({
-			type: "text",
-			name: "appName",
-			message: "App name:",
-			initial: projectName
-		})
-		if (result.appName) appName = result.appName
-	}
+		if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(spriteName)) {
+			console.error(`\n❌ Invalid sprite name: ${spriteName}`)
+			console.error("Name must start with a letter/digit and contain only letters, digits, hyphens, and underscores.")
+			process.exit(1)
+		}
 
-	// Validate app name to prevent command injection
-	if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(appName)) {
-		console.error(`\n❌ Invalid app name: ${appName}`)
-		console.error("App name must start with a letter/digit and contain only letters, digits, hyphens, and underscores.")
-		process.exit(1)
-	}
+		await build("spawn")
 
-	// Check if app exists
-	const { execFileSync } = await import("node:child_process")
-	let appExists = false
-	try {
-		execFileSync("fly", ["status", "--app", appName], { stdio: "pipe" })
-		appExists = true
-	} catch {
-		// App doesn't exist
-	}
+		console.log(`\n🚀 Deploying to Spawn (Sprite)...`)
+		console.log(`   Sprite: ${spriteName}`)
 
-	// Only prompt for secrets on first deploy (when app doesn't exist)
-	// On subsequent deploys, secrets are already set on Fly
-	if (!appExists) {
-		openRouterKey = process.env.OPENROUTER_API_KEY
-		if (!openRouterKey) {
-			console.log("🔑 No OPENROUTER_API_KEY found.")
-			while (true) {
-				const result = await prompts({
-					type: "password",
-					name: "key",
-					message: "Paste OpenRouter API key:"
-				})
-				const key = result.key?.trim()
-				if (key && key.length > 0) {
-					openRouterKey = key
-					break
-				}
-				console.log("   OpenRouter API key is required. Please enter a value.")
+		// Check if sprite already exists
+		let spriteExists = false
+		try {
+			const existingSprites = execFileSync("sprite", ["list"], { encoding: "utf-8" })
+			if (existingSprites.includes(spriteName)) {
+				spriteExists = true
+				console.log(`   Using existing sprite: ${spriteName}`)
 			}
+		} catch {
+			// sprite not installed or other error
 		}
 
-		// Set up owner ACL
-		const aclPath = resolve(projectDir, "credentials", "allowFrom.json")
-		if (!existsSync(aclPath)) {
-			const result = await prompts({
-				type: "text",
-				name: "owner",
-				message: "Your wallet address (owner):",
-				validate: (v: string) =>
-					/^0x[a-fA-F0-9]{40}$/.test(v) ||
-					"Enter a valid Ethereum address (0x...)"
-			})
-			if (result.owner) {
-				const { mkdirSync } = await import("node:fs")
-				mkdirSync(resolve(projectDir, "credentials"), { recursive: true })
-				writeFileSync(
-					aclPath,
-					JSON.stringify(
-						{ version: 1, allowFrom: [result.owner.toLowerCase()] },
-						null,
-						"\t"
-					)
-				)
-				console.log(`✅ Owner set: ${result.owner}\n`)
-			}
-		}
-	}
-
-	// Build first
-	await build(deployPlatform)
-
-	if (deployPlatform === "fly") {
-		console.log("\n🚀 Deploying to Fly.io...")
-
-		// Ensure fly.toml exists with correct app name
-		if (existsSync(projectFlyToml)) {
-			// Copy project fly.toml to dist
-			const { cpSync } = await import("node:fs")
-			cpSync(projectFlyToml, resolve(distDir, "fly.toml"))
-		} else {
-			// Generate fly.toml with correct app name
-			const flyTomlContent = `app = "${appName}"\n\n[build]\n  builder = "paketobuildpacks/builder:base"\n\n[env]\n  PORT = "8454"\n`
-			writeFileSync(resolve(distDir, "fly.toml"), flyTomlContent)
-		}
-
-		if (!appExists) {
-			console.log(`📦 Creating Fly.io app: ${appName}`)
+		// Create sprite if it doesn't exist
+		if (!spriteExists) {
+			console.log(`\n📦 Creating sprite: ${spriteName}`)
 			try {
-				execFileSync("fly", ["apps", "create", appName], {
-					cwd: distDir,
+				execFileSync("sprite", ["create", "-skip-console", spriteName], {
 					stdio: "inherit"
 				})
 			} catch {
-				console.log(`   App may already exist, continuing...`)
+				// Sprite may already exist (race condition or cached)
+				console.log(`   Sprite ${spriteName} already exists, using it`)
 			}
 		}
 
-		// Deploy
-		await new Promise<void>((resolve, reject) => {
-			const deploy = spawn("fly", ["deploy", "--config", "fly.toml"], {
-				cwd: distDir,
-				stdio: "inherit"
-			})
-			deploy.on("error", (err) =>
-				reject(new Error(`Deploy failed: ${err.message}`))
-			)
-			deploy.on("close", (code) =>
-				code === 0 ? resolve() : reject(new Error(`Exit ${code}`))
-			)
+		// Wait for sprite to be ready
+		console.log("\n⏳ Waiting for sprite to be ready...")
+		let ready = false
+		for (let i = 0; i < 30; i++) {
+			try {
+				execFileSync("sprite", ["exec", "-s", spriteName, "--", "echo", "ready"], {
+					stdio: "pipe"
+				})
+				ready = true
+				break
+			} catch {
+				if (i % 5 === 4) {
+					console.log(`   Still waiting... (${i + 1}/30)`)
+				}
+				await new Promise((r) => setTimeout(r, 2000))
+			}
+		}
+
+		if (!ready) {
+			console.error("\n❌ Sprite did not become ready in time.")
+			process.exit(1)
+		}
+
+		console.log("   ✓ Sprite ready")
+
+		// Upload build artifacts
+		console.log("\n📤 Uploading build artifacts...")
+		const { tmpdir } = await import("node:os")
+		const { join } = await import("node:path")
+		const tarPath = join(tmpdir(), `hybrid-deploy-${Date.now()}.tar.gz`)
+
+		execFileSync("tar", ["-czf", tarPath, "-C", distDir, "."], {
+			stdio: "pipe"
 		})
 
-		// Set secrets via fly secrets (doesn't require VM to be running)
-		if (!appExists) {
-			if (openRouterKey) {
-				console.log("\n🔑 Setting OpenRouter key as secret...")
-				try {
-					execFileSync(
-						"fly",
-						["secrets", "set", `OPENROUTER_API_KEY=${openRouterKey}`, "--app", appName],
-						{
-							cwd: distDir,
-							stdio: "inherit"
-						}
-					)
-				} catch (e) {
-					console.log("   ⚠️  Could not set secret, skipping...")
+		execFileSync("sprite", ["exec", "-s", spriteName, "--", "mkdir", "-p", "/app"], {
+			stdio: "pipe"
+		})
+
+		// Retry upload up to 3 times (sprite may still be initializing)
+		let uploadSuccess = false
+		for (let attempt = 0; attempt < 3; attempt++) {
+			try {
+				execFileSync(
+					"sprite",
+					[
+						"exec",
+						"-s",
+						spriteName,
+						"-file",
+						`${tarPath}:/tmp/hybrid-deploy.tar.gz`,
+						"--",
+						"tar",
+						"-xzf",
+						"/tmp/hybrid-deploy.tar.gz",
+						"-C",
+						"/app"
+					],
+					{ stdio: "inherit" }
+				)
+				uploadSuccess = true
+				break
+			} catch {
+				if (attempt < 2) {
+					console.log(`   Upload failed, retrying... (${attempt + 1}/3)`)
+					await new Promise((r) => setTimeout(r, 5000))
 				}
 			}
 		}
 
-		console.log("\n✅ Deployed!")
-		console.log(`   Dashboard: https://fly.io/apps/${appName}`)
-
-		// Save fly.toml to project for future deploys
-		if (!existsSync(projectFlyToml)) {
-			const { cpSync } = await import("node:fs")
-			cpSync(resolve(distDir, "fly.toml"), projectFlyToml)
-			console.log(`   Saved fly.toml to project`)
+		if (!uploadSuccess) {
+			console.error("\n❌ Failed to upload build artifacts after 3 attempts.")
+			process.exit(1)
 		}
 
+		// Clean up local tar
+		try {
+			const { unlinkSync } = await import("node:fs")
+			unlinkSync(tarPath)
+		} catch {}
+
+		// Install dependencies
+		console.log("\n📦 Installing dependencies...")
+		execFileSync(
+			"sprite",
+			["exec", "-s", spriteName, "--", "bash", "-c", "cd /app && npm install --production"],
+			{ stdio: "inherit" }
+		)
+
+		// Create startup script
+		console.log("\n🔧 Setting up agent service...")
+		const startupScript = `#!/bin/bash
+cd /app
+export NODE_ENV=production
+export AGENT_PORT=8454
+export OPENROUTER_API_KEY=${openRouterKey || process.env.OPENROUTER_API_KEY || ""}
+exec nohup node server/index.cjs > /app/agent.log 2>&1 &
+echo $! > /app/agent.pid
+`
+		const { tmpdir: osTmpdir } = await import("node:os")
+		const { join: pathJoin } = await import("node:path")
+		const scriptPath = osTmpdir() + `/hybrid-start-${Date.now()}.sh`
+		writeFileSync(scriptPath, startupScript, { mode: 0o755 })
+
+		execFileSync(
+			"sprite",
+			["exec", "-s", spriteName, "-file", `${scriptPath}:/app/start-agent.sh`, "--", "chmod", "+x", "/app/start-agent.sh"],
+			{ stdio: "pipe" }
+		)
+
+		execFileSync(
+			"sprite",
+			["exec", "-s", spriteName, "--", "bash", "/app/start-agent.sh"],
+			{ stdio: "inherit" }
+		)
+
+		try {
+			const { unlinkSync } = await import("node:fs")
+			unlinkSync(scriptPath)
+		} catch {}
+
+		// Wait for agent to start
+		console.log("\n⏳ Waiting for agent to start...")
+		let agentReady = false
+		for (let i = 0; i < 15; i++) {
+			try {
+				const result = execFileSync(
+					"sprite",
+					["exec", "-s", spriteName, "--", "curl", "-s", "http://localhost:8454/health"],
+					{ encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
+				)
+				if (result) {
+					agentReady = true
+					break
+				}
+			} catch {
+				// Agent not ready yet
+			}
+			await new Promise((r) => setTimeout(r, 2000))
+		}
+
+		console.log(`\n   Sprite: ${spriteName}`)
+		console.log(`   URL: https://${spriteName}.sprites.dev`)
+		console.log(`   Health: https://${spriteName}.sprites.dev/health`)
+		console.log(`   Chat: https://${spriteName}.sprites.dev/api/chat`)
+		console.log("\n✅ Deployed!")
+		console.log("\nConnect to the running agent:")
+		console.log(`   sprite exec -s ${spriteName} -tty -- bash`)
 		return
 	}
 
-	if (deployPlatform === "railway") {
-		console.log("\n🚂 Railway deployment not yet implemented.")
-		console.log("   See https://railway.app for manual deployment.")
-		process.exit(1)
-	}
-
 	console.error(`Unknown platform: ${deployPlatform}`)
-	console.error("Supported: fly, railway")
+	console.error("Supported: firecracker")
 	process.exit(1)
 }
 

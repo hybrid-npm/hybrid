@@ -1,0 +1,49 @@
+{
+  "agents": {
+    "hybrid": {
+      "name": "Hybrid",
+      "description": "Self-hosted AI agent platform with encrypted sessions and wallet-based access control",
+      "url": "https://github.com/anomalyco/hybrid",
+      "install": "cd /app && npm install --production",
+      "launch": "cd /app && node server/index.cjs",
+      "env": {
+        "OPENROUTER_API_KEY": "${OPENROUTER_API_KEY}",
+        "NODE_ENV": "production",
+        "AGENT_PORT": "8454"
+      },
+      "config_files": {},
+      "notes": "Hybrid uses a single-sprite deployment model. Build with `hybrid build --target spawn` first, then deploy.",
+      "icon": "https://raw.githubusercontent.com/anomalyco/hybrid/main/site/public/icon.png",
+      "featured_cloud": ["sprite"],
+      "creator": "01 Studio",
+      "repo": "anomalyco/hybrid",
+      "license": "MIT",
+      "created": "2026-04",
+      "added": "2026-04",
+      "github_stars": 0,
+      "stars_updated": "2026-04",
+      "language": "TypeScript",
+      "runtime": "node",
+      "category": "cli",
+      "tagline": "Your personal AI agent, self-hosted",
+      "tags": ["ai-agent", "self-hosted", "claude-code", "encrypted"]
+    }
+  },
+  "clouds": {
+    "sprite": {
+      "name": "Sprite",
+      "price": "Free tier",
+      "description": "Managed cloud servers -- one command to deploy",
+      "url": "https://sprites.dev",
+      "type": "cli",
+      "auth": "sprite login",
+      "provision_method": "sprite create",
+      "exec_method": "sprite exec",
+      "interactive_method": "sprite exec -tty",
+      "icon": "https://raw.githubusercontent.com/OpenRouterTeam/spawn/main/assets/clouds/sprite.png"
+    }
+  },
+  "matrix": {
+    "sprite/hybrid": "implemented"
+  }
+}
