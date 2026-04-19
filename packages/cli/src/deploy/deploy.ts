@@ -87,6 +87,9 @@ export async function runDeploy(
 		existingStatus === "stopped" ||
 		options.force
 	) {
+		if (options.force && existingStatus === "running") {
+			await provider.teardown(instanceName)
+		}
 		await provider.provision(instanceName)
 	}
 

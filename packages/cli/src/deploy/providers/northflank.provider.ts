@@ -334,7 +334,7 @@ export const northflankProvider: DeployProvider = {
 
 	async endpoint(instanceId: string): Promise<string> {
 		const projectId = process.env.NF_PROJECT_ID
-		if (!projectId) return `https://${instanceId}.${projectId}.northflank.app`
+		if (!projectId) return `https://${instanceId}.northflank.app`
 
 		try {
 			// Try to get the actual URL from the service info

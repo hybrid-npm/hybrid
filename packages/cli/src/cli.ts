@@ -345,16 +345,6 @@ async function init(name?: string) {
 		output: process.stdout
 	})
 
-	const question = (prompt: string): Promise<string> => {
-		return new Promise((resolve) => {
-			rl.question(prompt, (answer: string) => {
-				resolve(answer.trim())
-			})
-		})
-	}
-
-	rl.close()
-
 	// Provider picker using prompts
 	const prompts = (await import("prompts")).default
 	const providerResponse = await prompts({
@@ -415,6 +405,9 @@ async function init(name?: string) {
 		resolve(credentialsDir, "allowFrom.json"),
 		JSON.stringify(acl, null, 2)
 	)
+
+	// Close readline now that all prompts are done
+	rl.close()
 
 	// Update .env file with generated key and API keys
 	let envContent = readFileSync(envPath, "utf-8")
@@ -723,27 +716,29 @@ async function loadDeploy() {
 
 function parseDeployArgs(args: string[]) {
 	const name = args.find(
-		(a, i) => i > 1 && !a.startsWith("--") && !a.startsWith("-")
+		(a, i) => i > 1 && !a.startsWith("--") && !a.startsWith("-"),
 	)
-	const platform = args.find(
-		(a, i) =>
-			(i > 1 && a.endsWith(":") === false && args[i - 1] === "--provider") ||
-			(i > 1 && args[i - 1] === "-p")
-	)
+	const providerIdx = args.indexOf("--provider")
+	const providerAltIdx = args.indexOf("-p")
+	const nameIdx = args.indexOf("--name")
+	const nameAltIdx = args.indexOf("-n")
 	const providerFlag =
-		args[args.indexOf("--provider") + 1] || args[args.indexOf("-p") + 1]
+		(providerIdx !== -1 ? args[providerIdx + 1] : undefined) ||
+		(providerAltIdx !== -1 ? args[providerAltIdx + 1] : undefined)
 	const nameFlag =
-		args[args.indexOf("--name") + 1] || args[args.indexOf("-n") + 1]
+		(nameIdx !== -1 ? args[nameIdx + 1] : undefined) ||
+		(nameAltIdx !== -1 ? args[nameAltIdx + 1] : undefined)
+	const posArg =
+		args[1] && !args[1].startsWith("-") ? args[1] : undefined
 	const skipBuild = args.includes("--no-build")
 	const force = args.includes("--force")
-	const posArg = args[1] && !args[1].startsWith("-") ? args[1] : undefined
 	const follow = !args.includes("--no-follow")
 	return {
 		platform: providerFlag,
-		name: nameFlag || posArg,
+		name: name || posArg || nameFlag,
 		skipBuild,
 		force,
-		follow
+		follow,
 	}
 }
 
@@ -768,8 +763,11 @@ async function deployCommand(args: string[]) {
 	}
 
 	const name = args.find((a, i) => i > 1 && !a.startsWith("-"))
-	const platform =
-		args[args.indexOf("--provider") + 1] || args[args.indexOf("-p") + 1]
+	const pIdx = args.indexOf("--provider")
+	const pAlt = args.indexOf("-p")
+	const subPlatform =
+		(pIdx !== -1 ? args[pIdx + 1] : undefined) ||
+		(pAlt !== -1 ? args[pAlt + 1] : undefined)
 
 	switch (sub) {
 		case "sleep": {
@@ -778,7 +776,7 @@ async function deployCommand(args: string[]) {
 				process.exit(1)
 			}
 			const { runSleep } = await loadDeploy()
-			await runSleep(name, platform, projectRoot)
+			await runSleep(name, subPlatform, projectRoot)
 			break
 		}
 		case "wake": {
@@ -787,7 +785,7 @@ async function deployCommand(args: string[]) {
 				process.exit(1)
 			}
 			const { runWake } = await loadDeploy()
-			await runWake(name, platform, projectRoot)
+			await runWake(name, subPlatform, projectRoot)
 			break
 		}
 		case "status": {
@@ -796,7 +794,7 @@ async function deployCommand(args: string[]) {
 				process.exit(1)
 			}
 			const { runStatus } = await loadDeploy()
-			await runStatus(name, platform, projectRoot)
+			await runStatus(name, subPlatform, projectRoot)
 			break
 		}
 		case "logs": {
@@ -806,7 +804,7 @@ async function deployCommand(args: string[]) {
 			}
 			const follow = !args.includes("--no-follow")
 			const { runLogs } = await loadDeploy()
-			await runLogs(name, follow, platform, projectRoot)
+			await runLogs(name, follow, subPlatform, projectRoot)
 			break
 		}
 		case "teardown": {
@@ -815,7 +813,7 @@ async function deployCommand(args: string[]) {
 				process.exit(1)
 			}
 			const { runTeardown } = await loadDeploy()
-			await runTeardown(name, platform, projectRoot)
+			await runTeardown(name, subPlatform, projectRoot)
 			break
 		}
 		default:
