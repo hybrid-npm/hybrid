@@ -136,9 +136,7 @@ async function main() {
 	console.log("  deploy teardown <name> [--all] Destroy VM")
 	console.log("")
 	console.log("Deploy flags:")
-	console.log(
-		"  --provider <name>     Override provider (sprites, e2b, daytona, northflank)"
-	)
+	console.log("  --provider <name>  Override provider (sprites, e2b, northflank, daytona)")
 	console.log("  --name <name>         Override instance name")
 	console.log("  --force               Recreate VM even if it exists")
 	console.log("  --no-build            Skip build step")
