@@ -20,7 +20,7 @@ COPY HEARTBEAT.md ./
 COPY USER.md ./
 
 # Copy credentials (owner ACL)
-COPY credentials/ ./credentials/ 2>/dev/null || true
+COPY credentials/ ./credentials/
 
 # Create data directories
 RUN mkdir -p /app/data/secrets \

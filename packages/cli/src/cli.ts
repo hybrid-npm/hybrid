@@ -621,7 +621,7 @@ COPY package.json ./
 RUN npm install --production
 COPY server/ ./server/
 COPY SOUL.md AGENTS.md IDENTITY.md TOOLS.md BOOT.md BOOTSTRAP.md HEARTBEAT.md USER.md ./
-COPY credentials/ ./credentials/ 2>/dev/null || true
+COPY credentials/ ./credentials/
 ENV AGENT_PORT=8454
 ENV NODE_ENV=production
 ENV DATA_ROOT=/app/data
@@ -717,17 +717,15 @@ async function loadDeploy() {
 function parseDeployArgs(args: string[]) {
 	// Collect known flag indices so we don't mistake flag values as positional names
 	const skipSet = new Set<number>()
-	const flagNames = [
+	// Only flags that consume a value should skip the NEXT index
+	const valuedFlags = new Set([
 		"--provider",
 		"-p",
 		"--name",
 		"-n",
-		"--no-build",
-		"--force",
-		"--no-follow",
-	]
+	])
 	for (let i = 0; i < args.length; i++) {
-		if (flagNames.includes(args[i])) {
+		if (valuedFlags.has(args[i])) {
 			skipSet.add(i)
 			skipSet.add(i + 1)
 		}
@@ -791,12 +789,26 @@ async function deployCommand(args: string[]) {
 		return
 	}
 
-	const name = args.find((a, i) => i > 1 && !a.startsWith("-"))
 	const pIdx = args.indexOf("--provider")
 	const pAlt = args.indexOf("-p")
+	const nIdx = args.indexOf("--name")
+	const nAlt = args.indexOf("-n")
 	const subPlatform =
 		(pIdx !== -1 ? args[pIdx + 1] : undefined) ||
 		(pAlt !== -1 ? args[pAlt + 1] : undefined)
+	const subSkipIdx = new Set<number>()
+	subSkipIdx.add(pIdx)
+	subSkipIdx.add(pAlt)
+	subSkipIdx.add(nIdx)
+	subSkipIdx.add(nAlt)
+	// Skip the values after valued flags too
+	if (pIdx !== -1) subSkipIdx.add(pIdx + 1)
+	if (pAlt !== -1) subSkipIdx.add(pAlt + 1)
+	if (nIdx !== -1) subSkipIdx.add(nIdx + 1)
+	if (nAlt !== -1) subSkipIdx.add(nAlt + 1)
+	const name = args.find(
+		(a, i) => i > 1 && !a.startsWith("-") && !subSkipIdx.has(i),
+	)
 
 	switch (sub) {
 		case "sleep": {
