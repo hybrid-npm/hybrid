@@ -22,11 +22,10 @@ const DEFAULT_TEMPLATE = "base"
 
 type SandboxInstance = any // eslint-disable-line @typescript-eslint/no-explicit-any
 
-// In-process cache — populated during deploy, used for subsequent ops
-// in the same CLI invocation.
 const sandboxes = new Map<string, SandboxInstance>()
 
-/** Look up a sandbox by name or ID via the E2B API. Works across CLI invocations. */
+/** Look up a sandbox by name or ID via the E2B API. Works across CLI invocations.
+ *  Status-only — does NOT call connect(), so it won't auto-resume paused sandboxes. */
 async function findSandbox(name: string): Promise<SandboxInstance | null> {
 	const Sandbox = await getSDK()
 	const paginator = Sandbox.list()
@@ -70,7 +69,8 @@ function getAPIKey(): string {
 	return key
 }
 
-/** Get a sandbox instance, trying cache first then API lookup. */
+/** Get a sandbox instance, trying cache first then API lookup + connect.
+ *  Connect will auto-resume paused sandboxes. */
 async function getSandbox(name: string): Promise<SandboxInstance | null> {
 	const cached = sandboxes.get(name)
 	if (cached) return cached
@@ -226,14 +226,13 @@ export const e2bProvider: DeployProvider = {
 	},
 
 	async status(instanceId: string): Promise<InstanceStatus> {
-		const sandbox = await getSandbox(instanceId)
-		if (sandbox) return "running"
-
+		// NOTE: Must use findSandbox only — doGetSandbox() calls connect()
+		// which auto-resumes paused sandboxes, so status would never show "sleeping".
 		const info = await findSandbox(instanceId)
 		if (!info) return "stopped"
-		const status = (info as any).status as string
-		if (status === "paused") return "sleeping"
-		if (status === "running") return "running"
+		const sbInfo = info as any
+		if (sbInfo.status === "paused") return "sleeping"
+		if (sbInfo.status === "running") return "running"
 		return "unknown"
 	},
 

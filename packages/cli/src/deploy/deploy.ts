@@ -276,7 +276,8 @@ async function runBuild(projectRoot: string, packageDir: string) {
 		existsSync(resolve(distDir, f)),
 	)
 	const hasCredentials = existsSync(resolve(distDir, "credentials"))
-	const configCopy = present.join(" ")
+	const configCopy =
+		present.length > 0 ? `COPY ${present.join(" ")} ./` : ""
 	const credCopy = hasCredentials
 		? "COPY credentials/ ./credentials/"
 		: "COPY .hybrid-deploy.json ./"
