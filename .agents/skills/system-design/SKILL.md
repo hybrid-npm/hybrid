@@ -372,20 +372,18 @@ await dispatchToChannel({
 
 ## Security Model
 
-### Wallet Key Security
+### Secret Management
 
 ```bash
 # Never commit to git
-echo "AGENT_WALLET_KEY=0x..." >> .env
+echo "OPENROUTER_API_KEY=sk-or-v1..." >> .env
 echo ".env" >> .gitignore
 
 # Use secrets in production
-fly secrets set AGENT_WALLET_KEY=0x...
+fly secrets set OPENROUTER_API_KEY=sk-or-v1...
 # Or
-wrangler secret put AGENT_WALLET_KEY
+wrangler secret put OPENROUTER_API_KEY
 ```
-
-### ACL Enforcement
 
 ```typescript
 // In agent server

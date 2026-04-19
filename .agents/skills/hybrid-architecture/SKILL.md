@@ -125,12 +125,10 @@ Order of prompt assembly:
 The agent runs a unified MCP server providing:
 
 - **Memory tools** — Read/write PARA memory, daily logs, auto memory
-- **ACL tools** — Owner management, pairing requests
 - **File tools** — OpenClaw-compatible read/write/edit/apply_patch
 
 ### File Operations Security
 
-- Only owners can access file operations
 - All paths restricted to `./workspace/{userId}/`
 - Path traversal (`../`) blocked
 - Symlink escapes prevented
@@ -195,24 +193,21 @@ const results = await manager.search("project deadline", {
 // 70% vector weight, 30% text weight (default)
 ```
 
-### Multi-User ACL
+### User-Scoped Memory
 
 ```
 .hybrid/memory/
-├── ACL.md              # Access control list
-├── MEMORY.md           # Shared (owners only)
+├── MEMORY.md           # Shared memory
 └── users/
-    ├── 0xalice/
+    ├── alice/
     │   └── MEMORY.md   # Alice's private memory
-    └── 0xbob/
+    └── bob/
         └── MEMORY.md   # Bob's private memory
 ```
 
 ```typescript
-const acl = parseACL(workspaceDir)
-const role = getRole(acl, userId)  // "owner" | "guest"
-// Owner: read/write all memory
-// Guest: read/write only own user memory
+const manager = await MemoryIndexManager.get({ workspaceDir, userId })
+// userId scopes memory to a specific user's directory
 ```
 
 ---
@@ -414,7 +409,7 @@ interface CronJob { ... }
 hybrid init [name]           # Create new agent project
 hybrid build [--target]      # Build to .hybrid/
 hybrid dev                   # Start development server
-hybrid deploy [platform]     # Deploy (fly, cf, railway)
+hybrid deploy [platform]     # Deploy (sprites, e2b, northflank)
 hybrid register              # Register agent identity
 hybrid install <source>      # Install skill (github, npm, local)
 hybrid uninstall <name>      # Remove skill
@@ -440,26 +435,32 @@ hybrid build
 
 ## Deployment Targets
 
-### Fly.io
+### Sprites (default)
 
 ```bash
-hybrid deploy fly
-# Runs: fly deploy from .hybrid/
+hybrid deploy sprites
+# Provisions Firecracker microVM, uploads bundle, sets up sleep/wake
 ```
 
-### Cloudflare Workers
+### E2B
 
 ```bash
-hybrid deploy cf
-# Builds: packages/gateway
-# Runs: wrangler deploy
+hybrid deploy e2b
+# Uses E2B Sandbox with native pause/resume
 ```
 
-### Node.js
+### Northflank
+
+```bash
+hybrid deploy northflank
+# Platform-managed auto-scale-to-zero
+```
+
+### Node.js (self-hosted)
 
 ```bash
 hybrid build
-# Ship .hybrid/ to server
+# Ship dist/ to your server
 # Run: node dist/server/index.cjs
 ```
 

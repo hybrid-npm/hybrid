@@ -147,9 +147,9 @@ Annoyed by: [pet peeves]
 PROJECT_ROOT/
 ├── USER.md              # Default/fallback
 └── users/
-    ├── 0xalice/
+    ├── alice/
     │   └── USER.md      # Alice's profile
-    └── 0xbob/
+    └── bob/
         └── USER.md      # Bob's profile
 ```
 
@@ -258,12 +258,12 @@ Periodic tasks. Empty file means no heartbeat:
 ├── ACL.md                    # Access control
 ├── MEMORY.md                 # Shared auto-memory
 ├── users/
-│   └── 0x.../               # Per-user memory
+│   └── alice               # Per-user memory
 │       ├── MEMORY.md
 │       └── conversations/
 │           └── conv-id.json
 ├── conversations/           # All conversations
-│   └── 0x.../
+│   └── alice
 │       └── conv-id.json
 ├── life/                    # PARA system
 │   ├── projects/
@@ -367,20 +367,9 @@ interface AtomicFact {
 
 ---
 
-## Access Control (ACL.md)
+## User-Scoped Memory
 
-```markdown
-# ACL.md
-
-## Owners
-
-- 0xabc123...  # Added 2026-03-01
-- 0xdef456...  # Added 2026-03-02
-
-## Guests
-
-- 0x789...    # Added 2026-03-03
-```
+Memory is isolated per-user via the `userId` parameter. Each user gets their own directory under `users/`.
 
 ### Permissions
 
@@ -424,9 +413,9 @@ if (role === "owner") {
 | **PARA knowledge graph** | ❌ | ✅ |
 | **Atomic facts + decay tiers** | ❌ | ✅ |
 | **Fact supersession** | ❌ | ✅ |
-| **Multi-user ACL (wallet-based)** | ❌ | ✅ |
+| **Multi-user memory isolation** | ❌ | ✅ |
 | **Channel adapter framework** | ❌ | ✅ |
-| **ENS + Basename resolution** | ❌ | ✅ |
+| **Firecracker sleep/wake** | ❌ | ✅ |
 
 ---
 
@@ -494,13 +483,13 @@ const manager = await MemoryIndexManager.get({
   agentId: "main",
   workspaceDir: process.cwd(),
   config: resolvedConfig,
-  userId: "0xalice"
+  userId: "alice"
 })
 
 const results = await manager.search("project deadline", {
   maxResults: 10,
   minScore: 0.5,
-  scope: { type: "user", userId: "0xalice" }
+  scope: { type: "user", userId: "alice" }
 })
 ```
 

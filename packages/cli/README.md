@@ -1,6 +1,6 @@
 # @hybrd/cli
 
-The `hybrid` / `hy` command-line tool for building, developing, deploying, and managing Hybrid AI agents.
+The `hybrid` / `hy` command-line tool for building, developing, deploying, and managing Hybrid AI agents on Firecracker microVMs.
 
 ## Installation
 
@@ -24,12 +24,7 @@ hybrid init my-agent # Skip name prompt
 The init command will ask:
 1. **Project name** - Directory name for the project
 2. **Agent display name** - Human-readable name for the agent
-3. **Deployment target** - Fly.io, Railway, Cloudflare, AWS, or GCP
-4. **Fly.io app name** - App identifier (lowercase, numbers, hyphens)
-5. **Primary region** - Closest region for deployment
-6. **VM size** - Resource allocation (shared/performance CPU, RAM)
-7. **Persistent storage** - Enable volume for data persistence
-8. **Storage size** - Volume size in GB (if enabled)
+3. **Deployment target** - sprites, E2B, Northflank, or Daytona
 
 **Generated files:**
 ```
@@ -39,10 +34,7 @@ my-agent/
 ├── AGENTS.md         # Repository guidelines
 ├── .env.example      # Environment variables template
 ├── .gitignore        # Git ignore rules
-├── Dockerfile        # Container build instructions
-├── fly.toml          # Fly.io deployment config
-├── start.sh          # Start script
-└── README.md         # Project documentation
+└── Dockerfile        # Container build instructions
 ```
 
 ### `hybrid build [--target]`
@@ -50,11 +42,9 @@ my-agent/
 Build the agent bundle into `./dist/`:
 
 ```bash
-hybrid build                  # Default build
-hybrid build --target fly     # Fly.io target (default)
-hybrid build --target spawn   # Spawn Sprite target
-hybrid build --target railway # Railway target
-hybrid build --target cf      # Cloudflare Workers target
+hybrid build                   # Default build (firecracker target)
+hybrid build --target firecracker  # Firecracker microVM target
+hybrid build --target cf       # Cloudflare Workers target
 ```
 
 The build:
@@ -65,13 +55,13 @@ The build:
 5. Copies core skills from `packages/agent/skills/` → `.hybrid/skills/core/`
 6. Copies user skills from `./skills/` → `.hybrid/skills/ext/`
 7. Writes `skills/skills_lock.json` listing all installed skills
-8. Generates deployment files: `package.json`, `Dockerfile`, `fly.toml`, `start.sh`
+8. Generates deployment files: `package.json`, `Dockerfile`, `start.sh`, deploy manifest
 
 **Build output structure:**
 ```
 dist/
 ├── dist/                    # Compiled agent code
-│   ├── server/index.cjs     # Full Claude Code SDK server
+│   ├── server/index.cjs     # Full agent server
 │   ├── server/simple.cjs    # Lightweight server
 ├── skills/
 │   ├── core/                # Built-in skills (memory)
@@ -79,41 +69,13 @@ dist/
 │   └── skills_lock.json
 ├── package.json
 ├── Dockerfile
-├── fly.toml                 # (Fly.io targets only)
-├── spawn.sh                 # (Spawn targets only)
-└── start.sh                 # Starts server
-```
-
-The build:
-1. Compiles `packages/agent` via `pnpm --filter hybrid/agent build`
-2. Creates `./dist/` directory structure
-3. Copies compiled `dist/` from the agent package
-4. Copies `SOUL.md`, `AGENTS.md`, and `agent.ts` from your project root
-5. Copies core skills from `packages/agent/skills/` → `.hybrid/skills/core/`
-6. Copies user skills from `./skills/` → `.hybrid/skills/ext/`
-7. Writes `skills/skills_lock.json` listing all installed skills
-8. Generates deployment files: `package.json`, `Dockerfile`, `fly.toml`, `start.sh`
-
-**Build output structure:**
-```
-dist/
-├── dist/                    # Compiled agent code
-│   ├── server/index.cjs     # Full Claude Code SDK server
-│   ├── server/simple.cjs    # Lightweight server
-├── skills/
-│   ├── core/                # Built-in skills (memory)
-│   ├── ext/                 # User-installed skills
-│   └── skills_lock.json
-├── package.json
-├── Dockerfile
-├── fly.toml                 # (Fly.io targets only)
-├── spawn.sh                 # (Spawn targets only)
-└── start.sh                 # Starts server
+├── start.sh                 # Starts server
+└── .hybrid-deploy.json      # Provider manifest
 ```
 
 ### `hybrid dev`
 
-Start the development server. Builds the agent then runs `pnpm dev` in the agent directory:
+Start the development server:
 
 ```bash
 hybrid dev
@@ -121,21 +83,55 @@ hybrid dev
 
 ### `hybrid deploy [platform]`
 
-Build then deploy to a platform:
+Build then deploy to a Firecracker microVM provider:
 
 ```bash
-hybrid deploy          # Deploys to Fly.io (default)
-hybrid deploy          # Fly.io: runs `fly deploy` from .hybrid/
-hybrid deploy cf       # Cloudflare: builds packages/gateway, runs `wrangler deploy`
-hybrid deploy railway  # Railway (builds only, manual deploy)
+hybrid deploy              # Deploys to default provider (sprites)
+hybrid deploy sprites      # Deploy to sprites.dev
+hybrid deploy e2b          # Deploy to e2b.dev
+hybrid deploy northflank   # Deploy to Northflank
+hybrid deploy daytona      # Deploy to Daytona
 ```
 
-### `hybrid register`
+### `hybrid deploy sleep <name>`
 
-Register the agent identity:
+Put a running Firecracker VM to sleep:
 
 ```bash
-hybrid register
+hybrid deploy sleep my-agent [--provider sprites]
+```
+
+### `hybrid deploy wake <name>`
+
+Wake a sleeping Firecracker VM:
+
+```bash
+hybrid deploy wake my-agent [--provider sprites]
+```
+
+### `hybrid deploy status <name>`
+
+Show VM status:
+
+```bash
+hybrid deploy status my-agent
+```
+
+### `hybrid deploy logs <name>`
+
+Stream agent logs:
+
+```bash
+hybrid deploy logs my-agent --follow
+```
+
+### `hybrid deploy teardown <name>`
+
+Destroy a VM and all associated resources:
+
+```bash
+hybrid deploy teardown my-agent
+hybrid deploy teardown --all  # Destroy all VMs
 ```
 
 ### `hybrid install <source>`
@@ -174,34 +170,18 @@ hybrid skills
 
 Shows core skills (from `packages/agent/skills/`) and installed extension skills (from `./skills/`), with name and description from each `SKILL.md`.
 
-## Generated Files
+## Configuration
 
-### `Dockerfile` (Fly.io / Railway)
+Pre-select your deployment provider in `hybrid.config.ts`:
 
-```dockerfile
-FROM node:20
-WORKDIR /app
-COPY dist/ ./dist/
-COPY skills/ ./skills/
-COPY package.json .
-COPY start.sh .
-COPY SOUL.md .
-COPY AGENTS.md .
-RUN npm install
-CMD ["sh", "start.sh"]
+```typescript
+export const config = {
+  deploy: {
+    platform: "sprites",    // default provider
+    spriteName: "my-agent", // optional instance name
+  }
+}
 ```
-
-### `start.sh`
-
-Runs the agent server:
-
-```bash
-node dist/server/simple.cjs
-```
-
-### `fly.toml`
-
-Generated for Fly.io targets with appropriate service configuration.
 
 ## Skills System
 
@@ -249,27 +229,20 @@ hybrid build
     │
     ├── Write skills_lock.json
     │
-    └── Generate: package.json, Dockerfile, fly.toml, start.sh
+    └── Generate: package.json, Dockerfile, start.sh, .hybrid-deploy.json
 
-hybrid deploy
+hybrid deploy sprites
     │
-    ├── hybrid build --target fly
+    ├── hybrid build
     │
-    └── fly deploy (from .hybrid/)
-
-hybrid deploy cf
-    │
-    ├── pnpm --filter hybrid/gateway build
-    │
-    └── wrangler deploy (from packages/gateway/)
+    └── sprite deploy (provision → upload → endpoint)
 ```
 
 ## Relation to Other Packages
 
 - Builds `packages/agent` via `pnpm --filter`
 - Deploys `packages/gateway` for Cloudflare Workers target
-- Delegates `register` command to agent identity scripts
-- The output `.hybrid/` directory is what `packages/gateway` runs inside its Docker container
+- The output `.hybrid/` directory is what gets deployed into Firecracker microVMs
 
 ## License
 

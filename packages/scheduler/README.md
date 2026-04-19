@@ -1,14 +1,10 @@
 # @hybrd/scheduler
 
-Agentic scheduling system for Hybrid AI agents. **100% OpenClaw-compatible** with additional features for agent-native workflows.
+Agentic scheduling system for Hybrid AI agents. Enables agents to schedule future actions for themselves.
 
 ## Overview
 
-The scheduler enables agents to schedule future actions for themselves. This is "agentic scheduling" - the LLM decides when and what to schedule, not a human.
-
-## OpenClaw Compatibility
-
-This scheduler implements the complete OpenClaw CronService API:
+The scheduler lets agents set up time-based triggers — run a cron job, fire after an interval, or execute once at a specific time. Jobs are persisted to SQLite and survive VM sleep/wake cycles.
 
 ### Schedule Types
 
@@ -57,47 +53,23 @@ type CronSchedule =
 
 ### Precise Timer
 
-Unlike polling-based schedulers, this implementation arms the timer to the exact next wake time:
-
-```typescript
-private armTimer(): void {
-  const nextAt = this.nextWakeAtMs()  // Find earliest job
-  if (!nextAt) return
-  
-  const delay = Math.max(0, nextAt - Date.now())
-  this.state.timer = setTimeout(() => this.onTimer(), delay)
-}
-```
+Unlike polling-based schedulers, this implementation arms the timer to the exact next wake time — no fixed polling loop. A maintenance heartbeat runs at most every 60 seconds to handle edge cases.
 
 ### Concurrency Protection
 
-Uses `runningAtMs` marker to prevent double-execution:
-
-```typescript
-if (typeof job.state.runningAtMs === "number") {
-  // Already running - check if stuck (> 2 hours)
-  if (Date.now() - job.state.runningAtMs > STUCK_RUN_MS) {
-    return true  // Stuck, allow re-run
-  }
-  return false  // Still running
-}
-```
+Uses `runningAtMs` marker to prevent double-execution. Jobs that appear stuck (running for more than 2 hours) are automatically unstuck on the next scheduler start.
 
 ### Error Backoff
 
 Exponential backoff on consecutive errors:
 
-| Errors | Backoff |
-|--------|---------|
+| Consecutive failures | Delay before retry |
+|---------------------|--------------------|
 | 1 | 30 seconds |
-| 2 | 60 seconds |
+| 2 | 1 minute |
 | 3 | 5 minutes |
 | 4 | 15 minutes |
 | 5+ | 1 hour |
-
-### Missed Job Catchup
-
-On startup, clears stale `runningAtMs` markers (from crashes) and runs any due jobs.
 
 ## Job Definition
 
@@ -105,11 +77,11 @@ On startup, clears stale `runningAtMs` markers (from crashes) and runs any due j
 interface CronJob {
   id: string
   agentId?: string
-  sessionKey?: string           // For reminder delivery context
+  sessionKey?: string
   name: string
   description?: string
   enabled: boolean
-  deleteAfterRun?: boolean      // Auto-delete after successful run
+  deleteAfterRun?: boolean
   createdAtMs: number
   updatedAtMs: number
   schedule: CronSchedule
@@ -132,7 +104,6 @@ type CronPayload =
       model?: string
       thinking?: string
       timeoutSeconds?: number
-      allowUnsafeExternalContent?: boolean
     }
 ```
 
@@ -142,7 +113,7 @@ type CronPayload =
 interface CronDelivery {
   mode: "none" | "announce"
   channel?: string      // "telegram", "slack", etc.
-  to?: string           // Recipient address
+  to?: string           // Recipient identifier
   accountId?: string
   bestEffort?: boolean
 }
@@ -170,30 +141,25 @@ const scheduler = new SchedulerService({
 await scheduler.start()
 ```
 
-### Schedule a One-Time Task
+### Schedule Tasks
 
 ```typescript
+// One-time task
 await scheduler.add({
   name: "Reminder",
   schedule: { kind: "at", at: "2026-03-01T09:00:00Z" },
   payload: { kind: "agentTurn", message: "Check on the project" },
-  delivery: { mode: "announce", channel: "telegram", to: "user-123" }
+  delivery: { mode: "announce", channel: "telegram", to: "alice" }
 })
-```
 
-### Schedule an Interval Task
-
-```typescript
+// Interval task
 await scheduler.add({
   name: "Status Check",
   schedule: { kind: "every", everyMs: 300000 },  // 5 minutes
   payload: { kind: "agentTurn", message: "Check status" }
 })
-```
 
-### Schedule a Cron Task
-
-```typescript
+// Cron task
 await scheduler.add({
   name: "Daily Standup",
   schedule: { kind: "cron", expr: "0 9 * * 1-5", tz: "America/Chicago" },
@@ -209,11 +175,6 @@ The scheduler provides ready-to-use MCP tools for agent integration:
 import { createSchedulerTools } from "@hybrd/scheduler"
 
 const tools = createSchedulerTools(scheduler)
-
-// Use with Claude Agent SDK
-const agent = new Agent({
-  tools: [...otherTools, ...tools]
-})
 ```
 
 ### Available Tools
@@ -240,74 +201,13 @@ interface ChannelAdapter {
 }
 ```
 
-### Built-in Adapters
-
-| Channel | Port | Description |
-|---------|------|-------------|
-| `telegram` | 8456 | Telegram messaging (planned) |
-
-### Custom Adapter
-
-```typescript
-class SlackAdapter implements ChannelAdapter {
-  readonly channel = "slack"
-  readonly port = 8457
-  
-  async trigger(req: TriggerRequest): Promise<TriggerResponse> {
-    // POST to Slack API
-    return { delivered: true, messageId: "..." }
-  }
-}
-```
-
-## Feature Comparison
-
-| Feature | OpenClaw | Hybrid |
-|---------|:--------:|:------:|
-| Precise timer | ✅ | ✅ |
-| Concurrency protection | ✅ | ✅ |
-| Missed job catchup | ✅ | ✅ |
-| Error backoff | ✅ | ✅ |
-| Pagination API | ✅ | ✅ |
-| SQLite storage | ❌ | ✅ |
-| MCP tools | ❌ | ✅ |
-| Channel adapters | ❌ | ✅ |
-
 ## Storage
 
-Uses SQLite via sql.js (WASM) for persistence:
-
-```typescript
-interface ScheduledTaskRow {
-  id: string
-  name: string
-  schedule: string       // JSON
-  payload: string        // JSON
-  delivery: string       // JSON
-  state: string          // JSON
-  enabled: number        // 0 or 1
-  created_at: number
-  updated_at: number
-}
-```
-
-Benefits over JSON file storage:
+Uses SQLite via sql.js (WASM) for persistence. Benefits over JSON file storage:
 - Atomic writes
 - Query support
 - Better performance
-- Works in WASM environments
-
-## Configuration
-
-```typescript
-interface SchedulerConfig {
-  store: SqliteSchedulerStore
-  dispatcher: ChannelDispatcher
-  executor: SchedulerExecutor
-  enabled?: boolean       // Default: true
-  timezone?: string       // Default: system timezone
-}
-```
+- Works in WASM environments (Firecracker microVMs)
 
 ## Environment Variables
 
@@ -316,15 +216,6 @@ interface SchedulerConfig {
 | `SCHEDULER_ENABLED` | `true` | Enable/disable scheduler |
 | `SCHEDULER_DB_PATH` | `./data/scheduler.db` | SQLite database path |
 | `SCHEDULER_TIMEZONE` | System TZ | Default timezone for cron |
-
-## Events
-
-```typescript
-scheduler.onEvent((event) => {
-  // event.action: "added" | "updated" | "removed" | "started" | "finished"
-  console.log(`Job ${event.jobId}: ${event.action}`)
-})
-```
 
 ## Testing
 

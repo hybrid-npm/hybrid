@@ -1,12 +1,12 @@
 # hybrid/agent
 
-The runtime agent package for deployed Hybrid AI agents. Not published to npm — this is the actual process that runs in production.
+The runtime agent package for deployed Hybrid AI agents. Not published to npm — this is the actual process that runs in production inside a Firecracker microVM.
 
 ## Overview
 
 The agent package runs:
 
-1. **Agent Server** — A Hono HTTP server that accepts chat requests, drives the Claude Code SDK to generate responses, and streams Server-Sent Events (SSE) back to callers.
+1. **Agent Server** — A Hono HTTP server that accepts chat requests, drives the Pi agent SDK to generate responses, and streams Server-Sent Events (SSE) back to callers.
 
 ## Architecture
 
@@ -24,9 +24,7 @@ The agent package runs:
 │  │       ↓                                                       │  │
 │  │  Memory search → system prompt → conversation history        │  │
 │  │       ↓                                                       │  │
-│  │  MCP servers: memory tools + scheduler tools                 │  │
-│  │       ↓                                                       │  │
-│  │  claude-agent-sdk query() → SSE stream                       │  │
+│  │  Pi agent SDK query() → SSE stream                           │  │
 │  │  { text, tool-call-start, tool-call-delta, tool-call-end,    │  │
 │  │    usage, error }                                             │  │
 │  └─────────────────────────────────────────────────────────────┘  │
@@ -97,7 +95,7 @@ Content-Type: application/json
     { "id": "1", "role": "user", "content": "What can you help me with?" }
   ],
   "chatId": "conv-123",
-  "userId": "0xalice...",
+  "userId": "alice",
   "teamId": "team-xyz"
 }
 ```
@@ -141,9 +139,9 @@ The agent supports per-user `USER.md` files:
 PROJECT_ROOT/
 ├── USER.md              # Default/fallback user profile
 └── users/
-    ├── 0xalice/
+    ├── alice/
     │   └── USER.md      # Alice's profile
-    └── 0xbob/
+    └── bob/
         └── USER.md      # Bob's profile
 ```
 
@@ -153,7 +151,6 @@ When a request includes a `userId`, the agent loads `users/{userId}/USER.md`. Fa
 
 Hybrid uses the **OpenClaw** standard for agent template files. This is an open specification — you can use the same templates across any OpenClaw-compatible agent runtime.
 
-**Reference:** [OpenClaw Documentation](https://github.com/anomalyco/opencode)
 | File | Purpose | When to Edit |
 |------|---------|--------------|
 | `IDENTITY.md` | Agent name, creature type, vibe, emoji, avatar | When you want to change who the agent "is" |
@@ -165,9 +162,9 @@ Hybrid uses the **OpenClaw** standard for agent template files. This is an open 
 | `BOOTSTRAP.md` | First-run setup wizard (deleted after completion) | When onboarding new agents |
 | `HEARTBEAT.md` | Periodic check tasks | When defining recurring background tasks |
 
-All templates follow OpenClaw's format exactly. See [OpenClaw documentation](https://github.com/anomalyco/opencode) for the full specification.
+All templates follow OpenClaw's format exactly.
 
-**Note:** `MEMORY.md` is a runtime file stored in user workspaces, not a template. See [Multi-Tenant User Profiles](#multi-tenant-user-profiles) below. `USER.md` is a template that gets populated per-user at runtime.
+**Note:** `MEMORY.md` is a runtime file stored in user workspaces, not a template. `USER.md` is a template that gets populated per-user at runtime.
 
 ## MCP Tool Servers
 
@@ -175,15 +172,12 @@ The agent runs a unified MCP (Model Context Protocol) server for each request:
 
 - **Hybrid MCP Server** — `createMemoryMcpServer()` from `src/memory-tools.ts`. Provides:
 	- **Memory tools** — Read/write access to PARA memory, daily logs, and auto-memory
-	- **ACL tools** — Owner management, pairing requests
 	- **File tools** — OpenClaw-compatible read/write/edit/apply_patch operations
-	- All tools are scoped by user role (owner vs guest) from `ACL.md`
 
 ```typescript
-import { createMemoryMcpServer, resolveUserRole } from "hybrid/agent"
+import { createMemoryMcpServer } from "hybrid/agent"
 
-const { role, acl } = resolveUserRole(workspaceDir, userId)
-const mcpServer = createMemoryMcpServer(workspaceDir, userId, role, acl)
+const mcpServer = createMemoryMcpServer(workspaceDir, userId)
 ```
 
 ### File Operations
@@ -198,22 +192,9 @@ The agent provides OpenClaw-compatible file operation tools:
 | `apply_patch` | Apply unified diff patches |
 
 **Security:**
-- Only owners can access file operations
 - All paths are restricted to `./workspace/{userId}/`
 - Path traversal attacks (`../`) are blocked
 - Symlink escapes are prevented
-- Each user has isolated workspace
-
-**Workspace Structure:**
-```
-./
-├── workspace/
-│   └── {userId}/          # User's file workspace
-├── memory/
-│   └── users/
-│       └── {userId}/      # User's memory
-└── acl.json              # Access control
-```
 
 ## Scheduler Integration
 
@@ -223,14 +204,12 @@ The `SchedulerService` is initialized on startup and backed by SQLite. Job callb
 
 ## Model Configuration
 
-Supports both Anthropic direct and OpenRouter:
+Supports providers via OpenRouter or direct API keys:
 
 ```env
-# Anthropic direct
-ANTHROPIC_API_KEY=sk-ant-...
-
-# OpenRouter (auto-detected)
 OPENROUTER_API_KEY=sk-or-...
+# Or direct Anthropic key:
+ANTHROPIC_API_KEY=sk-ant-...
 ```
 
 If `OPENROUTER_API_KEY` is set, `ANTHROPIC_BASE_URL` is automatically set to `https://openrouter.ai/api`.
@@ -268,8 +247,8 @@ pnpm build
 ```
 
 Outputs to `dist/`:
-- `dist/server/index.cjs` — Full Claude Code SDK agent server
-- `dist/server/simple.cjs` — Lightweight server (OpenAI-compatible, no Claude Code subprocess)
+- `dist/server/index.cjs` — Full agent server
+- `dist/server/simple.cjs` — Lightweight server (OpenAI-compatible)
 
 ## License
 

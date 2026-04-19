@@ -6,11 +6,11 @@ Multi-layer memory system for Hybrid AI agents with **100% OpenClaw compatibilit
 
 The memory system provides persistent storage and semantic search for agent knowledge. It implements the complete OpenClaw memory API while adding:
 
-- **3-Layer PARA Memory Architecture** - Projects, Areas, Resources, Archives
-- **Multi-User ACL System** - Owner/guest roles with wallet-based isolation
-- **Atomic Fact Management** - Structured facts with decay tiers and supersession
-- **Daily Log System** - Event, fact, decision, and action logging
-- **Conversation Storage** - Per-user conversation history for context
+- **3-Layer PARA Memory Architecture** — Projects, Areas, Resources, Archives
+- **Multi-User Isolation** — Per-user memory scoping with role-based access
+- **Atomic Fact Management** — Structured facts with decay tiers and supersession
+- **Daily Log System** — Event, fact, decision, and action logging
+- **Conversation Storage** — Per-user conversation history for context
 
 ## OpenClaw Compatibility
 
@@ -122,7 +122,7 @@ const results = await manager.search("project deadline", {
 })
 ```
 
-### Multi-User ACL
+### Multi-User Role-Based Access
 
 Role-based access control for memory isolation:
 
@@ -195,12 +195,12 @@ const preferences = await readMemorySection(workspaceDir, "preferences", userId,
 ├── ACL.md                    # Access control list
 ├── MEMORY.md                 # Shared auto-memory
 ├── users/
-│   └── 0x.../               # Per-user memory
+│   └── alice/               # Per-user memory (user ID can be any string)
 │       ├── MEMORY.md
 │       └── conversations/
 │           └── conv-id.json
 ├── conversations/           # All conversations
-│   └── 0x.../
+│   └── alice/
 │       └── conv-id.json
 ├── life/                    # PARA system
 │   ├── projects/
@@ -226,7 +226,7 @@ const manager = await MemoryIndexManager.get({
   agentId: "main",
   workspaceDir: process.cwd(),
   config: resolvedConfig,
-  userId: "0x...",
+  userId: "alice",
   conversationId: "conv-123"
 })
 
@@ -273,9 +273,6 @@ await accessFact(entityPath, factId)  // Updates lastAccessed, accessCount
 // Search and summary
 const facts = await searchFacts(workspaceDir, "query", { bucket: "projects" })
 const summary = await generateSummary(entityPath, entityName)
-
-// Decay computation
-const tier = computeDecayTier(fact)  // "hot" | "warm" | "cold"
 ```
 
 ### ACL Functions
@@ -290,10 +287,10 @@ import {
 } from "@hybrd/memory"
 
 const acl = parseACL(workspaceDir)
-const role = getRole(acl, walletAddress)
+const role = getRole(acl, userId)
 
-await addOwner(workspaceDir, "0x...")
-await removeOwner(workspaceDir, "0x...")
+await addOwner(workspaceDir, "alice")
+await removeOwner(workspaceDir, "alice")
 const owners = listOwners(acl)
 ```
 
@@ -313,10 +310,6 @@ import {
 await logFact(workspaceDir, "Fact content")
 await logDecision(workspaceDir, "Decision made")
 await logAction(workspaceDir, "Action taken")
-
-const log = await readLog(workspaceDir, "2026-03-01")
-const facts = await extractFactsFromLog(workspaceDir, "2026-03-01")
-const decisions = await extractDecisionsFromLog(workspaceDir, "2026-03-01")
 ```
 
 ### Conversation Functions
@@ -331,18 +324,10 @@ import {
 
 await saveConversation({
   dir: memoryDir,
-  userId: "0x...",
+  userId: "alice",
   conversationId: "conv-123",
   messages: [{ role: "user", content: "Hello" }]
 })
-
-const conversation = await loadConversation({
-  dir: memoryDir,
-  userId: "0x...",
-  conversationId: "conv-123"
-})
-
-const conversations = await listConversations({ dir: memoryDir, userId: "0x..." })
 ```
 
 ## Configuration
@@ -403,7 +388,6 @@ const config = resolveMemoryConfig({
 | **Access Control** |
 | ACL system | ❌ | ✅ | NEW |
 | Owner/guest roles | ❌ | ✅ | NEW |
-| Wallet-based auth | ❌ | ✅ | NEW |
 | **Storage** |
 | SQLite index | ✅ | ✅ | Identical |
 | sqlite-vec | ✅ | ✅ | Identical |
@@ -417,102 +401,6 @@ const config = resolveMemoryConfig({
 | **Backends** |
 | Built-in SQLite | ✅ | ✅ | Identical |
 | QMD sidecar | ✅ | ❌ | Not implemented |
-
-## Hybrid-Specific Additions
-
-### 1. 3-Layer PARA Memory System
-
-OpenClaw uses flat memory files. Hybrid adds structured organization:
-
-```
-Layer 1: PARA (Projects/Areas/Resources/Archives)
-         - Structured entity storage
-         - Atomic facts with metadata
-         - Decay tier computation
-
-Layer 2: Daily Log
-         - Chronological entries
-         - Event/Fact/Decision/Action types
-         - Timestamped, append-only
-
-Layer 3: Auto Memory
-         - Categorized sections
-         - Preferences/Learnings/Decisions/Context/Notes
-```
-
-### 2. Multi-User ACL System
-
-OpenClaw has single-user memory. Hybrid adds:
-
-```typescript
-// ACL.md in workspace root
-## Owners
-
-- 0xabc123...  # Added 2026-03-01
-- 0xdef456...  # Added 2026-03-02
-
-// Role permissions:
-// Owner: read/write all memory
-// Guest: read/write only own user memory
-```
-
-### 3. Atomic Fact Management
-
-OpenClaw stores plain text. Hybrid adds structured facts:
-
-```typescript
-interface AtomicFact {
-  id: string
-  fact: string
-  category: "relationship" | "milestone" | "status" | "preference" | "user-signal"
-  timestamp: string
-  source: string
-  status: "active" | "superseded"
-  supersededBy?: string       // Link to replacement fact
-  relatedEntities: string[]
-  lastAccessed: string
-  accessCount: number         // Affects decay tier
-}
-
-// Decay tier computation:
-// - accessCount >= 10: always "warm"
-// - accessCount >= 5 && < 14 days: "hot"
-// - < 7 days: "hot"
-// - < 30 days: "warm"
-// - > 30 days: "cold"
-```
-
-### 4. Per-User Memory Isolation
-
-OpenClaw shares memory across all users. Hybrid isolates:
-
-```
-.hybrid/memory/
-├── MEMORY.md              # Shared (owners only)
-├── users/
-│   ├── 0xalice/
-│   │   └── MEMORY.md      # Alice's private memory
-│   └── 0xbob/
-│       └── MEMORY.md      # Bob's private memory
-```
-
-### 5. Conversation History Storage
-
-OpenClaw indexes sessions. Hybrid adds structured conversation storage:
-
-```typescript
-interface ConversationEntry {
-  id: string
-  userId: string
-  conversationId: string
-  messages: Array<{ role, content, timestamp }>
-  createdAt: number
-  updatedAt: number
-}
-
-// Stored as JSON per conversation
-// Can be chunked and indexed for search
-```
 
 ## Usage Example
 
@@ -533,12 +421,8 @@ const manager = await MemoryIndexManager.get({
   agentId: "main",
   workspaceDir: process.cwd(),
   config,
-  userId: "0xalice"
+  userId: "alice"
 })
-
-// Check ACL
-const acl = parseACL(process.cwd())
-const role = getRole(acl, "0xalice")
 
 // Log a fact
 await logFact(process.cwd(), "User prefers morning meetings")
@@ -557,7 +441,7 @@ await addFact(
 // Search
 const results = await manager.search("launch timeline", {
   maxResults: 5,
-  scope: { type: "user", userId: "0xalice" }
+  scope: { type: "user", userId: "alice" }
 })
 ```
 

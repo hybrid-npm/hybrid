@@ -88,7 +88,7 @@ type InboxId = Brand<string, "InboxId">
 type MessageId = Brand<string, "MessageId">
 
 // Creation
-const userId = "0xabc123" as UserId
+const userId = "alice" as UserId
 const convId = "conv-123" as ConversationId
 
 // Type-safe functions

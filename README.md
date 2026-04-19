@@ -1,195 +1,109 @@
 # Hybrid
 
-**Drop-in OpenClaw replacement with channel adapter framework.**
+**A Firecracker-based AI agent framework built around Pi.**
 
-Hybrid is a TypeScript agent runtime with **100% OpenClaw feature parity** — your `SOUL.md`, `AGENTS.md`, memory files, and skills work without modification. On top of that, you get a 3-layer PARA memory system, multi-user access control, and a channel adapter framework for connecting to any network.
-
-Port your OpenClaw instance in under 10 minutes. Deploy to Fly.io, Cloudflare Workers, or any Node.js host.
-
----
+Hybrid gives you AI agents that **sleep when idle and wake on demand**. Drop in your Pi-powered agent code, deploy to a Firecracker microVM provider, and pay only for compute when your agent is actually working.
 
 ## Why Hybrid
 
-OpenClaw gave agents persistent memory, skills, and a scheduler. Hybrid keeps all of that and adds the missing pieces for real-world multi-user deployment:
+Traditional agent frameworks run 24/7, burning cash while waiting for the next message. Hybrid fixes that:
 
-- **Messaging** — agents communicate through channel adapters. Connect to Telegram, Slack, or any platform through a uniform adapter interface with local HTTP IPC.
-- **Multi-user memory** — each user's memory is isolated by wallet address. Owners get full access; guests get their own private slice.
-- **Structured knowledge** — beyond flat markdown files, Hybrid adds a PARA-based entity graph with atomic facts, decay tiers, and fact supersession.
-- **Channel adapters** — Telegram or Slack today, more tomorrow. A uniform adapter interface with local HTTP IPC, so channels are independently deployable.
-
----
-
-## OpenClaw Compatibility
-
-Everything that works in OpenClaw works in Hybrid. Same files, same format, same behavior.
-
-| | OpenClaw | Hybrid |
-|--|:--:|:--:|
-| `SOUL.md` + `AGENTS.md` config | ✅ | ✅ |
-| `MEMORY.md` auto-memory | ✅ | ✅ |
-| `memory/*.md` indexed files | ✅ | ✅ |
-| Session transcripts (`memory/conversations/{userId}/{conversationId}.json`) | ✅ | ✅ |
-| Vector search (sqlite-vec) | ✅ | ✅ |
-| BM25 / FTS hybrid search | ✅ | ✅ |
-| Embedding providers (openai, gemini, voyage, mistral, local, auto) | ✅ | ✅ |
-| Daily logs (`memory/logs/YYYY-MM-DD.md`) | ✅ | ✅ |
-| Skills (`SKILL.md` format) | ✅ | ✅ |
-| Scheduler (cron / every / at) | ✅ | ✅ |
-| **Per-user memory isolation** | ❌ | ✅ |
-| **PARA knowledge graph** | ❌ | ✅ |
-| **Atomic facts + decay tiers** | ❌ | ✅ |
-| **Fact supersession** | ❌ | ✅ |
-| **Multi-user ACL (wallet-based)** | ❌ | ✅ |
-| **Channel adapter framework** | ❌ | ✅ |
-| **ENS + Basename resolution** | ❌ | ✅ |
-
----
+- **Sleep/wake agents** — Firecracker microVMs pause when idle, wake in seconds on incoming messages
+- **Pi-powered** — Built around the Pi agent runtime with full tool/skill support
+- **Multi-provider** — Deploy to sprites, E2B, Northflank, or Daytona — pick your provider at deploy time
+- **Structured memory** — PARA knowledge graph with decay tiers, daily logs, and hybrid vector+keyword search
+- **Agentic scheduler** — Cron, interval, and one-time jobs that deliver via channel adapters
 
 ## Quickstart
 
-### Porting from OpenClaw
-
-Your config files, memory, and skills work without modification.
-
-**1. Scaffold into a new directory**
-
 ```bash
 npm create hybrid my-agent
 cd my-agent
-```
-
-**2. Copy your OpenClaw files over**
-
-```bash
-cp /path/to/openclaw/SOUL.md   ./SOUL.md
-cp /path/to/openclaw/AGENTS.md ./AGENTS.md
-cp /path/to/openclaw/MEMORY.md ./MEMORY.md
-cp -r /path/to/openclaw/memory ./memory
-cp -r /path/to/openclaw/skills ./skills
-```
-
-**3. Add new skills** (optional)
-
-```bash
-hybrid skills add github:cloudflare/skills/wrangler
-hybrid skills add github:you/my-skill
-```
-
-**4. Set your env vars**
-
-```bash
-cp .env.example .env
-```
-
-Then fill in `.env`:
-
-```env
-OPENROUTER_API_KEY=your_key    # or ANTHROPIC_API_KEY
-```
-
-**5. Run**
-
-```bash
+cp .env.example .env   # fill in your API key
 hybrid dev
 ```
 
----
+## Deployment
 
-## Onboarding
+Hybrid agents run on **Firecracker microVMs**. You pick the provider at deploy time via `hybrid deploy [platform]`:
 
-When you first create a Hybrid agent, it includes a `BOOTSTRAP.md` file that defines the first-run onboarding experience.
+| Provider | Sleep | Wake | Best For |
+|----------|-------|------|----------|
+| `sprites` | `sprite sleep` | Near-instant (< 2s) | Reference implementation |
+| `e2b` | `sandbox.pause()` | Near-instant | Best dev experience after sprites |
+| `northflank` | Auto-scale to 0 | On request (~5-15s) | Production-grade |
+| `daytona` | `daytona stop` | ~30s | Dev environments |
 
-### First Run
-
-1. **Configure ACL** — Add your wallet address to `ACL.md`:
-   ```markdown
-   ## Owners
-
-   - 0xyour_wallet_address
-   ```
-
-2. **Start the agent**:
-   ```bash
-   pnpm dev
-   ```
-
-3. **Chat with your agent** — The agent will:
-   - Ask about its identity (name, personality, emoji)
-   - Learn about you (name, preferences, timezone)
-   - Discuss boundaries and behavior
-   - Delete `BOOTSTRAP.md` when complete
-
-4. **Onboarding complete** — Your agent now has a unique identity!
-
-### How It Works
-
-- **Owner-only**: During onboarding, only the owner can interact with the agent
-- **State tracking**: Progress is saved in `workspace-state.json`
-- **Automatic completion**: The agent detects when `BOOTSTRAP.md` is deleted and marks onboarding complete
-- **OpenClaw compatible**: Uses the same BOOTSTRAP.md format and flow
-
-### Adding More Users
-
-After onboarding, add more owners or guests to `ACL.md`:
-- **Owners** can access all memory and modify agent configuration
-- **Guests** get isolated memory and can only create their own user profile
-
-### Multi-Tenant Profiles
-
-Each user gets their own profile:
-```
-users/
-├── 0xalice/
-│   └── USER.md    ← Alice's preferences
-└── 0xbob/
-    └── USER.md    ← Bob's preferences
-```
-
-The agent maintains its identity (`IDENTITY.md`, `SOUL.md`) across all users.
-
----
-
-### Starting fresh
+### Deploy an Agent
 
 ```bash
-npm create hybrid my-agent
-cd my-agent
-cp .env.example .env   # fill in OPENROUTER_API_KEY
-hybrid dev
+# Deploy to sprites (default)
+hybrid deploy
+
+# Deploy to a specific provider
+hybrid deploy sprites
+hybrid deploy e2b
+hybrid deploy northflank
+
+# Control running agents
+hybrid deploy sleep my-agent
+hybrid deploy wake my-agent
+hybrid deploy status my-agent
+hybrid deploy logs my-agent --follow
+hybrid deploy teardown my-agent
 ```
 
----
+### Configuration
 
-## Project Structure
+Pre-select your provider in `hybrid.config.ts`:
 
-Running `hybrid init <name>` generates this project structure:
+```typescript
+export const config = {
+  deploy: {
+    platform: "sprites",    // default provider
+    spriteName: "my-agent", // optional instance name
+  }
+}
+```
+
+All providers implement a uniform `DeployProvider` interface — provision, deploy, sleep, wake, logs, status, and teardown work the same way regardless of platform.
+
+## Architecture
+
+```
+                     Incoming Message
+                           │
+                           ▼
+              ┌────────────────────────┐
+              │   Webhook Gateway      │
+              │   (proxy/forwarder)    │
+              └────────┬───────────────┘
+                       │
+                       ▼              if sleeping:
+            ┌────────────────────┐    ┌──────────────┐
+            │  Firecracker VM    │◄───┤  wake()      │
+            │  ┌──────────────┐  │    └──────────────┘
+            │  │ Agent Server │  │
+            │  │ (port 8454)  │  │
+            │  └──────────────┘  │
+            └────────────────────┘
+                       │
+              idle timeout → sleep()
+```
+
+### Project Structure
 
 ```
 my-agent/
-├── package.json                 # Project config (name replaced)
-├── .gitignore                   # Ignores credentials/, sessions/, memory/, etc.
+├── package.json                 # Project dependencies
+├── SOUL.md                      # Agent personality & identity
+├── AGENTS.md                    # Workspace rules & memory system
 ├── .env.example                 # Environment template
-│
-├── credentials/                 # Access control
-│   └── allowFrom.json           # Created during init with owner wallet
-│
-├── skills/                      # Copied from core skills
-│   ├── memory/SKILL.md
-│   └── skills-manager/SKILL.md
-│
-├── skills-lock.json             # Locks installed skill versions
-│
-└── [Agent Configuration Files]
-    ├── SOUL.md                  # Agent personality & principles
-    ├── IDENTITY.md              # Name, creature, vibe, emoji
-    ├── USER.md                  # Human profile template
-    ├── AGENTS.md                # Workspace rules & memory system
-    ├── TOOLS.md                 # Local notes (cameras, SSH, etc.)
-    ├── BOOTSTRAP.md             # First-run setup guide
-    └── HEARTBEAT.md             # Periodic task checklist
+├── skills/                      # Installed skills (SKILL.md files)
+└── memory/                      # Agent memory (life/, logs/, MEMORY.md)
 ```
 
-### Key Files
+### Key Template Files
 
 | File | Purpose |
 |------|---------|
@@ -197,118 +111,32 @@ my-agent/
 | `IDENTITY.md` | Name, creature type, vibe, emoji, avatar |
 | `USER.md` | Human profile — name, preferences, context |
 | `AGENTS.md` | Workspace rules, memory system, group chat behavior |
-| `TOOLS.md` | Local notes — camera names, SSH aliases, TTS voices |
+| `TOOLS.md` | Local notes — tool-specific configuration |
 | `BOOTSTRAP.md` | First-run onboarding guide (deleted after setup) |
 | `HEARTBEAT.md` | Periodic task checklist for proactive behavior |
 
-### Init Flow
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    hybrid init <name>                        │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  1. Copy templates/agent/ → <name>/                         │
-│     - package.json (with name replaced)                     │
-│     - SOUL.md, IDENTITY.md, USER.md, AGENTS.md             │
-│     - TOOLS.md, BOOTSTRAP.md, HEARTBEAT.md                 │
-│     - .gitignore, .env.example                              │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  2. Copy core skills/ → <name>/skills/                      │
-│     - memory/                                               │
-│     - skills-manager/                                       │
-│                                                             │
-│     Create skills-lock.json with core skill references      │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  3. Prompt: "Enter your wallet address (owner):"           │
-│                                                             │
-│     Input: 0xAbC123...                                      │
-│                                                             │
-│     → Create credentials/allowFrom.json                    │
-│       { "version": 1, "allowFrom": ["0xabc123..."] }       │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  Output:                                                    │
-│                                                             │
-│  ✅ Created agent at: my-agent/                             │
-│                                                             │
-│  Next steps:                                                │
-│    cd my-agent                                              │
-│    npm install  # or pnpm install                           │
-│    hybrid dev   # Start development                         │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Agent Runtime Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     Agent Process                            │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐     │
-│  │   SOUL.md   │    │  IDENTITY.md│    │   USER.md   │     │
-│  │ Personality │    │ Who am I?   │    │ Human info  │     │
-│  └─────────────┘    └─────────────┘    └─────────────┘     │
-│         │                  │                  │              │
-│         └──────────────────┼──────────────────┘              │
-│                            ▼                                │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │                   System Prompt                       │   │
-│  │  [IDENTITY] + [SOUL] + [AGENTS] + [TOOLS] + [USER]   │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                            │                                │
-│                            ▼                                │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │              Claude Agent SDK                        │   │
-│  │  query({ prompt, options }) → conversation stream    │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                            │                                │
-│                            ▼                                │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │                   Skills Layer                       │   │
-│  │  ./skills/*/SKILL.md → Tool definitions              │   │
-│  └─────────────────────────────────────────────────────┘   │
-Owners can read all memory — shared, per-user, and the `memory/` directory. Guests only read and write their own slice. If there's no `ACL.md`, everyone is treated as an owner (to allow initial onboarding). Set up ACL immediately after first run to restrict access.
-└─────────────────────────────────────────────────────────────┘
-```
-
----
-
 ## Memory
 
-Hybrid has a 3-layer memory system. All three layers are indexed together into SQLite for unified search.
+Hybrid has a 3-layer memory system, all indexed into SQLite for unified search:
 
 ### Layer 1 — PARA Knowledge Graph
 
-Structured entity storage inspired by the [PARA method](https://fortelabs.com/blog/para/). The agent can create named entities in four buckets — `projects`, `areas`, `resources`, `archives` — and attach atomic facts to each one.
+Structured entity storage inspired by the PARA method. The agent creates named entities across four buckets — `projects`, `areas`, `resources`, `archives` — and attaches atomic facts with decay tiers:
 
 ```
 memory/life/
   areas/people/Alice/
     items.json     ← all facts, including superseded ones
-    summary.md     ← hot + warm facts only, used for search indexing
+    summary.md     ← hot + warm facts only (for search indexing)
 ```
 
-Each fact has a **decay tier** based on how recently and how often it's been accessed:
+Decay tiers are computed automatically based on access patterns:
 
 | Tier | Condition |
 |------|-----------|
-| Hot | accessed in the last 7 days, or 5+ accesses in the last 14 days |
-| Warm | accessed in the last 30 days, or 10+ total accesses |
-| Cold | not accessed in 30+ days |
-
-Cold facts are excluded from search and from `summary.md` — but never deleted. When a fact becomes outdated, **supersession** marks the old fact as `superseded` and links it to the new one. Both stay in `items.json` as a history trail.
+| Hot | Accessed in last 7 days, or 5+ accesses in 14 days |
+| Warm | Accessed in last 30 days, or 10+ total accesses |
+| Cold | Not accessed in 30+ days (excluded from search, never deleted) |
 
 ### Layer 2 — Daily Log
 
@@ -318,170 +146,56 @@ An append-only chronological log. Each day gets its own file:
 memory/logs/2026-03-02.md
 ```
 
-The agent logs facts, decisions, and actions throughout a session. Entries are timestamped and tagged `[FACT]`, `[DECISION]`, or `[ACTION]`. Nothing is ever rewritten — the file only grows.
+Entries tagged `[FACT]`, `[DECISION]`, or `[ACTION]` — never rewritten.
 
 ### Layer 3 — Auto Memory
 
-A structured `MEMORY.md` with five fixed sections: **User Preferences**, **Learnings**, **Decisions**, **Context**, **Notes**. The agent appends dated bullet points to the relevant section as it learns things about the user.
-
-### Per-User Isolation
-
-Every user's memory is scoped to their wallet address:
-
-```
-memory/users/0xabc.../MEMORY.md    ← guest's private memory
-MEMORY.md                                  ← shared memory (owners only)
-```
-
-Access control is defined in `ACL.md` at the project root:
-
-```markdown
-## Owners
-
-- 0xabc123...    # Added 2026-03-01
-```
-
-Owners can read all memory — shared, per-user, and the `memory/` directory. Guests only read and write their own slice. If there's no ACL file, everyone is treated as an owner (to allow initial onboarding). Once you add your first owner to the ACL, all other users default to guest.
+A structured `MEMORY.md` with five sections: **User Preferences**, **Learnings**, **Decisions**, **Context**, **Notes**. The agent appends dated bullets as it learns.
 
 ### Search
 
-Queries run both **vector search** (semantic, via sqlite-vec) and **BM25 keyword search** (FTS5) in parallel. Results are merged with a 70/30 weighting by default and filtered by a minimum relevance score. If no embedding provider is configured, it falls back to keyword-only.
-
----
+Vector search (semantic, via sqlite-vec) and BM25 keyword search run in parallel, merged with a 70/30 weighting. Falls back to keyword-only if no embedding provider is configured.
 
 ## Scheduler
 
-The scheduler lets the agent take action on a time-based trigger — run a cron job, fire after an interval, or execute once at a specific time. Jobs are persisted to SQLite and survive restarts.
-
-### Schedule Types
+The scheduler lets agents schedule future actions for themselves:
 
 ```typescript
-// One-time — fires once at a specific time
-{ kind: "at", at: "2026-03-15T09:00:00Z" }
-
-// Interval — fires every N milliseconds
-{ kind: "every", everyMs: 3_600_000 }  // every hour
-
-// Cron — standard cron expression with optional timezone
-{ kind: "cron", expr: "0 9 * * 1-5", tz: "America/New_York" }
+{ kind: "at", at: "2026-03-15T09:00:00Z" }           // One-time
+{ kind: "every", everyMs: 3_600_000 }                // Every hour
+{ kind: "cron", expr: "0 9 * * 1-5", tz: "America/New_York" }  // Weekdays at 9am
 ```
 
-### How It Works
+Jobs fire via precise `setTimeout` — no polling loop. Failed jobs back off exponentially. Stuck jobs (running > 2 hours) auto-unstick on restart.
 
-The scheduler uses precise `setTimeout` calls — it computes the exact millisecond of the next job and sleeps until then. There's no fixed polling loop. A maintenance heartbeat runs at most every 60 seconds to handle edge cases.
+## Agent Server
 
-When a job fires, the scheduler sends the agent an **agent turn** — a message it processes just like a user message. The agent's response can optionally be delivered to a recipient via a channel adapter.
+The agent runs on port 8454 as a Hono HTTP server that accepts chat requests and streams SSE responses:
 
-```typescript
-// Example job payload
-{
-  kind: "agentTurn",
-  message: "Send the daily summary to the team",
-  delivery: {
-    mode: "announce",
-    channel: "telegram",
-    to: "user-123..."
-  }
-}
+```bash
+# Development
+hybrid dev
+
+# Build for Firecracker deployment
+hybrid build
+
+# Deploy
+hybrid deploy sprites
 ```
-
-### Error Handling
-
-Failed jobs back off exponentially before retrying:
-
-| Consecutive failures | Delay before retry |
-|---------------------|--------------------|
-| 1 | 30 seconds |
-| 2 | 1 minute |
-| 3 | 5 minutes |
-| 4 | 15 minutes |
-| 5+ | 1 hour |
-
-Jobs that appear stuck (running for more than 2 hours) are automatically unstuck on the next scheduler start.
-
----
-
-## Architecture
-
-```
-                     HTTP • Scheduler callbacks
-                                       │
-                                       ▼
-                     ┌─────────────────────────────────┐
-                     │       Channel Adapters           │
-                     │  @hybrd/channels                 │
-                     │  HTTP IPC                        │
-                     └─────────────────────────────────┘
-                                      │
-                                      ▼
-                    ┌─────────────────────────────────┐
-                    │        Agent Server              │
-                    │  hybrid/agent  (port 8454)       │
-                    │                                  │
-                    │  SOUL.md + AGENTS.md             │
-                    │  Memory search (vector + BM25)   │
-                    │  MCP: memory tools               │
-                    │  MCP: scheduler tools            │
-                    │  Claude Code SDK → SSE stream    │
-                    └─────────────────────────────────┘
-                               │            │
-               ┌───────────────┘            └───────────────┐
-               ▼                                            ▼
-┌──────────────────────────┐              ┌──────────────────────────────┐
-│      @hybrd/memory        │              │       @hybrd/scheduler        │
-│                           │              │                               │
-│  Layer 1: PARA graph      │              │  cron / interval / one-time   │
-│    projects / areas /     │              │  Precise timer, no polling    │
-│    resources / archives   │              │  Exponential error backoff    │
-│                           │              │  Delivers via channel adapter │
-│  Layer 2: Daily log       │              └──────────────────────────────┘
-│    logs/YYYY-MM-DD.md     │
-│                           │
-│  Layer 3: Auto memory     │
-│    MEMORY.md              │
-│                           │
-│  SQLite + sqlite-vec      │
-│  Multi-user ACL           │
-└──────────────────────────┘
-```
-
----
 
 ## Packages
 
 | Package | Description |
 |---------|-------------|
-| [`hybrid/agent`](./packages/agent/README.md) | Agent runtime: HTTP server |
-| [`hybrid/gateway`](./packages/gateway/README.md) | Cloudflare Workers gateway + container lifecycle |
-| [`@hybrd/memory`](./packages/memory/README.md) | 3-layer PARA memory, multi-user ACL, hybrid search |
+| [`hybrid/agent`](./packages/agent/README.md) | Agent runtime: Hono HTTP server with Pi-powered agent |
+| [`hybrid/gateway`](./packages/gateway/README.md) | Cloudflare Workers gateway (deprecated) |
+| [`@hybrd/memory`](./packages/memory/README.md) | 3-layer PARA memory, hybrid search |
 | [`@hybrd/scheduler`](./packages/scheduler/README.md) | Agentic cron/interval/one-time scheduler |
 | [`@hybrd/channels`](./packages/channels/README.md) | Channel adapter framework (Telegram, Slack, ...) |
 | [`@hybrd/cli`](./packages/cli/README.md) | `hybrid` CLI: build, dev, deploy, skills |
 | [`@hybrd/types`](./packages/types/README.md) | Shared TypeScript type definitions |
 | [`@hybrd/utils`](./packages/utils/README.md) | Shared utilities |
 | [`create-hybrid`](./packages/create-hybrid/README.md) | Project scaffolding (`npm create hybrid`) |
-
----
-
-## Deployment
-
-### Fly.io
-```bash
-hybrid deploy fly
-```
-
-### Cloudflare Workers + Containers
-```bash
-hybrid deploy cf
-```
-
-### Any Node.js host
-```bash
-hybrid build
-# Ship dist/ to your server and run start.sh
-```
-
----
 
 ## Monorepo Development
 
@@ -492,8 +206,6 @@ pnpm test       # Run tests
 pnpm lint       # Lint (biome)
 pnpm typecheck  # Type check
 ```
-
----
 
 ## License
 

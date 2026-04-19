@@ -66,7 +66,7 @@ const response = await fetch("http://localhost:8454/api/chat", {
       { id: "1", role: "user", content: "Hello!" }
     ],
     chatId: "conv-123",
-    userId: "0xalice"
+    userId: "alice"
   })
 })
 

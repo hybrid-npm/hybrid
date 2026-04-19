@@ -20,8 +20,6 @@ interface Agent<TRuntimeExtension, TPluginContext> {
   getInstructions(options): Promise<string | undefined>
   getTools(options): Promise<Record<string, AnyTool> | undefined>
   createRuntimeContext(baseRuntime): Promise<AgentRuntime & TRuntimeExtension>
-  use(plugin): void
-  listen(opts): Promise<void>
 }
 
 interface AgentConfig<TRuntimeExtension> {
@@ -54,24 +52,13 @@ type AnyTool<TRuntimeExtension> = Tool<any, any, TRuntimeExtension>
 
 ### Plugin Types
 
-Plugins are applied to the agent's Hono HTTP server. They can add routes, middleware, or other behavior.
+Plugins are applied to the agent's HTTP server. They can add routes, middleware, or other behavior.
 
 ```typescript
 interface Plugin<T> {
   name: string
   description?: string
-  apply: (app: Hono<{ Variables: HonoVariables }>, context: T) => void | Promise<void>
-}
-
-interface PluginRegistry<TContext> {
-  register: (plugin: Plugin<TContext>) => void
-  applyAll: (app, context) => Promise<void>
-}
-
-interface PluginContext {
-  agent: Agent
-  behaviors?: BehaviorRegistry
-  scheduler?: unknown
+  apply: (app: Hono, context: T) => void | Promise<void>
 }
 ```
 
@@ -80,22 +67,6 @@ interface PluginContext {
 Behaviors implement a **middleware chain** pattern. Each behavior can run logic before and after the agent generates a response, and can short-circuit the chain.
 
 ```typescript
-interface BehaviorConfig {
-  enabled?: boolean
-  config?: unknown
-}
-
-interface BehaviorContext<TRuntimeExtension> {
-  runtime: AgentRuntime & TRuntimeExtension
-  client: unknown
-  conversation: unknown
-  message: unknown
-  response?: string
-  sendOptions?: { threaded?, contentType?, filtered?, metadata? }
-  next?: () => Promise<void>
-  stopped?: boolean     // Set to true to stop the chain
-}
-
 interface BehaviorObject<TRuntimeExtension> {
   id: string
   config: BehaviorConfig
@@ -103,7 +74,6 @@ interface BehaviorObject<TRuntimeExtension> {
   after?(context: BehaviorContext): Promise<void> | void
 }
 
-// Factory function type: (config) => BehaviorObject
 type Behavior<TConfig> = (config: TConfig & BehaviorConfig) => BehaviorObject
 ```
 
@@ -116,32 +86,17 @@ import { BehaviorRegistryImpl } from "@hybrd/types"
 
 const registry = new BehaviorRegistryImpl()
 registry.register(myBehavior({ enabled: true }))
-registry.registerAll([behaviorA(), behaviorB()])
-
-// Executes chain — stops early if any behavior sets context.stopped = true
 await registry.executeBefore(behaviorContext)
 await registry.executeAfter(behaviorContext)
 ```
-
-### Runtime Types
-
-```typescript
-interface AgentRuntime {
-  scheduler?: unknown
-}
-```
-
-The `TRuntimeExtension` generic threads through `Agent`, `AgentConfig`, `Tool`, and `BehaviorContext` to allow packages to extend the runtime context without losing type safety.
 
 ### Channel Types
 
 ```typescript
 type ChannelId = string
 
-type CronDeliveryMode = "none" | "announce"
-
 interface CronDelivery {
-  mode: CronDeliveryMode
+  mode: "none" | "announce"
   channel?: ChannelId
   to?: string
   accountId?: string
@@ -167,60 +122,27 @@ interface ChannelAdapter {
   stop(): Promise<void>
   trigger(req: TriggerRequest): Promise<TriggerResponse>
 }
-
-interface ChannelDispatcher {
-  dispatch(params: { channel, to, message, metadata? }): Promise<TriggerResponse>
-}
 ```
 
 ### Schedule Types
 
 ```typescript
 type CronSchedule =
-  | { kind: "at"; at: string }                                          // One-time at ISO timestamp
-  | { kind: "every"; everyMs: number; anchorMs?: number }              // Recurring interval
-  | { kind: "cron"; expr: string; tz?: string; staggerMs?: number }    // Cron expression
+  | { kind: "at"; at: string }
+  | { kind: "every"; everyMs: number; anchorMs?: number }
+  | { kind: "cron"; expr: string; tz?: string; staggerMs?: number }
 
 type CronPayload =
   | { kind: "systemEvent"; text: string }
-  | { kind: "agentTurn"; message, model?, thinking?, timeoutSeconds?, allowUnsafeExternalContent? }
+  | { kind: "agentTurn"; message, model?, thinking?, timeoutSeconds? }
 
 interface CronJob {
   id: string
-  agentId?: string
-  sessionKey?: string
   name: string
-  description?: string
-  enabled: boolean
-  deleteAfterRun?: boolean
-  createdAtMs: number
-  updatedAtMs: number
   schedule: CronSchedule
-  sessionTarget: string
-  wakeMode: string
   payload: CronPayload
   delivery?: CronDelivery
   state: CronJobState
-}
-
-interface SchedulerStatus {
-  enabled: boolean
-  storePath?: string
-  jobs: number
-  nextWakeAtMs?: number
-}
-
-type SchedulerEvent = {
-  jobId: string
-  action: "added" | "updated" | "removed" | "started" | "finished" | string
-}
-```
-
-### Resolver Type
-
-```typescript
-interface Resolver {
-  resolve: (address: string) => Promise<string | null>
 }
 ```
 
@@ -229,14 +151,13 @@ interface Resolver {
 ```
 @hybrd/types
     │
-    ├── agent.ts       → Agent, AgentConfig, ListenOptions
+    ├── agent.ts       → Agent, AgentConfig
     ├── tool.ts        → Tool, AnyTool
-    ├── plugin.ts      → Plugin, PluginRegistry, PluginContext
-    ├── behavior.ts    → BehaviorObject, BehaviorRegistryImpl  ← only runtime export
+    ├── plugin.ts      → Plugin, PluginRegistry
+    ├── behavior.ts    → BehaviorObject, BehaviorRegistryImpl
     ├── runtime.ts     → AgentRuntime
-    ├── channel.ts    → ChannelAdapter, TriggerRequest, CronDelivery
-    ├── schedule.ts    → CronSchedule, CronJob, SchedulerStatus
-    └── resolver.ts    → Resolver
+    ├── channel.ts     → ChannelAdapter, TriggerRequest, CronDelivery
+    └── schedule.ts    → CronSchedule, CronJob, SchedulerStatus
 ```
 
 ## Package Consumers

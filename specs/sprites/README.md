@@ -1,273 +1,122 @@
-# Zero-Knowledge Agent Platform on Sprites
+# Agent on Sprites (Firecracker microVMs)
 
-A two-Sprite architecture providing true zero-knowledge encryption for AI agent platforms. Built on Fly.io Sprites.
+An agent deployment target for Hybrid, running on Fly.io Sprites (Firecracker microVMs) that **sleep when idle and wake on demand**.
 
 ## Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                    YOUR PLATFORM                                           │
-│                                                                                           │
-│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────────────────────────┐ │
-│  │  Orchestration  │    │    Database     │    │         User Dashboard              │ │
-│  │  • Create Sprites    │  • User metadata    │  • Sign in with wallet              │ │
-│  │  • List Sprites     │  • Billing data     │  • View agent activity              │ │
-│  │  • Manage lifecycle │  • Sprite state     │  • Configure settings                │ │
-│  └────────┬────────┘    └────────┬────────┘    └──────────────────┬──────────────────┘ │
-│           │                      │                                 │                     │
-└───────────│──────────────────────│─────────────────────────────────│─────────────────────┘
-            │                      │                                 │
-            │    SPRITES API       │                                 │
-            ▼                      ▼                                 ▼
-    ┌─────────────────────────────────────────────────────────────────────────────────────┐
-    │                         SPRITES INFRASTRUCTURE                                       │
-    │                              (per-user)                                              │
-    │                                                                                    │
-    │   ┌─────────────────────────────────────────────────────────────────────────────┐   │
-    │   │                           AGENT SPRITE                                      │   │
-    │   │   ┌─────────────────────────────────────────────────────────────────────┐  │   │
-    │   │   │                     User's AI Agent                                 │  │   │
-    │   │   │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌──────────┐ │  │   │
-    │   │   │  │ Claude Code │  │  Sessions   │  │   Tools    │  │ Plugins  │ │  │   │
-    │   │   │  │  (can do   │  │  (encrypted)│  │            │  │          │ │  │   │
-    │   │   │  │ anything!)  │  │             │  │            │  │          │ │  │   │
-    │   │   │  └─────────────┘  └──────┬──────┘  └─────────────┘  └──────────┘ │  │   │
-    │   │   │                          │                                   │  │   │
-    │   │   │                          ▼                                   │  │   │
-    │   │   │                  ┌───────────────┐                           │  │   │
-    │   │   │                  │ AgentStorage  │                           │  │   │
-    │   │   │                  │  (wrapper)    │                           │  │   │
-    │   │   │                  └───────┬───────┘                           │  │   │
-    │   │   │                          │                                   │  │   │
-    │   │   └──────────────────────────│───────────────────────────────────┘  │   │
-    │   │                              │                                       │   │
-    │   │   /home/sprite/agent/  ◄────┘                                       │   │
-    │   │   ├── workspace/       (filesystem access)                          │   │
-    │   │   ├── sessions/        (encrypted by Vault)                        │   │
-    │   │   ├── data/            (encrypted by Vault)                        │   │
-    │   │   └── ...                                                         │   │
-    │   │                                                                      │   │
-    │   └──────────────────────────────────────────────────────────────────────┘   │
-    │                                       │                                         │
-    │                                       │ HTTP (API only)                        │
-    │                                       │ No filesystem access                   │
-    │                                       ▼                                         │
-    │   ┌──────────────────────────────────────────────────────────────────────┐   │
-    │   │                           VAULT SPRITE                                │   │
-    │   │   ┌────────────────────────────────────────────────────────────────┐  │   │
-    │   │   │                      Vault Service                           │  │   │
-    │   │   │                                                                 │  │   │
-    │   │   │   ┌─────────────┐  ┌─────────────┐  ┌─────────────┐           │  │   │
-    │   │   │   │  /encrypt   │  │  /decrypt   │  │   /sign     │           │  │   │
-    │   │   │   │  endpoint   │  │  endpoint   │  │  endpoint   │           │  │   │
-    │   │   │   └──────┬──────┘  └──────┬──────┘  └──────┬──────┘           │  │   │
-    │   │   │          │                 │                 │                   │  │   │
-    │   │   │          └─────────────────┼─────────────────┘                   │  │   │
-    │   │   │                            ▼                                    │  │   │
-    │   │   │                    ┌───────────────┐                            │  │   │
-    │   │   │                    │  Key Manager  │                            │  │   │
-    │   │   │                    │  (IN MEMORY)  │                            │  │   │
-    │   │   │                    │               │                            │  │   │
-    │   │   │                    │  • Keys only  │                            │  │   │
-    │   │   │                    │    in RAM      │                            │  │   │
-    │   │   │                    │  • Never to   │                            │  │   │
-    │   │   │                    │    disk        │                            │  │   │
-    │   │   │                    │  • Lost on    │                            │  │   │
-    │   │   │                    │    restart    │                            │  │   │
-    │   │   │                    └───────────────┘                            │  │   │
-    │   │   │                                                                 │  │   │
-    │   │   └────────────────────────────────────────────────────────────────┘  │   │
-    │   │                                                                      │   │
-    │   └──────────────────────────────────────────────────────────────────────┘   │
-    │                                                                                    │
-    └──────────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                            YOUR PLATFORM                                │
+│                                                                         │
+│  ┌─────────────────┐    ┌──────────────────────────────────────────┐   │
+│  │  Orchestration  │    │         User Dashboard                   │   │
+│  │  • Create VMs   │    │  • View agent activity                   │   │
+│  │  • List VMs     │    │  • Configure settings                    │   │
+│  │  • Sleep/Wake   │    │  • Deploy updates                        │   │
+│  └────────┬────────┘    └──────────────────┬───────────────────────┘   │
+│           │                                │                           │
+└───────────│────────────────────────────────│───────────────────────────┘
+            │                                │
+            │    SPRITES API                 │
+            ▼                                ▼
+    ┌─────────────────────────────────────────────────────────────────┐
+    │                      AGENT SPRITE                                │
+    │                    (per-user/per-agent)                          │
+    │                                                                   │
+    │   ┌─────────────────────────────────────────────────────────┐    │
+    │   │                     Hybrid Agent                        │    │
+    │   │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐    │    │
+    │   │  │  SOUL.md    │  │  MEMORY.md  │  │   Skills    │    │    │
+    │   │  │  IDENTITY   │  │  PARA Graph │  │  SKILL.md   │    │    │
+    │   │  └─────────────┘  └─────────────┘  └─────────────┘    │    │
+    │   │                                                         │    │
+    │   │  Agent Server (port 8454)                               │    │
+    │   │  POST /api/chat → SSE stream                            │    │
+    │   │  GET  /health    → health check                         │    │
+    │   │                                                         │    │
+    │   │  /home/sprite/agent/                                    │    │
+    │   │  ├── workspace/                                         │    │
+    │   │  ├── sessions/                                          │    │
+    │   │  ├── memory/                                            │    │
+    │   │  └── ...                                                 │    │
+    │   └─────────────────────────────────────────────────────────┘    │
+    │                                                                   │
+    └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Why This Architecture?
+## Sleep/Wake Model
 
-### The Problem
+Sprites provide a natural serverless model for AI agents:
 
-When running AI agents for users, you face a fundamental security dilemma:
-
-| Approach | Problem |
-|----------|---------|
-| Store keys on disk | Agent can read them |
-| Give agent root access | Agent can read everything |
-| Use separate services | Still need to store keys somewhere |
-| Trust the platform | Users must trust you |
-
-### Our Solution
-
-**Two Sprites = Two Trust Domains:**
+| State | Description | Cost |
+|-------|-------------|------|
+| **Running** | Agent handles requests normally | Standard compute |
+| **Sleeping** | VM paused, state preserved in memory | Minimal (storage only) |
+| **Waking** | Triggered by incoming message via proxy | ~2s cold start |
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                      AGENT SPRITE                                    │
-│  • User has root                                                   │
-│  • Can read all files                                              │
-│  • Can install packages                                            │
-│  • CANNOT access Vault memory                                      │
-└─────────────────────────────────────────────────────────────────────┘
-                              │ HTTP only
-                              ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                      VAULT SPRITE                                   │
-│  • Keys ONLY in memory                                             │
-│  • Only exposes HTTP API                                            │
-│  • No filesystem for keys                                           │
-│  • CANNOT be accessed by Agent's filesystem                         │
-└─────────────────────────────────────────────────────────────────────┘
+Message arrives → Proxy wakes VM → Agent responds → Idle timeout → Sleep
 ```
 
-## Security Properties
+## Security Model
 
-| Property | Guarantee |
-|----------|-----------|
-| Keys never on disk | ✅ Keys only in Vault memory |
-| Platform can't read user data | ✅ Keys never leave user Sprites |
-| Agent can't access keys | ✅ Only HTTP API access |
-| Keys lost on restart | ✅ Intentional - cold start = re-auth |
+### Isolation
 
-## Threat Model
+Each agent runs in its own isolated Firecracker microVM:
+- Separate filesystem per agent
+- No cross-agent access
+- Sleep state preserves memory contents
 
-### What We Protect Against
+### VM Lifecycle
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                                                                                 │
-│  1. PLATFORM OPERATOR READING USER DATA                                         │
-│     Problem: Traditional hosting lets operators see everything                 │
-│     Solution: Keys never stored - only in user Sprites                         │
-│                                                                                 │
-│  2. AGENT AI EXFILTRATING ENCRYPTION KEYS                                      │
-│     Problem: AI agent has full filesystem access                                │
-│     Solution: Keys in separate Vault Sprite, HTTP API only                     │
-│                                                                                 │
-│  3. DISK COMPROMISE (server theft, etc)                                        │
-│     Problem: Stolen disks expose all data                                      │
-│     Solution: Keys only in memory, encrypted at rest in object storage         │
-│                                                                                 │
-│  4. MALICIOUS AGENT READING OTHER USERS' DATA                                  │
-│     Problem: Shared infrastructure risks cross-user access                     │
-│     Solution: Each user has separate Sprites, isolated VMs                    │
-│                                                                                 │
-│  5. PLATFORM BEING COMPELLED TO REVEAL DATA                                    │
-│     Problem: Legal requests can force data disclosure                          │
-│     Solution: We literally cannot - keys are in user Sprites                   │
-│                                                                                 │
-└─────────────────────────────────────────────────────────────────────────────────┘
+┌──────────┐   sleep    ┌──────────┐   message    ┌──────────┐
+│ Running  │───────────►│ Sleeping │──────────────►│ Running  │
+│          │            │          │  (auto-wake) │          │
+│  Active  │            │  Paused  │              │  Active  │
+└──────────┘            └──────────┘              └──────────┘
 ```
 
 ## Data Flow
 
-### User Onboarding
+### Agent Deployment
 
 ```
-1. User connects wallet
-   ┌──────────┐     ┌────────────────┐     ┌──────────────────┐
-   │  Wallet  │────►│  Your Platform │────►│  Generate random │
-   │          │     │                │     │  challenge       │
-   └──────────┘     └────────────────┘     └──────────────────┘
-
-2. User signs challenge
-   ┌──────────┐     ┌────────────────┐     ┌──────────────────┐
-   │  Wallet  │────►│  Your Platform │────►│  Derive key:     │
-   │          │     │                │     │  key = hash(sig)│
-   └──────────┘     └────────────────┘     └──────────────────┘
-
-3. Provision Sprites
-   ┌────────────────┐     ┌────────────────┐     ┌──────────────────┐
-   │  Your Platform │────►│   Create       │────►│   Initialize    │
-   │                │     │  Vault Sprite  │     │  Vault with key │
-   └────────────────┘     └────────────────┘     └──────────────────┘
+1. Build agent bundle (hybrid build)
+2. Provision VM sprite (sprite create)
+3. Deploy artifacts (sprite exec + tar upload)
+4. Agent starts listening on port 8454
 ```
 
-### Agent Operation
+### Message Handling
 
 ```
-Save session (encrypted):
-
-Agent                    Vault
-  │                        │
-  │  POST /encrypt         │
-  │───────────────────────►│
-  │                        │
-  │  Return encrypted blob │
-  │◄───────────────────────│
-  │                        │
-  │  Write to disk         │
-  │───────────────────────►
+Client → Webhook Proxy → Wake VM (if asleep) → Forward to agent:8454
+                                                         │
+                                                    SSE response
+                                                         │
+                                                    ← Client
 ```
 
 ### Cold Start
 
-```
-1. User request → Agent wakes
-2. Agent calls Vault → Vault has no key!
-3. Vault returns: 401 Not Initialized
-4. User re-authenticates with wallet
-5. Key restored to Vault memory
-6. Agent can now encrypt/decrypt
-```
+A sleeping VM wakes automatically when a message arrives via `sprite exec` proxy. The agent restores from preserved memory state — no re-authentication needed.
 
 ## API Reference
 
-### Vault Service
+### Sprite CLI Commands
 
-All endpoints accept JSON bodies, return JSON responses.
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/status` | Health check, returns initialization state |
-| POST | `/init` | Initialize vault with user's encryption key |
-| POST | `/reinit` | Re-initialize after cold start |
-| POST | `/encrypt` | Encrypt data with user's key |
-| POST | `/decrypt` | Decrypt data with user's key |
-| POST | `/sign` | Sign a message with user's key |
-
-#### GET /status
-
-```bash
-curl https://vault-user123.sprites.app/status
-```
-
-Response:
-```json
-{
-  "initialized": true,
-  "uptime": 3600
-}
-```
-
-#### POST /encrypt
-
-```bash
-curl -X POST https://vault-user123.sprites.app/encrypt \
-  -H "Content-Type: application/json" \
-  -d '{"data": "Hello World"}'
-```
-
-Response:
-```json
-{
-  "encrypted": "base64encodedencryptedblob..."
-}
-```
-
-#### POST /decrypt
-
-```bash
-curl -X POST https://vault-user123.sprites.app/decrypt \
-  -H "Content-Type: application/json" \
-  -d '{"encrypted": "base64encodedencryptedblob..."}'
-```
-
-Response:
-```json
-{
-  "decrypted": "Hello World"
-}
-```
+| Operation | Command |
+|-----------|---------|
+| auth check | `sprite list` (fails if not installed/authed) |
+| provision | `sprite create -skip-console <name>` |
+| deploy | `sprite exec -s <name> -file <tar>:/tmp/...` → extract |
+| status | `sprite list` → parse state |
+| sleep | `sprite sleep <name>` |
+| wake | `sprite exec -s <name> -- echo` (proxy wakes VM) |
+| logs | `sprite logs -s <name> -f` |
+| endpoint | `https://<name>.sprites.dev` |
+| teardown | `sprite delete <name>` |
 
 ## Quick Start
 
@@ -288,13 +137,14 @@ export FLY_ORG=your-org
 ### 3. Run Locally (Development)
 
 ```bash
-# Terminal 1: Start Vault
+# Terminal 1: Start agent server
 npm run dev
 
-# Terminal 2: Test with client
-VAULT_URL=http://localhost:8080 npx tsx client.ts init 64-character-hex-key-here----------------
-VAULT_URL=http://localhost:8080 npx tsx client.ts encrypt "Hello World"
-VAULT_URL=http://localhost:8080 npx tsx client.ts status
+# Terminal 2: Test agent
+curl http://localhost:8080/health
+curl -X POST http://localhost:8080/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"Hello"}],"chatId":"test-1"}'
 ```
 
 ### 4. Run Tests
@@ -302,146 +152,66 @@ VAULT_URL=http://localhost:8080 npx tsx client.ts status
 ```bash
 # Unit tests
 npm test
-
-# Integration tests
-npm run test:integration
-
-# E2E tests
-npm run test:e2e
-```
-
-## Usage Examples
-
-### Using Encrypted Storage
-
-```typescript
-import { AgentStorage } from './agent-storage';
-
-const storage = new AgentStorage(
-  'https://vault-user123.sprites.app',
-  '/home/sprite/agent/data'
-);
-
-// Save encrypted session
-await storage.saveSession('session-1', {
-  messages: [
-    { role: 'user', content: 'Hello' },
-    { role: 'assistant', content: 'Hi there!' }
-  ],
-  context: { workingDirectory: '/home/sprite/agent/workspace' }
-});
-
-// Load encrypted session  
-const session = await storage.loadSession('session-1');
-
-// Store arbitrary encrypted data
-await storage.set('mykey', 'sensitive-data');
-const data = await storage.get('mykey');
 ```
 
 ## Deployment
 
-### Docker Images
+### Deploy via Hybrid CLI
 
 ```bash
-# Build Vault image
-docker build -t your-registry/vault:latest -f vault.Dockerfile .
-
-# Build Agent image  
-docker build -t your-registry/agent:latest -f agent.Dockerfile .
-
-# Push to registry
-docker push your-registry/vault:latest
-docker push your-registry/agent:latest
+hybrid deploy sprites
 ```
 
-### Deploy to Sprites
+### Manual Deploy
 
 ```bash
-# Create Vault Sprite
-sprite create vault-user123
-sprite services create vault --cmd node --args vault-service.js
+# Build
+hybrid build
 
-# Create Agent Sprite
-sprite create agent-user123
+# Deploy to sprites
+sprite create my-agent
+sprite exec -s my-agent -file dist/agent.tar:/tmp/agent.tar
 ```
 
 ## Cost
 
-| Sprite | 4 hrs/day | 8 hrs/day | 24 hrs/day |
-|--------|-----------|------------|-------------|
-| Agent | ~$0.23 | ~$0.46 | ~$1.38 |
-| Vault | ~$0.06 | ~$0.12 | ~$0.36 |
-| **Total** | **~$0.29** | **~$0.58** | **~$1.74** |
+Sprites sleep when idle, so you only pay when agents are actively working:
 
-Monthly (30 days): **$9-52/month** depending on usage
+| Usage | Cost (per agent) |
+|-------|-----------------|
+| 4 hrs/day | ~$0.23 |
+| 8 hrs/day | ~$0.46 |
+| 24 hrs/day | ~$1.38 |
+| **Monthly** | **$9-52** depending on usage |
 
-## Files
-
-```
-specs/sprites/
-├── SPEC.md                 # Architecture specification
-├── README.md               # This file
-├── vault-service.ts        # Vault Sprite - encryption API
-├── agent-storage.ts        # Encrypted storage wrapper
-├── agent.ts               # Agent entry point
-├── provision.ts           # User provisioning
-├── client.ts             # CLI client
-├── package.json           # Dependencies
-├── tsconfig.json          # TypeScript config
-├── Makefile               # Convenience commands
-├── docker-compose.yaml    # Local development
-├── vault.Dockerfile       # Vault container
-├── agent.Dockerfile       # Agent container
-└── vitest*.config.ts     # Test configs
-```
+Compare to running 24/7 on traditional VMs — agents that sleep 80% of the time save **~80% on compute costs**.
 
 ## Environment Variables
 
-### Vault Service
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `PORT` | HTTP port | `8080` |
-
-### Agent Service
-
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `VAULT_URL` | Vault Sprite URL | Yes |
+| `VAULT_URL` | Vault Sprite URL | Yes (if using vault) |
 | `USER_ID` | User identifier | Yes |
+| `PORT` | Agent server port | No (default: 8454) |
 
 ## Troubleshooting
 
-### Vault not initialized
+### Agent not responding
 
-```
-Error: vault not initialized
-```
+**Solution**: Check if VM is sleeping. Wake manually: `hybrid deploy wake my-agent`
 
-**Solution**: User must authenticate. Call `/init` with their encryption key.
+### Can't reach agent
 
-### Agent can't reach Vault
-
-```
-Error: connect ECONNREFUSED
-```
-
-**Solution**: Check `VAULT_URL` is correct and Vault Sprite is running.
+**Solution**: Check `VAULT_URL` is correct and agent Sprite is running.
 
 ### Keys lost after restart
 
-This is **intentional**. Cold start = re-auth required.
+This is **expected** — cold start preserves state from preserved memory. Agent restores automatically on wake.
 
-## Alternative Approaches Considered
+## Related
 
-| Approach | Why Not Selected |
-|----------|-----------------|
-| Single Sprite, directory permissions | Root can bypass |
-| Single Sprite, in-memory keys only | User must re-auth every time, worse UX |
-| Two-Process same Sprite | Root can kill processes |
-| Fly Machines + Volumes | More expensive, less isolated |
-| Self-hosted | Much higher cost, more operational burden |
+- [Firecracker Deploy Spec](../cli-deploy-firecracker/SPEC.md) — Full provider interface and implementation plan
+- [Hybrid CLI](../../packages/cli/README.md) — `hybrid deploy` command docs
 
 ## License
 

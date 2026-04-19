@@ -77,9 +77,9 @@ PROJECT_ROOT/
 ├── BOOTSTRAP.md         # First-run wizard
 ├── HEARTBEAT.md         # Periodic tasks
 └── users/               # Multi-tenant profiles
-    ├── 0xalice/
+    ├── alice/
     │   └── USER.md
-    └── 0xbob/
+    └── bob/
         └── USER.md
 ```
 
