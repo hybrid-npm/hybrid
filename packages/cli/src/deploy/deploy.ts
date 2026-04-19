@@ -280,7 +280,7 @@ COPY package.json ./
 RUN npm install --production
 COPY server/ ./server/
 COPY SOUL.md AGENTS.md IDENTITY.md TOOLS.md BOOT.md BOOTSTRAP.md HEARTBEAT.md USER.md ./
-COPY credentials/ ./credentials/ 2>/dev/null || true
+COPY credentials/ ./credentials/
 ENV AGENT_PORT=8454
 ENV NODE_ENV=production
 ENV DATA_ROOT=/app/data
