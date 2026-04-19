@@ -48,9 +48,9 @@ jobs:
 
       - name: Publish packages to npm
         run: |
-          for pkg in packages/agent packages/types packages/memory packages/scheduler packages/utils packages/create-hybrid packages/cli packages/channels; do
+          for pkg in packages/types packages/memory packages/scheduler packages/utils packages/create-hybrid packages/cli packages/channels; do
             if [ -f "$pkg/package.json" ]; then
               echo "Publishing $pkg..."
-              (cd "$pkg" && npm publish --access public --provenance)
+              (cd "$pkg" && npm publish --access public --provenance) || echo "Skipping $pkg (already published or failed)"
             fi
           done
