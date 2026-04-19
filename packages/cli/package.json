@@ -61,7 +61,16 @@
 		"tsup": "^8.5.0",
 		"vitest": "^3.2.4"
 	},
+	"peerDependencies": {
+		"e2b": "^2.0.0"
+	},
+	"peerDependenciesMeta": {
+		"e2b": {
+			"optional": true
+		}
+	},
 	"optionalDependencies": {
+		"e2b": "^2.19.0",
 		"node-llama-cpp": "^3.0.0",
 		"sqlite-vec": "^0.1.0"
 	}

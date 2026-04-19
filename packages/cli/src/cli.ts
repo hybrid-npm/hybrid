@@ -137,7 +137,7 @@ async function main() {
 	console.log("")
 	console.log("Deploy flags:")
 	console.log(
-		"  --provider <name>     Override provider (sprites, e2b, daytona)"
+		"  --provider <name>     Override provider (sprites, e2b, daytona, northflank)"
 	)
 	console.log("  --name <name>         Override instance name")
 	console.log("  --force               Recreate VM even if it exists")
