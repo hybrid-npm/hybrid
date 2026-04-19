@@ -49,8 +49,14 @@ jobs:
       - name: Publish packages to npm
         run: |
           for pkg in packages/types packages/memory packages/scheduler packages/utils packages/create-hybrid packages/cli packages/channels; do
-            if [ -f "$pkg/package.json" ]; then
-              echo "Publishing $pkg..."
-              (cd "$pkg" && npm publish --access public --provenance) || echo "Skipping $pkg (already published or failed)"
+            [ -f "$pkg/package.json" ] || continue
+            name=$(node -p "require('./${pkg}/package.json').name")
+            version=$(node -p "require('./${pkg}/package.json').version")
+
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "✓ $name@$version already published"
+            else
+              echo "Publishing $name@$version..."
+              (cd "$pkg" && npm publish --access public --provenance) || echo "skipped $pkg"
             fi
           done
