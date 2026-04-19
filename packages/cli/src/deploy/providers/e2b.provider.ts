@@ -1,5 +1,5 @@
-import { execFileSync, spawn } from "node:child_process"
-import { existsSync, unlinkSync, writeFileSync } from "node:fs"
+import { execFileSync } from "node:child_process"
+import { existsSync, unlinkSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { basename, join } from "node:path"
 import type {
@@ -22,6 +22,33 @@ const DEFAULT_TEMPLATE = "base"
 
 type SandboxInstance = any // eslint-disable-line @typescript-eslint/no-explicit-any
 
+// In-process cache — populated during deploy, used for subsequent ops
+// in the same CLI invocation.
+const sandboxes = new Map<string, SandboxInstance>()
+
+/** Look up a sandbox by name or ID via the E2B API. Works across CLI invocations. */
+async function findSandbox(name: string): Promise<SandboxInstance | null> {
+	const Sandbox = await getSDK()
+	const paginator = Sandbox.list()
+	while (paginator.hasNext) {
+		const items = await paginator.nextItems()
+		for (const s of items) {
+			const info = (s as unknown) as Record<string, unknown>
+			const meta = info.metadata as
+				| Record<string, string>
+				| undefined
+			if (
+				meta?.["hybrid-name"] === name ||
+				info.sandboxId === name ||
+				(info.sandboxId as string)?.startsWith(name)
+			) {
+				return s as SandboxInstance
+			}
+		}
+	}
+	return null
+}
+
 async function getSDK() {
 	try {
 		const { Sandbox } = await import("e2b")
@@ -43,7 +70,19 @@ function getAPIKey(): string {
 	return key
 }
 
-const sandboxes = new Map<string, SandboxInstance>()
+/** Get a sandbox instance, trying cache first then API lookup. */
+async function getSandbox(name: string): Promise<SandboxInstance | null> {
+	const cached = sandboxes.get(name)
+	if (cached) return cached
+
+	const found = await findSandbox(name)
+	if (!found) return null
+
+	const Sandbox = await getSDK()
+	const sandbox = await Sandbox.connect((found as any).sandboxId)
+	sandboxes.set(name, sandbox)
+	return sandbox
+}
 
 export const e2bProvider: DeployProvider = {
 	name: "e2b",
@@ -62,7 +101,6 @@ export const e2bProvider: DeployProvider = {
 		getAPIKey()
 		const Sandbox = await getSDK()
 		try {
-			// Try listing — Sandbox.list() returns a paginator in e2b v2
 			const paginator = Sandbox.list()
 			await paginator.nextItems()
 		} catch (err: unknown) {
@@ -81,46 +119,18 @@ export const e2bProvider: DeployProvider = {
 
 		console.log(`\n📦 Creating E2B sandbox: ${name}`)
 
-		// Try to resume an existing paused sandbox first
-		try {
-			const paginator = Sandbox.list()
-			let found: any = null // eslint-disable-line @typescript-eslint/no-explicit-any
-			while (paginator.hasNext) {
-				const items = await paginator.nextItems()
-				for (const s of items) {
-					const info = s as any
-					const meta = info.metadata as
-						| Record<string, string>
-						| undefined
-					if (meta?.["hybrid-name"] === name) {
-						found = info
-						break
-					}
-					if (
-						info.sandboxId === name ||
-						info.sandboxId?.startsWith(name)
-					) {
-						found = info
-						break
-					}
-				}
-				if (found) break
-			}
-
-			if (found) {
-				// connect() auto-resumes if paused
-				const sandbox = await Sandbox.connect(found.sandboxId)
-				sandboxes.set(name, sandbox)
-				console.log(
-					`   ✓ Resumed existing sandbox: ${found.sandboxId}`,
-				)
-				return found.sandboxId
-			}
-		} catch {
-			// No existing sandbox, create new
+		const existing = await findSandbox(name)
+		if (existing) {
+			const sandbox = await Sandbox.connect(
+				(existing as any).sandboxId,
+			)
+			sandboxes.set(name, sandbox)
+			console.log(
+				`   ✓ Resumed existing sandbox: ${(existing as any).sandboxId}`,
+			)
+			return (existing as any).sandboxId
 		}
 
-		// Create new sandbox — template is first positional arg in e2b v2
 		const sandbox = await Sandbox.create(DEFAULT_TEMPLATE, {
 			metadata: { "hybrid-name": name },
 		})
@@ -131,10 +141,10 @@ export const e2bProvider: DeployProvider = {
 	},
 
 	async deploy(instanceId: string, distDir: string): Promise<void> {
-		const sandbox = sandboxes.get(instanceId)
+		const sandbox = await getSandbox(instanceId)
 		if (!sandbox) {
 			throw new Error(
-				`Sandbox ${instanceId} not found in active sessions.\nRun 'hybrid deploy' again to reconnect.`,
+				`Sandbox ${instanceId} not found.\nRun 'hybrid deploy' again to reconnect.`,
 			)
 		}
 
@@ -167,7 +177,6 @@ export const e2bProvider: DeployProvider = {
 			}
 		}
 
-		// Extract and install deps
 		console.log("\n📦 Extracting and installing dependencies...")
 		const result = await sandbox.commands.run(
 			"cd /home/user && mkdir -p app && tar -xzf /tmp/hybrid-deploy.tar.gz -C app && cd app && npm install --production 2>&1",
@@ -184,14 +193,12 @@ export const e2bProvider: DeployProvider = {
 			)
 		}
 
-		// Start the agent
 		console.log("\n🔧 Starting agent...")
 		await sandbox.commands.run(
 			"cd /home/user/app && export NODE_ENV=production AGENT_PORT=8454 && nohup node server/index.cjs > /tmp/agent.log 2>&1 & echo $! > /tmp/agent.pid",
 			{ timeout: 10000 },
 		)
 
-		// Wait for agent health check
 		console.log("\n⏳ Waiting for agent to start...")
 		let ready = false
 		for (let i = 0; i < 15; i++) {
@@ -219,43 +226,22 @@ export const e2bProvider: DeployProvider = {
 	},
 
 	async status(instanceId: string): Promise<InstanceStatus> {
-		const cached = sandboxes.get(instanceId)
-		if (cached) {
-			return "running"
-		}
+		const sandbox = await getSandbox(instanceId)
+		if (sandbox) return "running"
 
-		try {
-			const Sandbox = await getSDK()
-			const paginator = Sandbox.list()
-			while (paginator.hasNext) {
-				const items = await paginator.nextItems()
-				const found = items.find(
-					(s: { sandboxId: string }) =>
-						s.sandboxId === instanceId ||
-						s.sandboxId?.startsWith(instanceId),
-				)
-				if (found) {
-					const info = found as any
-					if (info.status === "paused") {
-						return "sleeping"
-					}
-					if (info.status === "running") {
-						return "running"
-					}
-					return "running"
-				}
-			}
-			return "stopped"
-		} catch {
-			return "unknown"
-		}
+		const info = await findSandbox(instanceId)
+		if (!info) return "stopped"
+		const status = (info as any).status as string
+		if (status === "paused") return "sleeping"
+		if (status === "running") return "running"
+		return "unknown"
 	},
 
 	async sleep(instanceId: string): Promise<void> {
-		const sandbox = sandboxes.get(instanceId)
+		const sandbox = await getSandbox(instanceId)
 		if (!sandbox) {
 			throw new Error(
-				`Sandbox ${instanceId} not found in active sessions.\nCannot pause a sandbox that isn't connected.`,
+				`Sandbox ${instanceId} not found.\nRun 'hybrid deploy' again to reconnect.`,
 			)
 		}
 
@@ -270,7 +256,6 @@ export const e2bProvider: DeployProvider = {
 
 		console.log(`\n☀️  Resuming E2B sandbox: ${instanceId}`)
 		try {
-			// Sandbox.connect auto-resumes paused sandboxes
 			const sandbox = await Sandbox.connect(instanceId)
 			sandboxes.set(instanceId, sandbox)
 			console.log("   ✓ Sandbox resumed")
@@ -282,10 +267,10 @@ export const e2bProvider: DeployProvider = {
 	},
 
 	async logs(instanceId: string, follow = true): Promise<void> {
-		const sandbox = sandboxes.get(instanceId)
+		const sandbox = await getSandbox(instanceId)
 		if (!sandbox) {
 			throw new Error(
-				`Sandbox ${instanceId} not found. Wake it first with: hybrid deploy wake ${instanceId}`,
+				`Sandbox ${instanceId} not found.\nRun 'hybrid deploy' again to reconnect.`,
 			)
 		}
 
@@ -316,9 +301,7 @@ export const e2bProvider: DeployProvider = {
 
 	async endpoint(instanceId: string): Promise<string> {
 		const sandbox = sandboxes.get(instanceId)
-		if (!sandbox) {
-			return `https://${instanceId}-8454.e2b.dev`
-		}
+		if (!sandbox) return `https://${instanceId}-8454.e2b.dev`
 
 		try {
 			const host = await sandbox.getHost(8454)
@@ -337,7 +320,6 @@ export const e2bProvider: DeployProvider = {
 			if (cached) {
 				await cached.kill()
 			} else {
-				// Connect then kill
 				const sandbox = await Sandbox.connect(instanceId)
 				await sandbox.kill()
 			}

@@ -574,8 +574,8 @@ async function build(target?: string) {
 		JSON.stringify(deployPkg, null, 2)
 	)
 
-	// Generate Dockerfile (generic Firecracker target)
-	writeFileSync(resolve(distDir, "Dockerfile"), generateDockerfile())
+	// Generate Dockerfile (only COPY files that exist in dist)
+	writeFileSync(resolve(distDir, "Dockerfile"), generateDockerfile(distDir))
 
 	// .hybrid-deploy.json manifest for provider consumption
 	writeFileSync(
@@ -606,14 +606,31 @@ node server/index.cjs
 	console.log(`   Target: ${buildTarget}`)
 }
 
-function generateDockerfile(): string {
+function generateDockerfile(distDir: string): string {
+	const configFiles = [
+		"SOUL.md",
+		"AGENTS.md",
+		"IDENTITY.md",
+		"TOOLS.md",
+		"BOOT.md",
+		"BOOTSTRAP.md",
+		"HEARTBEAT.md",
+		"USER.md",
+	]
+	const present = configFiles.filter((f) =>
+		existsSync(resolve(distDir, f)),
+	)
+	const hasCredentials = existsSync(resolve(distDir, "credentials"))
+	const configCopy = present.length > 0 ? `COPY ${present.join(" ")} ./` : ""
+	const credCopy = hasCredentials ? "COPY credentials/ ./credentials/" : ""
+
 	return `FROM node:20-bookworm-slim
 WORKDIR /app
 COPY package.json ./
 RUN npm install --production
 COPY server/ ./server/
-COPY SOUL.md AGENTS.md IDENTITY.md TOOLS.md BOOT.md BOOTSTRAP.md HEARTBEAT.md USER.md ./
-COPY credentials/ ./credentials/
+${configCopy}
+${credCopy}
 ENV AGENT_PORT=8454
 ENV NODE_ENV=production
 ENV DATA_ROOT=/app/data

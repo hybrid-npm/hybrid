@@ -115,30 +115,10 @@ export const daytonaProvider: DeployProvider = {
 				`${instanceId}:/workspace/app/hybrid-deploy.tar.gz`
 			])
 		} catch {
-			// Fallback: pipe tarball to daytona code via stdin
-			const { readFileSync } = await import("node:fs")
-			const { spawn } = await import("node:child_process")
-			const tarContent = readFileSync(tarPath)
-
-			// Use shell pipe to avoid MAX_ARG_STRLEN limit
-			const shell = spawn(
-				"sh",
-				[
-					"-c",
-					`cat | base64 -d > /workspace/app/hybrid-deploy.tar.gz`
-				],
-				{ stdio: ["pipe", "pipe", "pipe"] }
+			throw new Error(
+				`daytona cp failed for instance ${instanceId}.\n` +
+					`Ensure the Daytona CLI supports file copy: daytona cp ${tarPath} ${instanceId}:/workspace/app/hybrid-deploy.tar.gz`
 			)
-
-			shell.stdin.write(tarContent.toString("base64"))
-			shell.stdin.end()
-
-			await new Promise<void>((resolve, reject) => {
-				shell.on("exit", (code) => {
-					if (code === 0) resolve()
-					else reject(new Error(`base64 decode failed with code ${code}`))
-				})
-			})
 		}
 
 		// Extract and install deps

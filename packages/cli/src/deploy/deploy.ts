@@ -271,7 +271,16 @@ async function runBuild(projectRoot: string, packageDir: string) {
 		JSON.stringify(deployPkg, null, 2)
 	)
 
-	// Generic Dockerfile
+	// Generate Dockerfile — only COPY files that exist in dist
+	const present = configFiles.filter((f) =>
+		existsSync(resolve(distDir, f)),
+	)
+	const hasCredentials = existsSync(resolve(distDir, "credentials"))
+	const configCopy = present.join(" ")
+	const credCopy = hasCredentials
+		? "COPY credentials/ ./credentials/"
+		: "COPY .hybrid-deploy.json ./"
+
 	writeFileSync(
 		resolve(distDir, "Dockerfile"),
 		`FROM node:20-bookworm-slim
@@ -279,8 +288,8 @@ WORKDIR /app
 COPY package.json ./
 RUN npm install --production
 COPY server/ ./server/
-COPY SOUL.md AGENTS.md IDENTITY.md TOOLS.md BOOT.md BOOTSTRAP.md HEARTBEAT.md USER.md ./
-COPY credentials/ ./credentials/
+COPY ${configCopy} ./
+${credCopy}
 ENV AGENT_PORT=8454
 ENV NODE_ENV=production
 ENV DATA_ROOT=/app/data
