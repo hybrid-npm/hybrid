@@ -280,7 +280,7 @@ async function init(name?: string) {
 		readdirSync,
 		readFileSync
 	} = await import("node:fs")
-	const { createInterface } = await import("node:readline")
+
 
 	const templateDir = resolve(packageDir, "templates", "agent")
 	const targetDir = resolve(process.cwd(), name)
@@ -340,12 +340,6 @@ async function init(name?: string) {
 	}
 
 	// Collect configuration via prompts
-	const rl = createInterface({
-		input: process.stdin,
-		output: process.stdout
-	})
-
-	// Provider picker using prompts
 	const prompts = (await import("prompts")).default
 	const providerResponse = await prompts({
 		type: "select",
@@ -389,14 +383,12 @@ async function init(name?: string) {
 		version: 1,
 		allowFrom: []
 	}
-	const ownerQuestion = (prompt: string): Promise<string> => {
-		return new Promise((resolve) => {
-			rl.question(prompt, (answer: string) => {
-				resolve(answer.trim())
-			})
-		})
-	}
-	const ownerAddress = await ownerQuestion("\nEnter your wallet address (owner): ")
+	const ownerResponse = await prompts({
+		type: "text",
+		name: "address",
+		message: "Enter your wallet address (owner, optional)"
+	})
+	const ownerAddress = ownerResponse?.address?.trim() || ""
 	if (ownerAddress) {
 		acl.allowFrom.push(ownerAddress.toLowerCase())
 		console.log(`\n✅ Added owner: ${ownerAddress.toLowerCase()}`)
@@ -407,7 +399,7 @@ async function init(name?: string) {
 	)
 
 	// Close readline now that all prompts are done
-	rl.close()
+	// (rl is not used — all prompts use the prompts library now)
 
 	// Update .env file with generated key and API keys
 	let envContent = readFileSync(envPath, "utf-8")
@@ -772,19 +764,28 @@ function parseDeployArgs(args: string[]) {
 async function deployCommand(args: string[]) {
 	const sub = args[1]
 
-	// No subcommand — do full deploy
-	if (!sub || sub.startsWith("-")) {
+	// If sub looks like a known provider, treat it as the platform and deploy.
+	// Otherwise treat it as a subcommand.
+	const knownProviders = new Set([
+		"sprites",
+		"e2b",
+		"daytona",
+		"northflank",
+	])
+	const isPlatform = sub && !sub.startsWith("-") && knownProviders.has(sub)
+
+	if (!sub || sub.startsWith("-") || isPlatform) {
 		const flags = parseDeployArgs(args)
 		const { runDeploy } = await loadDeploy()
 		await runDeploy(
 			{
-				platform: flags.platform,
+				platform: flags.platform || (isPlatform ? sub : undefined),
 				name: flags.name,
 				skipBuild: flags.skipBuild,
-				force: flags.force
+				force: flags.force,
 			},
 			projectRoot,
-			packageDir
+			packageDir,
 		)
 		return
 	}

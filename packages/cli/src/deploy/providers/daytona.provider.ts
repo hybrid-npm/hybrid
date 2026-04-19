@@ -115,18 +115,30 @@ export const daytonaProvider: DeployProvider = {
 				`${instanceId}:/workspace/app/hybrid-deploy.tar.gz`
 			])
 		} catch {
-			// Fallback: use daytona code --command with base64 encoding
+			// Fallback: pipe tarball to daytona code via stdin
 			const { readFileSync } = await import("node:fs")
+			const { spawn } = await import("node:child_process")
 			const tarContent = readFileSync(tarPath)
-			const base64 = tarContent.toString("base64")
 
-			// Write in chunks if content is large
-			runDaytonaInherit([
-				"code",
-				instanceId,
-				"--command",
-				`echo "${base64}" | base64 -d > /workspace/app/hybrid-deploy.tar.gz`
-			])
+			// Use shell pipe to avoid MAX_ARG_STRLEN limit
+			const shell = spawn(
+				"sh",
+				[
+					"-c",
+					`cat | base64 -d > /workspace/app/hybrid-deploy.tar.gz`
+				],
+				{ stdio: ["pipe", "pipe", "pipe"] }
+			)
+
+			shell.stdin.write(tarContent.toString("base64"))
+			shell.stdin.end()
+
+			await new Promise<void>((resolve, reject) => {
+				shell.on("exit", (code) => {
+					if (code === 0) resolve()
+					else reject(new Error(`base64 decode failed with code ${code}`))
+				})
+			})
 		}
 
 		// Extract and install deps
