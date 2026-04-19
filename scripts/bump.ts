@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 
 import { execSync } from "node:child_process"
-import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs"
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 
 interface PackageJson {
@@ -68,19 +68,28 @@ function bumpPackageVersions(bumpType: "patch" | "minor" | "major" = "patch") {
 			return statSync(itemPath).isDirectory()
 		})
 
-		const packageFiles = packageDirs.map(
-			(dir) => `packages/${dir}/package.json`
-		)
-
-		console.log(`🔍 Found ${packageFiles.length} packages to bump`)
+		console.log(`🔍 Found ${packageDirs.length} packages`)
 		console.log(`📦 Bumping ${bumpType} versions...\n`)
 
 		let newVersion = ""
-		for (const packageFile of packageFiles) {
-			const packagePath = join(process.cwd(), packageFile)
+		for (const dir of packageDirs) {
+			const packagePath = join(packagesDir, dir, "package.json")
+
+			// Skip directories without a package.json
+			if (!existsSync(packagePath)) {
+				console.log(`⏭️  ${dir}: skipped (no package.json)`)
+				continue
+			}
+
 			const packageJson: PackageJson = JSON.parse(
 				readFileSync(packagePath, "utf-8")
 			)
+
+			// Skip packages without a version field
+			if (!packageJson.version) {
+				console.log(`⏭️  ${dir}: skipped (no version field)`)
+				continue
+			}
 
 			const currentVersion = packageJson.version
 			newVersion = bumpVersion(currentVersion, bumpType)
