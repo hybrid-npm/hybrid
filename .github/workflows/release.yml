@@ -3,11 +3,16 @@ name: Release
 on:
   release:
     types: [published]
+  push:
+    tags:
+      - 'v*'
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    environment:
+      name: release
     permissions:
       contents: read
       id-token: write
@@ -57,6 +62,8 @@ jobs:
               echo "✓ $name@$version already published"
             else
               echo "Publishing $name@$version..."
-              (cd "$pkg" && npm publish --access public --provenance) || echo "skipped $pkg"
+              (cd "$pkg" && npm publish --access public) || echo "skipped $pkg"
             fi
           done
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

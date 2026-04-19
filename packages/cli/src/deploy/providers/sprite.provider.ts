@@ -317,6 +317,19 @@ echo $! > /app/agent.pid
 	},
 
 	async endpoint(instanceId: string): Promise<string> {
+		try {
+			// Get the actual sprite URL from the CLI (includes the unique hash)
+			const output = execFileSync("sprite", ["-s", instanceId, "url"], {
+				encoding: "utf-8"
+			})
+			// Parse "URL: https://xxx.sprites.app" from output
+			const match = output.match(/URL:\s+(https:\/\/[^\s]+)/)
+			if (match) {
+				return match[1].replace(/\/$/, "")
+			}
+		} catch {
+			// Fall back to old format if sprite url fails
+		}
 		return `https://${instanceId}.sprites.dev`
 	},
 
