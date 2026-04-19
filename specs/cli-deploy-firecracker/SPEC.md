@@ -143,11 +143,11 @@ deploy(platform?)
 
 ```
 hybrid deploy [platform]              Deploy to a Firecracker provider
-hybrid deploy:sleep <name> [--provider sprites|e2b|...]   Put VM to sleep
-hybrid deploy:wake <name>  [--provider sprites|e2b|...]   Wake VM
-hybrid deploy:status <name> [--provider sprites|e2b|...]  Show VM status
-hybrid deploy:logs <name> [--provider sprites|e2b|...]    Stream agent logs
-hybrid deploy:teardown <name> [--all]                     Destroy VM(s)
+hybrid deploy sleep <name> [--provider sprites|e2b|...]   Put VM to sleep
+hybrid deploy wake <name>  [--provider sprites|e2b|...]   Wake VM
+hybrid deploy status <name> [--provider sprites|e2b|...]  Show VM status
+hybrid deploy logs <name> [--provider sprites|e2b|...]    Stream agent logs
+hybrid deploy teardown <name> [--all]                     Destroy VM(s)
 ```
 
 Platform can be pre-selected in `hybrid.config.ts`:
@@ -368,8 +368,8 @@ What `hybrid deploy` does:
 - [ ] Create `deploy.ts` orchestration
 - [ ] Extract sprites logic from `cli.ts` → `sprite.provider.ts`
 - [ ] Refactor `cli.ts` `deploy()` to use provider interface
-- [ ] Add `deploy:sleep`, `deploy:wake`, `deploy:status`, `deploy:logs` subcommands
-- [ ] Add `deploy:teardown` command
+- [ ] Add `deploy sleep`, `deploy wake`, `deploy status`, `deploy logs` subcommands
+- [ ] Add `deploy teardown` command
 - [ ] Remove hardcoded `deploy.sh` from `build()`
 - [ ] Update `hybrid.config.ts` schema
 

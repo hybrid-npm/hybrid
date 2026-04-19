@@ -58,11 +58,6 @@ async function main() {
 	if (command === "dev") return dev(args.includes("--docker"))
 	if (command === "start") return start()
 	if (command === "deploy") return deployCommand(args)
-	if (command === "deploy:sleep") return deploySleepCommand(args)
-	if (command === "deploy:wake") return deployWakeCommand(args)
-	if (command === "deploy:status") return deployStatusCommand(args)
-	if (command === "deploy:logs") return deployLogsCommand(args)
-	if (command === "deploy:teardown") return deployTeardownCommand(args)
 	if (command === "init") return init(args[1])
 
 	if (command === "owner") {
@@ -131,12 +126,14 @@ async function main() {
 	console.log("  dev                       Start development server")
 	console.log("  build [--target]          Build for deployment (firecracker)")
 	console.log("  start                     Run built agent")
-	console.log("  deploy [platform]         Deploy to a Firecracker provider")
-	console.log("  deploy:sleep <name>       Put VM to sleep")
-	console.log("  deploy:wake <name>        Wake VM")
-	console.log("  deploy:status <name>      Show VM status")
-	console.log("  deploy:logs <name>        Stream agent logs")
-	console.log("  deploy:teardown <name>    Destroy VM")
+	console.log(
+		"  deploy [platform]              Deploy to a Firecracker provider"
+	)
+	console.log("  deploy sleep <name>            Put VM to sleep")
+	console.log("  deploy wake <name>             Wake VM")
+	console.log("  deploy status <name>           Show VM status")
+	console.log("  deploy logs <name>             Stream agent logs")
+	console.log("  deploy teardown <name> [--all] Destroy VM")
 	console.log("")
 	console.log("Deploy flags:")
 	console.log(
@@ -731,78 +728,100 @@ function parseDeployArgs(args: string[]) {
 }
 
 async function deployCommand(args: string[]) {
-	const flags = parseDeployArgs(args)
-	const { runDeploy } = await loadDeploy()
-	await runDeploy(
-		{
-			platform: flags.platform,
-			name: flags.name,
-			skipBuild: flags.skipBuild,
-			force: flags.force
-		},
-		projectRoot,
-		packageDir
+	const sub = args[1]
+
+	// No subcommand — do full deploy
+	if (!sub || sub.startsWith("-")) {
+		const flags = parseDeployArgs(args)
+		const { runDeploy } = await loadDeploy()
+		await runDeploy(
+			{
+				platform: flags.platform,
+				name: flags.name,
+				skipBuild: flags.skipBuild,
+				force: flags.force
+			},
+			projectRoot,
+			packageDir
+		)
+		return
+	}
+
+	const name = args.find((a, i) => i > 1 && !a.startsWith("-"))
+	const platform =
+		args[args.indexOf("--provider") + 1] || args[args.indexOf("-p") + 1]
+
+	switch (sub) {
+		case "sleep": {
+			if (!name) {
+				console.error("Usage: hybrid deploy sleep <name>")
+				process.exit(1)
+			}
+			const { runSleep } = await loadDeploy()
+			await runSleep(name, platform, projectRoot)
+			break
+		}
+		case "wake": {
+			if (!name) {
+				console.error("Usage: hybrid deploy wake <name>")
+				process.exit(1)
+			}
+			const { runWake } = await loadDeploy()
+			await runWake(name, platform, projectRoot)
+			break
+		}
+		case "status": {
+			if (!name) {
+				console.error("Usage: hybrid deploy status <name>")
+				process.exit(1)
+			}
+			const { runStatus } = await loadDeploy()
+			await runStatus(name, platform, projectRoot)
+			break
+		}
+		case "logs": {
+			if (!name) {
+				console.error("Usage: hybrid deploy logs <name>")
+				process.exit(1)
+			}
+			const follow = !args.includes("--no-follow")
+			const { runLogs } = await loadDeploy()
+			await runLogs(name, follow, platform, projectRoot)
+			break
+		}
+		case "teardown": {
+			if (!name) {
+				console.error("Usage: hybrid deploy teardown <name>")
+				process.exit(1)
+			}
+			const { runTeardown } = await loadDeploy()
+			await runTeardown(name, platform, projectRoot)
+			break
+		}
+		default:
+			console.error(`Unknown deploy subcommand: ${sub}`)
+			printDeployHelp()
+			process.exit(1)
+	}
+}
+
+function printDeployHelp() {
+	console.error("")
+	console.error("Usage: hybrid deploy <subcommand>")
+	console.error("")
+	console.error("Commands:")
+	console.error(
+		"  deploy [platform]             Deploy to a Firecracker provider"
 	)
-}
-
-async function deploySleepCommand(args: string[]) {
-	const flags = parseDeployArgs(args)
-	const name = flags.name
-	if (!name) {
-		console.error("Usage: hybrid deploy:sleep <name>")
-		console.error("Flags: --provider <name>, --name <name>")
-		process.exit(1)
-	}
-	const { runSleep } = await loadDeploy()
-	await runSleep(name, flags.platform, projectRoot)
-}
-
-async function deployWakeCommand(args: string[]) {
-	const flags = parseDeployArgs(args)
-	const name = flags.name
-	if (!name) {
-		console.error("Usage: hybrid deploy:wake <name>")
-		console.error("Flags: --provider <name>, --name <name>")
-		process.exit(1)
-	}
-	const { runWake } = await loadDeploy()
-	await runWake(name, flags.platform, projectRoot)
-}
-
-async function deployStatusCommand(args: string[]) {
-	const flags = parseDeployArgs(args)
-	const name = flags.name
-	if (!name) {
-		console.error("Usage: hybrid deploy:status <name>")
-		console.error("Flags: --provider <name>, --name <name>")
-		process.exit(1)
-	}
-	const { runStatus } = await loadDeploy()
-	await runStatus(name, flags.platform, projectRoot)
-}
-
-async function deployLogsCommand(args: string[]) {
-	const flags = parseDeployArgs(args)
-	const name = flags.name
-	if (!name) {
-		console.error("Usage: hybrid deploy:logs <name>")
-		console.error("Flags: --provider <name>, --name <name>, --no-follow")
-		process.exit(1)
-	}
-	const { runLogs } = await loadDeploy()
-	await runLogs(name, flags.follow, flags.platform, projectRoot)
-}
-
-async function deployTeardownCommand(args: string[]) {
-	const flags = parseDeployArgs(args)
-	const name = flags.name
-	if (!name) {
-		console.error("Usage: hybrid deploy:teardown <name>")
-		console.error("Flags: --provider <name>, --name <name>, --all")
-		process.exit(1)
-	}
-	const { runTeardown } = await loadDeploy()
-	await runTeardown(name, flags.platform, projectRoot)
+	console.error("  deploy sleep <name>            Put VM to sleep")
+	console.error("  deploy wake <name>             Wake VM")
+	console.error("  deploy status <name>           Show VM status")
+	console.error("  deploy logs <name>             Stream agent logs")
+	console.error("  deploy teardown <name> [--all] Destroy VM")
+	console.error("")
+	console.error(
+		"Flags: --provider <name>  --name <name>  --force  --no-build  --no-follow"
+	)
 }
 
 // ============================================================================
