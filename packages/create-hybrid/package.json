@@ -1,11 +1,14 @@
 {
 	"name": "create-hybrid",
-	"version": "2.0.0",
+	"version": "2.1.0",
 	"type": "module",
 	"bin": {
 		"create-hybrid": "./dist/index.js"
 	},
-	"files": ["dist", "templates"],
+	"files": [
+		"dist",
+		"templates"
+	],
 	"scripts": {
 		"build": "tsup",
 		"dev": "tsx src/index.ts",

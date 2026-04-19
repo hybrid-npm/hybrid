@@ -1,9 +1,16 @@
 {
 	"name": "@hybrd/channels",
-	"version": "2.0.0",
-	"keywords": ["channels", "hybrid", "adapter"],
+	"version": "2.1.0",
+	"keywords": [
+		"channels",
+		"hybrid",
+		"adapter"
+	],
 	"type": "module",
-	"files": ["dist", "src"],
+	"files": [
+		"dist",
+		"src"
+	],
 	"exports": {
 		".": {
 			"types": "./dist/index.d.ts",
