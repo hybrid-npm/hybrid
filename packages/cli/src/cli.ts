@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { existsSync } from "node:fs"
-import { basename, dirname, resolve } from "node:path"
+import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { config } from "dotenv"
 
@@ -51,10 +51,13 @@ async function main() {
 	const args = process.argv.slice(2)
 	const command = args[0]
 
-	if (command === "build") return build(args[1])
+	if (command === "build") {
+		const targetFlag = args.indexOf("--target")
+		return build(targetFlag !== -1 ? args[targetFlag + 1] : args[1])
+	}
 	if (command === "dev") return dev(args.includes("--docker"))
 	if (command === "start") return start()
-	if (command === "deploy") return deploy(args[1])
+	if (command === "deploy") return deployCommand(args)
 	if (command === "init") return init(args[1])
 
 	if (command === "owner") {
@@ -119,11 +122,24 @@ async function main() {
 	console.log("Usage: hybrid <command>")
 	console.log("")
 	console.log("Commands:")
-	console.log("  init <name>           Initialize a new agent")
-	console.log("  dev                   Start development server")
-	console.log("  build [--target]      Build for deployment (fly, railway)")
-	console.log("  start                 Run built agent")
-	console.log("  deploy [platform]     Deploy (fly, railway)")
+	console.log("  init <name>               Initialize a new agent")
+	console.log("  dev                       Start development server")
+	console.log("  build [--target]          Build for deployment (firecracker)")
+	console.log("  start                     Run built agent")
+	console.log(
+		"  deploy [platform]              Deploy to a Firecracker provider"
+	)
+	console.log("  deploy sleep <name>            Put VM to sleep")
+	console.log("  deploy wake <name>             Wake VM")
+	console.log("  deploy status <name>           Show VM status")
+	console.log("  deploy logs <name>             Stream agent logs")
+	console.log("  deploy teardown <name> [--all] Destroy VM")
+	console.log("")
+	console.log("Deploy flags:")
+	console.log("  --provider <name>  Override provider (sprites, e2b, northflank, daytona)")
+	console.log("  --name <name>         Override instance name")
+	console.log("  --force               Recreate VM even if it exists")
+	console.log("  --no-build            Skip build step")
 	console.log("")
 	console.log("Owner:")
 	console.log("  owner add <address>     Add an owner")
@@ -264,7 +280,7 @@ async function init(name?: string) {
 		readdirSync,
 		readFileSync
 	} = await import("node:fs")
-	const { createInterface } = await import("node:readline")
+
 
 	const templateDir = resolve(packageDir, "templates", "agent")
 	const targetDir = resolve(process.cwd(), name)
@@ -324,25 +340,6 @@ async function init(name?: string) {
 	}
 
 	// Collect configuration via prompts
-	const rl = createInterface({
-		input: process.stdin,
-		output: process.stdout
-	})
-
-	const question = (prompt: string): Promise<string> => {
-		return new Promise((resolve) => {
-			rl.question(prompt, (answer: string) => {
-				resolve(answer.trim())
-			})
-		})
-	}
-
-	// Owner wallet address
-	const ownerAddress = await question("\nEnter your wallet address (owner): ")
-
-	rl.close()
-
-	// Provider picker using prompts
 	const prompts = (await import("prompts")).default
 	const providerResponse = await prompts({
 		type: "select",
@@ -380,16 +377,29 @@ async function init(name?: string) {
 	}
 
 	// Create ACL file with owner
-	if (ownerAddress) {
-		const normalized = ownerAddress.toLowerCase()
-		const credentialsDir = resolve(targetDir, "credentials")
-		mkdirSync(credentialsDir, { recursive: true })
-		writeFileSync(
-			resolve(credentialsDir, "allowFrom.json"),
-			JSON.stringify({ version: 1, allowFrom: [normalized] }, null, 2)
-		)
-		console.log(`\n✅ Added owner: ${normalized}`)
+	const credentialsDir = resolve(targetDir, "credentials")
+	mkdirSync(credentialsDir, { recursive: true })
+	const acl: { version: number; allowFrom: string[] } = {
+		version: 1,
+		allowFrom: []
 	}
+	const ownerResponse = await prompts({
+		type: "text",
+		name: "address",
+		message: "Enter your wallet address (owner, optional)"
+	})
+	const ownerAddress = ownerResponse?.address?.trim() || ""
+	if (ownerAddress) {
+		acl.allowFrom.push(ownerAddress.toLowerCase())
+		console.log(`\n✅ Added owner: ${ownerAddress.toLowerCase()}`)
+	}
+	writeFileSync(
+		resolve(credentialsDir, "allowFrom.json"),
+		JSON.stringify(acl, null, 2)
+	)
+
+	// Close readline now that all prompts are done
+	// (rl is not used — all prompts use the prompts library now)
 
 	// Update .env file with generated key and API keys
 	let envContent = readFileSync(envPath, "utf-8")
@@ -457,7 +467,7 @@ async function build(target?: string) {
 
 	const projectDir = projectRoot
 	const distDir = resolve(projectDir, "dist")
-	const buildTarget = target || "fly"
+	const buildTarget = target || "firecracker"
 
 	console.log("\n🔧 Building agent...")
 
@@ -549,9 +559,9 @@ async function build(target?: string) {
 		version: "1.0.0",
 		type: "module",
 		dependencies: {
-		"@anthropic-ai/claude-agent-sdk": "^0.2.38",
-		"@hono/node-server": "^1.13.5",
-		ai: "^6.0.0",
+			"@anthropic-ai/claude-agent-sdk": "^0.2.38",
+			"@hono/node-server": "^1.13.5",
+			ai: "^6.0.0",
 			"better-sqlite3": "^11.0.0",
 			dotenv: "^16.4.5",
 			hono: "^4.10.8",
@@ -564,18 +574,24 @@ async function build(target?: string) {
 		JSON.stringify(deployPkg, null, 2)
 	)
 
-	// Generate Dockerfile
-	writeFileSync(resolve(distDir, "Dockerfile"), generateDockerfile(buildTarget))
+	// Generate Dockerfile (only COPY files that exist in dist)
+	writeFileSync(resolve(distDir, "Dockerfile"), generateDockerfile(distDir))
 
-	// Copy or generate fly.toml
-	if (buildTarget === "fly") {
-		const projectFlyToml = resolve(projectDir, "fly.toml")
-		if (existsSync(projectFlyToml)) {
-			cpSync(projectFlyToml, resolve(distDir, "fly.toml"))
-		} else {
-			writeFileSync(resolve(distDir, "fly.toml"), generateFlyToml())
-		}
-	}
+	// .hybrid-deploy.json manifest for provider consumption
+	writeFileSync(
+		resolve(distDir, ".hybrid-deploy.json"),
+		JSON.stringify(
+			{
+				version: 1,
+				provider: "firecracker",
+				startCommand: "node server/index.cjs",
+				port: 8454,
+				healthPath: "/health"
+			},
+			null,
+			2
+		)
+	)
 
 	// Generate start script
 	writeFileSync(
@@ -590,89 +606,37 @@ node server/index.cjs
 	console.log(`   Target: ${buildTarget}`)
 }
 
-function generateDockerfile(target: string): string {
-	if (target === "fly" || target === "railway") {
-		return `FROM node:20
+function generateDockerfile(distDir: string): string {
+	const configFiles = [
+		"SOUL.md",
+		"AGENTS.md",
+		"IDENTITY.md",
+		"TOOLS.md",
+		"BOOT.md",
+		"BOOTSTRAP.md",
+		"HEARTBEAT.md",
+		"USER.md",
+	]
+	const present = configFiles.filter((f) =>
+		existsSync(resolve(distDir, f)),
+	)
+	const hasCredentials = existsSync(resolve(distDir, "credentials"))
+	const configCopy = present.length > 0 ? `COPY ${present.join(" ")} ./` : ""
+	const credCopy = hasCredentials ? "COPY credentials/ ./credentials/" : ""
 
+	return `FROM node:20-bookworm-slim
 WORKDIR /app
-
-# Copy built agent runtime
-COPY server/ ./server/
-
-# Copy config
-COPY SOUL.md ./
-COPY AGENTS.md ./
-COPY IDENTITY.md ./
-COPY TOOLS.md ./
-COPY BOOTSTRAP.md ./
-COPY HEARTBEAT.md ./
-COPY USER.md ./
-
-# Copy credentials (owner ACL)
-COPY credentials/ ./credentials/
-
-# Copy deployment files
 COPY package.json ./
-COPY start.sh ./
-
-# Install dependencies
 RUN npm install --production
-
-# Create data directories and set ownership
-RUN chown -R node:node /app
-
+COPY server/ ./server/
+${configCopy}
+${credCopy}
 ENV AGENT_PORT=8454
 ENV NODE_ENV=production
+ENV DATA_ROOT=/app/data
 EXPOSE 8454
-
 USER node
 CMD ["node", "server/index.cjs"]
-`
-	}
-
-	return `FROM node:20
-WORKDIR /app
-COPY . ./
-RUN npm install --production
-RUN chown -R node:node /app
-USER node
-CMD ["sh", "start.sh"]
-`
-}
-
-function generateFlyToml(appName = "hybrid-agent"): string {
-	return `# Generated by hybrid build
-app = "${appName}"
-primary_region = "iad"
-
-[build]
-  dockerfile = "Dockerfile"
-  context = "."
-
-[deployment]
-  min_machines = 1
-  max_machines = 1
-
-[env]
-  NODE_ENV = "production"
-
-[[services]]
-  protocol = "tcp"
-  internal_port = 8454
-
-  [[services.ports]]
-    port = 80
-    handlers = ["http"]
-    force_https = true
-
-  [[services.ports]]
-    port = 443
-    handlers = ["tls", "http"]
-
-[vm]
-  memory = "1gb"
-  cpu_kind = "shared"
-  cpus = 1
 `
 }
 
@@ -748,241 +712,193 @@ async function start() {
 }
 
 // ============================================================================
-// Deploy
+// Deploy — delegates to deploy/ providers
 // ============================================================================
 
-async function deploy(platform?: string) {
-	const { spawn, execSync } = await import("node:child_process")
-	const { existsSync, readFileSync, writeFileSync } = await import("node:fs")
-	const prompts = (await import("prompts")).default
+let deployModule: typeof import("./deploy/deploy") | null = null
+async function loadDeploy() {
+	if (!deployModule) {
+		deployModule = await import("./deploy/deploy")
+	}
+	return deployModule
+}
 
-	const projectDir = projectRoot
-	let openRouterKey: string | undefined
-	const distDir = resolve(projectDir, "dist")
-
-	// Prompt for platform if not specified
-	let deployPlatform = platform
-
-	// Check hybrid.config.ts for saved platform
-	if (!deployPlatform) {
-		const hybridConfig = resolve(projectDir, "hybrid.config.ts")
-		if (existsSync(hybridConfig)) {
-			const configContent = readFileSync(hybridConfig, "utf-8")
-			const match = configContent.match(
-				/deployPlatform\s*[=:]\s*["']([^"']+)["']/
-			)
-			if (match) {
-				deployPlatform = match[1]
-				console.log(`   Using saved platform: ${deployPlatform}`)
-			}
+function parseDeployArgs(args: string[]) {
+	// Collect known flag indices so we don't mistake flag values as positional names
+	const skipSet = new Set<number>()
+	// Only flags that consume a value should skip the NEXT index
+	const valuedFlags = new Set([
+		"--provider",
+		"-p",
+		"--name",
+		"-n",
+	])
+	for (let i = 0; i < args.length; i++) {
+		if (valuedFlags.has(args[i])) {
+			skipSet.add(i)
+			skipSet.add(i + 1)
 		}
 	}
+	const providerIdx = args.indexOf("--provider")
+	const providerAltIdx = args.indexOf("-p")
+	const nameIdx = args.indexOf("--name")
+	const nameAltIdx = args.indexOf("-n")
+	const providerFlag =
+		(providerIdx !== -1 ? args[providerIdx + 1] : undefined) ||
+		(providerAltIdx !== -1 ? args[providerAltIdx + 1] : undefined)
+	const nameFlag =
+		(nameIdx !== -1 ? args[nameIdx + 1] : undefined) ||
+		(nameAltIdx !== -1 ? args[nameAltIdx + 1] : undefined)
 
-	if (!deployPlatform) {
-		const choice = await prompts({
-			type: "select",
-			name: "platform",
-			message: "Where do you want to deploy?",
-			choices: [
-				{ title: "Fly.io", value: "fly" },
-				{ title: "Railway", value: "railway" }
-			],
-			initial: 0
-		})
-		if (!choice.platform) {
-			console.log("\n  Cancelled.\n")
-			process.exit(0)
-		}
-		deployPlatform = choice.platform
-
-		// Save platform to hybrid.config.ts
-		const hybridConfig = resolve(projectDir, "hybrid.config.ts")
-		let configContent = ""
-		if (existsSync(hybridConfig)) {
-			configContent = readFileSync(hybridConfig, "utf-8")
-		}
-		if (!configContent.includes("deployPlatform")) {
-			const newContent = configContent
-				? configContent.replace(
-						/export default/,
-						`const deployPlatform = "${deployPlatform}"\n\nexport default`
-					)
-				: `const deployPlatform = "${deployPlatform}"\n\nexport default {}`
-			writeFileSync(hybridConfig, newContent)
-		}
+	// Find the first positional arg that isn't a flag, flag value, or subcommand
+	const name = args.find(
+		(a, i) =>
+			i > 1 &&
+			!a.startsWith("--") &&
+			!a.startsWith("-") &&
+			!skipSet.has(i) &&
+			a !== "deploy" &&
+			a !== "sleep" &&
+			a !== "wake" &&
+			a !== "status" &&
+			a !== "logs" &&
+			a !== "teardown" &&
+			a !== providerFlag &&
+			a !== nameFlag,
+	)
+	const skipBuild = args.includes("--no-build")
+	const force = args.includes("--force")
+	const follow = !args.includes("--no-follow")
+	return {
+		platform: providerFlag,
+		name: name || nameFlag,
+		skipBuild,
+		force,
+		follow,
 	}
-	const flyTomlPath = resolve(distDir, "fly.toml")
-	const projectFlyToml = resolve(projectDir, "fly.toml")
+}
 
-	// Get project name from directory as default
-	const projectName = basename(projectDir)
-	let appName = projectName
+async function deployCommand(args: string[]) {
+	const sub = args[1]
 
-	// Check project fly.toml first (preferred)
-	if (existsSync(projectFlyToml)) {
-		const flyToml = readFileSync(projectFlyToml, "utf-8")
-		const match = flyToml.match(/^app\s*=\s*["']([^"']+)["']/m)
-		if (match) appName = match[1]
-	} else {
-		// Prompt for app name only if no project fly.toml exists
-		const result = await prompts({
-			type: "text",
-			name: "appName",
-			message: "App name:",
-			initial: projectName
-		})
-		if (result.appName) appName = result.appName
-	}
+	// If sub looks like a known provider, treat it as the platform and deploy.
+	// Otherwise treat it as a subcommand.
+	const knownProviders = new Set([
+		"sprites",
+		"e2b",
+		"daytona",
+		"northflank",
+	])
+	const isPlatform = sub && !sub.startsWith("-") && knownProviders.has(sub)
 
-	// Validate app name to prevent command injection
-	if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(appName)) {
-		console.error(`\n❌ Invalid app name: ${appName}`)
-		console.error("App name must start with a letter/digit and contain only letters, digits, hyphens, and underscores.")
-		process.exit(1)
-	}
-
-	// Check if app exists
-	const { execFileSync } = await import("node:child_process")
-	let appExists = false
-	try {
-		execFileSync("fly", ["status", "--app", appName], { stdio: "pipe" })
-		appExists = true
-	} catch {
-		// App doesn't exist
-	}
-
-	// Only prompt for secrets on first deploy (when app doesn't exist)
-	// On subsequent deploys, secrets are already set on Fly
-	if (!appExists) {
-		openRouterKey = process.env.OPENROUTER_API_KEY
-		if (!openRouterKey) {
-			console.log("🔑 No OPENROUTER_API_KEY found.")
-			while (true) {
-				const result = await prompts({
-					type: "password",
-					name: "key",
-					message: "Paste OpenRouter API key:"
-				})
-				const key = result.key?.trim()
-				if (key && key.length > 0) {
-					openRouterKey = key
-					break
-				}
-				console.log("   OpenRouter API key is required. Please enter a value.")
-			}
-		}
-
-		// Set up owner ACL
-		const aclPath = resolve(projectDir, "credentials", "allowFrom.json")
-		if (!existsSync(aclPath)) {
-			const result = await prompts({
-				type: "text",
-				name: "owner",
-				message: "Your wallet address (owner):",
-				validate: (v: string) =>
-					/^0x[a-fA-F0-9]{40}$/.test(v) ||
-					"Enter a valid Ethereum address (0x...)"
-			})
-			if (result.owner) {
-				const { mkdirSync } = await import("node:fs")
-				mkdirSync(resolve(projectDir, "credentials"), { recursive: true })
-				writeFileSync(
-					aclPath,
-					JSON.stringify(
-						{ version: 1, allowFrom: [result.owner.toLowerCase()] },
-						null,
-						"\t"
-					)
-				)
-				console.log(`✅ Owner set: ${result.owner}\n`)
-			}
-		}
-	}
-
-	// Build first
-	await build(deployPlatform)
-
-	if (deployPlatform === "fly") {
-		console.log("\n🚀 Deploying to Fly.io...")
-
-		// Ensure fly.toml exists with correct app name
-		if (existsSync(projectFlyToml)) {
-			// Copy project fly.toml to dist
-			const { cpSync } = await import("node:fs")
-			cpSync(projectFlyToml, resolve(distDir, "fly.toml"))
-		} else {
-			// Generate fly.toml with correct app name
-			const flyTomlContent = `app = "${appName}"\n\n[build]\n  builder = "paketobuildpacks/builder:base"\n\n[env]\n  PORT = "8454"\n`
-			writeFileSync(resolve(distDir, "fly.toml"), flyTomlContent)
-		}
-
-		if (!appExists) {
-			console.log(`📦 Creating Fly.io app: ${appName}`)
-			try {
-				execFileSync("fly", ["apps", "create", appName], {
-					cwd: distDir,
-					stdio: "inherit"
-				})
-			} catch {
-				console.log(`   App may already exist, continuing...`)
-			}
-		}
-
-		// Deploy
-		await new Promise<void>((resolve, reject) => {
-			const deploy = spawn("fly", ["deploy", "--config", "fly.toml"], {
-				cwd: distDir,
-				stdio: "inherit"
-			})
-			deploy.on("error", (err) =>
-				reject(new Error(`Deploy failed: ${err.message}`))
-			)
-			deploy.on("close", (code) =>
-				code === 0 ? resolve() : reject(new Error(`Exit ${code}`))
-			)
-		})
-
-		// Set secrets via fly secrets (doesn't require VM to be running)
-		if (!appExists) {
-			if (openRouterKey) {
-				console.log("\n🔑 Setting OpenRouter key as secret...")
-				try {
-					execFileSync(
-						"fly",
-						["secrets", "set", `OPENROUTER_API_KEY=${openRouterKey}`, "--app", appName],
-						{
-							cwd: distDir,
-							stdio: "inherit"
-						}
-					)
-				} catch (e) {
-					console.log("   ⚠️  Could not set secret, skipping...")
-				}
-			}
-		}
-
-		console.log("\n✅ Deployed!")
-		console.log(`   Dashboard: https://fly.io/apps/${appName}`)
-
-		// Save fly.toml to project for future deploys
-		if (!existsSync(projectFlyToml)) {
-			const { cpSync } = await import("node:fs")
-			cpSync(resolve(distDir, "fly.toml"), projectFlyToml)
-			console.log(`   Saved fly.toml to project`)
-		}
-
+	if (!sub || sub.startsWith("-") || isPlatform) {
+		const flags = parseDeployArgs(args)
+		const { runDeploy } = await loadDeploy()
+		await runDeploy(
+			{
+				platform: flags.platform || (isPlatform ? sub : undefined),
+				name: flags.name,
+				skipBuild: flags.skipBuild,
+				force: flags.force,
+			},
+			projectRoot,
+			packageDir,
+		)
 		return
 	}
 
-	if (deployPlatform === "railway") {
-		console.log("\n🚂 Railway deployment not yet implemented.")
-		console.log("   See https://railway.app for manual deployment.")
-		process.exit(1)
-	}
+	const pIdx = args.indexOf("--provider")
+	const pAlt = args.indexOf("-p")
+	const nIdx = args.indexOf("--name")
+	const nAlt = args.indexOf("-n")
+	const subPlatform =
+		(pIdx !== -1 ? args[pIdx + 1] : undefined) ||
+		(pAlt !== -1 ? args[pAlt + 1] : undefined)
+	const subSkipIdx = new Set<number>()
+	subSkipIdx.add(pIdx)
+	subSkipIdx.add(pAlt)
+	subSkipIdx.add(nIdx)
+	subSkipIdx.add(nAlt)
+	// Skip the values after valued flags too
+	if (pIdx !== -1) subSkipIdx.add(pIdx + 1)
+	if (pAlt !== -1) subSkipIdx.add(pAlt + 1)
+	if (nIdx !== -1) subSkipIdx.add(nIdx + 1)
+	if (nAlt !== -1) subSkipIdx.add(nAlt + 1)
+	const name = args.find(
+		(a, i) => i > 1 && !a.startsWith("-") && !subSkipIdx.has(i),
+	)
 
-	console.error(`Unknown platform: ${deployPlatform}`)
-	console.error("Supported: fly, railway")
-	process.exit(1)
+	switch (sub) {
+		case "sleep": {
+			if (!name) {
+				console.error("Usage: hybrid deploy sleep <name>")
+				process.exit(1)
+			}
+			const { runSleep } = await loadDeploy()
+			await runSleep(name, subPlatform, projectRoot)
+			break
+		}
+		case "wake": {
+			if (!name) {
+				console.error("Usage: hybrid deploy wake <name>")
+				process.exit(1)
+			}
+			const { runWake } = await loadDeploy()
+			await runWake(name, subPlatform, projectRoot)
+			break
+		}
+		case "status": {
+			if (!name) {
+				console.error("Usage: hybrid deploy status <name>")
+				process.exit(1)
+			}
+			const { runStatus } = await loadDeploy()
+			await runStatus(name, subPlatform, projectRoot)
+			break
+		}
+		case "logs": {
+			if (!name) {
+				console.error("Usage: hybrid deploy logs <name>")
+				process.exit(1)
+			}
+			const follow = !args.includes("--no-follow")
+			const { runLogs } = await loadDeploy()
+			await runLogs(name, follow, subPlatform, projectRoot)
+			break
+		}
+		case "teardown": {
+			if (!name) {
+				console.error("Usage: hybrid deploy teardown <name>")
+				process.exit(1)
+			}
+			const { runTeardown } = await loadDeploy()
+			await runTeardown(name, subPlatform, projectRoot)
+			break
+		}
+		default:
+			console.error(`Unknown deploy subcommand: ${sub}`)
+			printDeployHelp()
+			process.exit(1)
+	}
+}
+
+function printDeployHelp() {
+	console.error("")
+	console.error("Usage: hybrid deploy <subcommand>")
+	console.error("")
+	console.error("Commands:")
+	console.error(
+		"  deploy [platform]             Deploy to a Firecracker provider"
+	)
+	console.error("  deploy sleep <name>            Put VM to sleep")
+	console.error("  deploy wake <name>             Wake VM")
+	console.error("  deploy status <name>           Show VM status")
+	console.error("  deploy logs <name>             Stream agent logs")
+	console.error("  deploy teardown <name> [--all] Destroy VM")
+	console.error("")
+	console.error(
+		"Flags: --provider <name>  --name <name>  --force  --no-build  --no-follow"
+	)
 }
 
 // ============================================================================
