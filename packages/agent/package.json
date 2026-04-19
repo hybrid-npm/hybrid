@@ -1,7 +1,6 @@
 {
 	"name": "hybrid/agent",
 	"version": "2.1.0",
-	"private": true,
 	"type": "module",
 	"main": "./dist/index.cjs",
 	"exports": {

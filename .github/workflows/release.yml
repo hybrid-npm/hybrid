@@ -46,7 +46,11 @@ jobs:
       - name: Build packages
         run: pnpm build:packages
 
-      - name: Publish to npm
-        run: pnpm -r publish --access public --no-git-checks
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish packages to npm
+        run: |
+          for pkg in packages/agent packages/types packages/memory packages/scheduler packages/utils packages/create-hybrid packages/cli packages/channels; do
+            if [ -f "$pkg/package.json" ]; then
+              echo "Publishing $pkg..."
+              (cd "$pkg" && npm publish --access public --provenance)
+            fi
+          done
