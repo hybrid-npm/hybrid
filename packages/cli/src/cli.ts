@@ -392,7 +392,29 @@ async function init(name?: string) {
 		openrouterKey = keyResponse.key || ""
 	}
 
-	// Create ACL file with owner (skip for now)
+	// Create ACL file with owner
+	const credentialsDir = resolve(targetDir, "credentials")
+	mkdirSync(credentialsDir, { recursive: true })
+	const acl: { version: number; allowFrom: string[] } = {
+		version: 1,
+		allowFrom: []
+	}
+	const ownerQuestion = (prompt: string): Promise<string> => {
+		return new Promise((resolve) => {
+			rl.question(prompt, (answer: string) => {
+				resolve(answer.trim())
+			})
+		})
+	}
+	const ownerAddress = await ownerQuestion("\nEnter your wallet address (owner): ")
+	if (ownerAddress) {
+		acl.allowFrom.push(ownerAddress.toLowerCase())
+		console.log(`\n✅ Added owner: ${ownerAddress.toLowerCase()}`)
+	}
+	writeFileSync(
+		resolve(credentialsDir, "allowFrom.json"),
+		JSON.stringify(acl, null, 2)
+	)
 
 	// Update .env file with generated key and API keys
 	let envContent = readFileSync(envPath, "utf-8")

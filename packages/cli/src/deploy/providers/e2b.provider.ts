@@ -1,32 +1,35 @@
-import { execFileSync } from "node:child_process"
-import { existsSync, unlinkSync } from "node:fs"
+import { execFileSync, spawn } from "node:child_process"
+import { existsSync, unlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { basename, join } from "node:path"
 import type {
 	DeployProvider,
 	InstanceStatus,
-	ProvisionOpts
+	ProvisionOpts,
 } from "../deploy-provider"
 
 // ============================================================================
 // E2B.dev Provider
 //
-// Uses the `e2b` SDK npm package for sandbox management.
+// Uses the `e2b` npm package for sandbox management.
 // Requires E2B_API_KEY environment variable.
 //
-// Sleep/wake: Sandbox.pause() freezes state to persistent disk.
-//             Sandbox.resume(sandboxId) restores to exact state.
+// Sleep/wake: sandbox.pause() freezes state.
+//             Sandbox.connect(sandboxId) resumes (auto-resumes if paused).
 // ============================================================================
 
-const DEFAULT_TEMPLATE = "hybrid" // Custom template with agent pre-installed
+const DEFAULT_TEMPLATE = "base"
 
-async function importSDK() {
+type SandboxInstance = any // eslint-disable-line @typescript-eslint/no-explicit-any
+
+async function getSDK() {
 	try {
-		// @ts-expect-error e2b is an optional peer dependency
 		const { Sandbox } = await import("e2b")
 		return Sandbox
 	} catch {
-		throw new Error(`e2b not installed.\nInstall with: npm install e2b`)
+		throw new Error(
+			"e2b not installed.\nInstall with: npm install e2b",
+		)
 	}
 }
 
@@ -34,14 +37,13 @@ function getAPIKey(): string {
 	const key = process.env.E2B_API_KEY
 	if (!key) {
 		throw new Error(
-			"E2B_API_KEY not set.\nGet your key: https://e2b.dev/dashboard?tab=keys\nSet with: export E2B_API_KEY=e2b_xxx"
+			"E2B_API_KEY not set.\nGet your key: https://e2b.dev/dashboard?tab=keys\nSet with: export E2B_API_KEY=e2b_xxx",
 		)
 	}
 	return key
 }
 
-// Map of active sandbox instances (so we don't lose references)
-const sandboxes = new Map<string, any>()
+const sandboxes = new Map<string, SandboxInstance>()
 
 export const e2bProvider: DeployProvider = {
 	name: "e2b",
@@ -57,75 +59,70 @@ export const e2bProvider: DeployProvider = {
 	},
 
 	async authCheck(): Promise<void> {
-		// Check API key
 		getAPIKey()
-
-		// Check SDK installed
+		const Sandbox = await getSDK()
 		try {
-			await importSDK()
-		} catch (err: any) {
-			throw new Error(err.message)
-		}
-
-		// Try listing sandboxes to verify auth works
-		const Sandbox = await importSDK()
-		try {
-			await Sandbox.list()
-		} catch (err: any) {
-			if (
-				err.message?.includes("401") ||
-				err.message?.includes("unauthorized")
-			) {
+			// Try listing — Sandbox.list() returns a paginator in e2b v2
+			const paginator = Sandbox.list()
+			await paginator.nextItems()
+		} catch (err: unknown) {
+			const msg = err instanceof Error ? err.message : String(err)
+			if (msg.includes("401") || msg.includes("unauthorized")) {
 				throw new Error(
-					"E2B API key is invalid.\nGet your key: https://e2b.dev/dashboard?tab=keys"
+					"E2B API key is invalid.\nGet your key: https://e2b.dev/dashboard?tab=keys",
 				)
 			}
-			throw new Error(`E2B connection failed: ${err.message}`)
+			throw new Error(`E2B connection failed: ${msg}`)
 		}
 	},
 
 	async provision(name: string, _opts?: ProvisionOpts): Promise<string> {
-		const Sandbox = await importSDK()
-		const apiKey = getAPIKey()
+		const Sandbox = await getSDK()
 
 		console.log(`\n📦 Creating E2B sandbox: ${name}`)
 
 		// Try to resume an existing paused sandbox first
 		try {
-			// Check if there's a paused sandbox with a matching metadata label
-			const list = await Sandbox.list({ limit: 50 })
-			let result: any = null
-			for (const s of list) {
-				const meta = s.metadata as Record<string, string> | undefined
-				if (meta?.["hybrid-name"] === name) {
-					result = s
-					break
+			const paginator = Sandbox.list()
+			let found: any = null // eslint-disable-line @typescript-eslint/no-explicit-any
+			while (paginator.hasNext) {
+				const items = await paginator.nextItems()
+				for (const s of items) {
+					const info = s as any
+					const meta = info.metadata as
+						| Record<string, string>
+						| undefined
+					if (meta?.["hybrid-name"] === name) {
+						found = info
+						break
+					}
+					if (
+						info.sandboxId === name ||
+						info.sandboxId?.startsWith(name)
+					) {
+						found = info
+						break
+					}
 				}
-				// Fallback: match by sandbox ID suffix
-				if (s.sandboxId === name || s.sandboxId?.startsWith(name)) {
-					result = s
-					break
-				}
+				if (found) break
 			}
 
-			if (result) {
-				const sandbox = await Sandbox.resume({
-					sandboxId: result.sandboxId,
-					apiKey
-				})
+			if (found) {
+				// connect() auto-resumes if paused
+				const sandbox = await Sandbox.connect(found.sandboxId)
 				sandboxes.set(name, sandbox)
-				console.log(`   ✓ Resumed existing sandbox: ${result.sandboxId}`)
-				return result.sandboxId
+				console.log(
+					`   ✓ Resumed existing sandbox: ${found.sandboxId}`,
+				)
+				return found.sandboxId
 			}
 		} catch {
 			// No existing sandbox, create new
 		}
 
-		// Create new sandbox
-		const sandbox = await Sandbox.create({
-			template: DEFAULT_TEMPLATE,
+		// Create new sandbox — template is first positional arg in e2b v2
+		const sandbox = await Sandbox.create(DEFAULT_TEMPLATE, {
 			metadata: { "hybrid-name": name },
-			apiKey
 		})
 
 		sandboxes.set(name, sandbox)
@@ -137,29 +134,31 @@ export const e2bProvider: DeployProvider = {
 		const sandbox = sandboxes.get(instanceId)
 		if (!sandbox) {
 			throw new Error(
-				`Sandbox ${instanceId} not found in active sessions.\nRun 'hybrid deploy' again to reconnect.`
+				`Sandbox ${instanceId} not found in active sessions.\nRun 'hybrid deploy' again to reconnect.`,
 			)
 		}
 
 		console.log("\n📤 Uploading build artifacts...")
 
-		// Create tarball of dist
-		const tarPath = join(tmpdir(), `hybrid-e2b-deploy-${Date.now()}.tar.gz`)
+		const tarPath = join(
+			tmpdir(),
+			`hybrid-e2b-deploy-${Date.now()}.tar.gz`,
+		)
 		execFileSync("tar", ["-czf", tarPath, "-C", distDir, "."], {
-			stdio: "pipe"
+			stdio: "pipe",
 		})
 
-		// Upload tarball to sandbox
 		try {
 			const fs = await import("node:fs/promises")
 			const tarBuffer = await fs.readFile(tarPath)
 			await sandbox.files.write("/tmp/hybrid-deploy.tar.gz", tarBuffer, {
-				onProgress: (p: number) => {
-					if (p === 100) console.log("   ✓ Upload complete")
-				}
+				onProgress: () => {},
 			})
-		} catch (err: any) {
-			throw new Error(`Upload failed: ${err.message}`)
+			console.log("   ✓ Upload complete")
+		} catch (err: unknown) {
+			throw new Error(
+				`Upload failed: ${err instanceof Error ? err.message : String(err)}`,
+			)
 		} finally {
 			if (existsSync(tarPath)) {
 				try {
@@ -172,7 +171,7 @@ export const e2bProvider: DeployProvider = {
 		console.log("\n📦 Extracting and installing dependencies...")
 		const result = await sandbox.commands.run(
 			"cd /home/user && mkdir -p app && tar -xzf /tmp/hybrid-deploy.tar.gz -C app && cd app && npm install --production 2>&1",
-			{ timeout: 120000 }
+			{ timeout: 120000 },
 		)
 
 		if (result.stderr) {
@@ -181,7 +180,7 @@ export const e2bProvider: DeployProvider = {
 
 		if (result.exitCode !== 0) {
 			throw new Error(
-				`Dependency installation failed (exit ${result.exitCode})`
+				`Dependency installation failed (exit ${result.exitCode})`,
 			)
 		}
 
@@ -189,7 +188,7 @@ export const e2bProvider: DeployProvider = {
 		console.log("\n🔧 Starting agent...")
 		await sandbox.commands.run(
 			"cd /home/user/app && export NODE_ENV=production AGENT_PORT=8454 && nohup node server/index.cjs > /tmp/agent.log 2>&1 & echo $! > /tmp/agent.pid",
-			{ timeout: 10000 }
+			{ timeout: 10000 },
 		)
 
 		// Wait for agent health check
@@ -198,47 +197,55 @@ export const e2bProvider: DeployProvider = {
 		for (let i = 0; i < 15; i++) {
 			try {
 				const health = await sandbox.commands.run(
-					"curl -sf http://localhost:8454/health || echo 'not ready'"
+					"curl -sf http://localhost:8454/health || echo 'not ready'",
 				)
 				if (health.stdout && !health.stdout.includes("not ready")) {
 					ready = true
 					break
 				}
 			} catch {
-				// Agent not ready yet
+				// Not ready yet
 			}
 			await new Promise((r) => setTimeout(r, 2000))
 		}
 
 		if (!ready) {
-			console.log("   ⚠️  Agent health check timed out (may still be starting)")
+			console.log(
+				"   ⚠️  Agent health check timed out (may still be starting)",
+			)
 		} else {
 			console.log("   ✓ Agent running")
 		}
 	},
 
 	async status(instanceId: string): Promise<InstanceStatus> {
-		// Check if we have the sandbox cached
 		const cached = sandboxes.get(instanceId)
 		if (cached) {
 			return "running"
 		}
 
-		// Query E2B for sandbox state
 		try {
-			const Sandbox = await importSDK()
-			const list = await Sandbox.list({ limit: 50 })
-			const found = list.find(
-				(s: any) =>
-					s.sandboxId === instanceId || s.sandboxId?.startsWith(instanceId)
-			)
-			if (!found) {
-				return "stopped"
+			const Sandbox = await getSDK()
+			const paginator = Sandbox.list()
+			while (paginator.hasNext) {
+				const items = await paginator.nextItems()
+				const found = items.find(
+					(s: { sandboxId: string }) =>
+						s.sandboxId === instanceId ||
+						s.sandboxId?.startsWith(instanceId),
+				)
+				if (found) {
+					const info = found as any
+					if (info.status === "paused") {
+						return "sleeping"
+					}
+					if (info.status === "running") {
+						return "running"
+					}
+					return "running"
+				}
 			}
-			if (found.status === "paused") {
-				return "sleeping"
-			}
-			return "running"
+			return "stopped"
 		} catch {
 			return "unknown"
 		}
@@ -248,7 +255,7 @@ export const e2bProvider: DeployProvider = {
 		const sandbox = sandboxes.get(instanceId)
 		if (!sandbox) {
 			throw new Error(
-				`Sandbox ${instanceId} not found in active sessions.\nCannot pause a sandbox that isn't connected.`
+				`Sandbox ${instanceId} not found in active sessions.\nCannot pause a sandbox that isn't connected.`,
 			)
 		}
 
@@ -259,17 +266,17 @@ export const e2bProvider: DeployProvider = {
 	},
 
 	async wake(instanceId: string): Promise<void> {
-		const Sandbox = await importSDK()
-		const apiKey = getAPIKey()
+		const Sandbox = await getSDK()
 
 		console.log(`\n☀️  Resuming E2B sandbox: ${instanceId}`)
 		try {
-			const sandbox = await Sandbox.resume({ sandboxId: instanceId, apiKey })
+			// Sandbox.connect auto-resumes paused sandboxes
+			const sandbox = await Sandbox.connect(instanceId)
 			sandboxes.set(instanceId, sandbox)
 			console.log("   ✓ Sandbox resumed")
-		} catch (err: any) {
+		} catch (err: unknown) {
 			throw new Error(
-				`Failed to resume sandbox: ${err.message}\nThe sandbox may have expired (E2B sandboxes have a maximum lifetime).`
+				`Failed to resume sandbox: ${err instanceof Error ? err.message : String(err)}\nThe sandbox may have expired (E2B sandboxes have a maximum lifetime).`,
 			)
 		}
 	},
@@ -278,17 +285,16 @@ export const e2bProvider: DeployProvider = {
 		const sandbox = sandboxes.get(instanceId)
 		if (!sandbox) {
 			throw new Error(
-				`Sandbox ${instanceId} not found. Wake it first with: hybrid deploy wake ${instanceId}`
+				`Sandbox ${instanceId} not found. Wake it first with: hybrid deploy wake ${instanceId}`,
 			)
 		}
 
 		if (follow) {
-			// Tail logs by polling
 			let offset = 0
 			while (true) {
 				try {
 					const result = await sandbox.commands.run(
-						`cat /tmp/agent.log 2>/dev/null || echo "No logs yet"`
+						"cat /tmp/agent.log 2>/dev/null || echo 'No logs yet'",
 					)
 					const output = result.stdout || ""
 					if (output.length > offset) {
@@ -302,7 +308,7 @@ export const e2bProvider: DeployProvider = {
 			}
 		} else {
 			const result = await sandbox.commands.run(
-				"cat /tmp/agent.log 2>/dev/null || echo 'No logs yet'"
+				"cat /tmp/agent.log 2>/dev/null || echo 'No logs yet'",
 			)
 			console.log(result.stdout || "No logs yet")
 		}
@@ -311,11 +317,9 @@ export const e2bProvider: DeployProvider = {
 	async endpoint(instanceId: string): Promise<string> {
 		const sandbox = sandboxes.get(instanceId)
 		if (!sandbox) {
-			// E2B provides a predictable URL format
 			return `https://${instanceId}-8454.e2b.dev`
 		}
 
-		// Get the actual host URL from the sandbox
 		try {
 			const host = await sandbox.getHost(8454)
 			return `https://${host}`
@@ -325,29 +329,24 @@ export const e2bProvider: DeployProvider = {
 	},
 
 	async teardown(instanceId: string): Promise<void> {
-		const Sandbox = await importSDK()
+		const Sandbox = await getSDK()
 
 		console.log(`\n🗑️  Destroying E2B sandbox: ${instanceId}`)
 		try {
-			// Kill the sandbox if we have a reference
 			const cached = sandboxes.get(instanceId)
 			if (cached) {
 				await cached.kill()
 			} else {
-				// Find by ID and kill
-				const list = await Sandbox.list({ limit: 50 })
-				const found = list.find(
-					(s: any) =>
-						s.sandboxId === instanceId || s.sandboxId?.startsWith(instanceId)
-				)
-				if (found) {
-					await found.kill()
-				}
+				// Connect then kill
+				const sandbox = await Sandbox.connect(instanceId)
+				await sandbox.kill()
 			}
 			sandboxes.delete(instanceId)
 			console.log("   ✓ Sandbox destroyed")
-		} catch (err: any) {
-			throw new Error(`Failed to destroy sandbox: ${err.message}`)
+		} catch (err: unknown) {
+			throw new Error(
+				`Failed to destroy sandbox: ${err instanceof Error ? err.message : String(err)}`,
+			)
 		}
-	}
+	},
 }
