@@ -25,6 +25,8 @@ export interface DeployOptions {
 	force?: boolean
 	/** Make the URL public without an auth wall */
 	public?: boolean
+	/** Start tailing logs immediately after deploy */
+	tail?: boolean
 }
 
 export interface DeployResult {
@@ -65,12 +67,12 @@ async function ensureAgentModel(projectRoot: string) {
 	}
 
 	const registry = ModelRegistry.create(authStorage)
-	const models = registry.models
+	const models = await registry.getAvailable()
 	const providerFilter = isUsingOpenRouter ? "openrouter" : "anthropic"
 	
 	const choices = models
-		.filter(m => m.provider.name === providerFilter)
-		.map(m => ({ title: m.name, value: m.id }))
+		.filter((m: any) => m.provider.name === providerFilter)
+		.map((m: any) => ({ title: m.name, value: m.id }))
 	
 	if (choices.length === 0) {
 		console.warn(`⚠️  No models found for ${providerFilter}. Defaulting to Sonnet.`)
@@ -85,8 +87,8 @@ async function ensureAgentModel(projectRoot: string) {
 		name: "model",
 		message: "Select a model to deploy with",
 		choices,
-		initial: choices.findIndex(c => c.value.includes("sonnet")),
-		suggest: async (input: string, choices: any[]) => choices.filter(i => i.title.toLowerCase().includes(input.toLowerCase())),
+		initial: choices.findIndex((c: any) => c.value.includes("sonnet")),
+		suggest: async (input: string, choices: any[]) => choices.filter((i: any) => i.title.toLowerCase().includes(input.toLowerCase())),
 	})
 
 	if (!choice.model) {
@@ -212,6 +214,11 @@ export async function runDeploy(
 	}
 
 	console.log("\n✅ Deployed!")
+
+	if (options.tail && typeof provider.logs === "function") {
+		console.log("\n📜 Tailing logs...")
+		await provider.logs(instanceName, true)
+	}
 
 	return { endpoint, keyPair }
 }
@@ -413,6 +420,9 @@ async function runBuild(projectRoot: string, packageDir: string) {
 		const src = resolve(agentDistDir, file)
 		if (existsSync(src)) {
 			cpSync(src, resolve(distDir, file))
+		} else {
+			console.error(`  Missing: ${file} - run 'pnpm build' in hybrid package (looked at ${src})`)
+			process.exit(1)
 		}
 	}
 

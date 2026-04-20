@@ -144,6 +144,7 @@ async function main() {
 	console.log("  --force               Recreate VM even if it exists")
 	console.log("  --no-build            Skip build step")
 	console.log("  --public              Make the sprite URL public (no auth wall)")
+	console.log("  --tail                Tail logs immediately after deployment")
 	console.log("")
 	console.log("Owner:")
 	console.log("  owner add <address>     Add an owner")
@@ -492,7 +493,8 @@ async function build(target?: string) {
 		if (existsSync(src)) {
 			cpSync(src, resolve(distDir, file))
 		} else {
-			console.error(`  Missing: ${file} - run 'pnpm build' in hybrid package`)
+			console.error(`  Missing: ${file} - run 'pnpm build' in hybrid package `)
+			process.exit(1)
 		}
 	}
 
@@ -773,6 +775,7 @@ function parseDeployArgs(args: string[]) {
 	const skipBuild = args.includes("--no-build")
 	const force = args.includes("--force")
 	const makePublic = args.includes("--public")
+	const tail = args.includes("--tail")
 	const follow = !args.includes("--no-follow")
 	return {
 		platform: providerFlag,
@@ -780,6 +783,7 @@ function parseDeployArgs(args: string[]) {
 		skipBuild,
 		force,
 		public: makePublic,
+		tail,
 		follow,
 	}
 }
@@ -807,6 +811,7 @@ async function deployCommand(args: string[]) {
 				skipBuild: flags.skipBuild,
 				force: flags.force,
 				public: flags.public,
+				tail: flags.tail,
 			},
 			projectRoot,
 			packageDir,
@@ -904,7 +909,7 @@ function printDeployHelp() {
 	console.error("  deploy teardown <name> [--all] Destroy VM")
 	console.error("")
 	console.error(
-		"Flags: --provider <name>  --name <name>  --force  --no-build  --no-follow  --public"
+		"Flags: --provider <name>  --name <name>  --force  --no-build  --no-follow  --public  --tail"
 	)
 }
 
