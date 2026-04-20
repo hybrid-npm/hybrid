@@ -94,6 +94,8 @@ async function main() {
 		process.exit(1)
 	}
 
+	if (command === "msg" || command === "m") return msgCommand(args.slice(1))
+
 	if (command === "clawhub" || command === "ch") {
 		const subcommand = args[1]
 		const passThroughArgs = args.slice(2).join(" ")
@@ -126,6 +128,7 @@ async function main() {
 	console.log("  dev                       Start development server")
 	console.log("  build [--target]          Build for deployment (firecracker)")
 	console.log("  start                     Run built agent")
+	console.log("  msg <message>             Send a message to an agent")
 	console.log(
 		"  deploy [platform]              Deploy to a Firecracker provider"
 	)
@@ -140,6 +143,7 @@ async function main() {
 	console.log("  --name <name>         Override instance name")
 	console.log("  --force               Recreate VM even if it exists")
 	console.log("  --no-build            Skip build step")
+	console.log("  --public              Make the sprite URL public (no auth wall)")
 	console.log("")
 	console.log("Owner:")
 	console.log("  owner add <address>     Add an owner")
@@ -151,7 +155,6 @@ async function main() {
 	console.log("  skills remove <name> [-g]   Remove a skill")
 	console.log("  skills list                 List installed skills")
 	console.log("")
-	console.log("  Uses npx skills --agent openclaw under the hood")
 	console.log("  -g, --global    Install to ~/.openclaw/skills/")
 	console.log("")
 	console.log("Sources:")
@@ -482,7 +485,7 @@ async function build(target?: string) {
 	console.log("📦 Copying agent runtime...")
 	const agentDistDir = resolve(packageDir, "dist")
 
-	const files = ["server/index.cjs"]
+	const files = ["server/index.mjs"]
 
 	for (const file of files) {
 		const src = resolve(agentDistDir, file)
@@ -559,13 +562,14 @@ async function build(target?: string) {
 		version: "1.0.0",
 		type: "module",
 		dependencies: {
-			"@anthropic-ai/claude-agent-sdk": "^0.2.38",
 			"@hono/node-server": "^1.13.5",
+			"@mariozechner/pi-coding-agent": "0.19.1",
 			ai: "^6.0.0",
 			"better-sqlite3": "^11.0.0",
 			dotenv: "^16.4.5",
 			hono: "^4.10.8",
 			"sql.js": "^1.11.0",
+			viem: "^2.46.2",
 			zod: "^4.0.0"
 		}
 	}
@@ -584,7 +588,7 @@ async function build(target?: string) {
 			{
 				version: 1,
 				provider: "firecracker",
-				startCommand: "node server/index.cjs",
+				startCommand: "node server/index.mjs",
 				port: 8454,
 				healthPath: "/health"
 			},
@@ -597,7 +601,7 @@ async function build(target?: string) {
 	writeFileSync(
 		resolve(distDir, "start.sh"),
 		`#!/bin/sh
-node server/index.cjs
+node server/index.mjs
 `
 	)
 
@@ -636,7 +640,7 @@ ENV NODE_ENV=production
 ENV DATA_ROOT=/app/data
 EXPOSE 8454
 USER node
-CMD ["node", "server/index.cjs"]
+CMD ["node", "server/index.mjs"]
 `
 }
 
@@ -768,12 +772,14 @@ function parseDeployArgs(args: string[]) {
 	)
 	const skipBuild = args.includes("--no-build")
 	const force = args.includes("--force")
+	const makePublic = args.includes("--public")
 	const follow = !args.includes("--no-follow")
 	return {
 		platform: providerFlag,
 		name: name || nameFlag,
 		skipBuild,
 		force,
+		public: makePublic,
 		follow,
 	}
 }
@@ -800,6 +806,7 @@ async function deployCommand(args: string[]) {
 				name: flags.name,
 				skipBuild: flags.skipBuild,
 				force: flags.force,
+				public: flags.public,
 			},
 			projectRoot,
 			packageDir,
@@ -897,8 +904,237 @@ function printDeployHelp() {
 	console.error("  deploy teardown <name> [--all] Destroy VM")
 	console.error("")
 	console.error(
-		"Flags: --provider <name>  --name <name>  --force  --no-build  --no-follow"
+		"Flags: --provider <name>  --name <name>  --force  --no-build  --no-follow  --public"
 	)
+}
+
+// ============================================================================
+// Msg — Send a message to any agent over HTTP
+// ============================================================================
+
+async function msgCommand(msgArgs: string[]) {
+	// Parse flags: --user, --chat, --conversation, --channel, --url
+	let message = msgArgs.find((a) => !a.startsWith("--"))
+	const urlFlag = msgArgs.find(
+		(_, i) => {
+			const prev = msgArgs[i - 1]
+			return prev === "--url"
+		}
+	)
+	const userId = msgArgs.find(
+		(_, i) => {
+			const prev = msgArgs[i - 1]
+			return prev === "--user" || prev === "-u"
+		}
+	)
+	const chatId = msgArgs.find(
+		(_, i) => {
+			const prev = msgArgs[i - 1]
+			return prev === "--chat" || prev === "-c"
+		}
+	)
+	const conversationId = msgArgs.find(
+		(_, i) => {
+			const prev = msgArgs[i - 1]
+			return prev === "--conversation" || prev === "--convo"
+		}
+	)
+	const channelFlag = msgArgs.find(
+		(_, i) => {
+			const prev = msgArgs[i - 1]
+			return prev === "--channel"
+		}
+	)
+	const noStream = msgArgs.includes("--no-stream") || msgArgs.includes("-n")
+
+	if (!message) {
+		console.error("Usage: hybrid msg <message> [flags]")
+		console.error("")
+		console.error("Send a message to an agent and stream the response.")
+		console.error("")
+		console.error("Environment:")
+		console.error("  AGENT_URL   Agent base URL (default: http://localhost:8454)")
+		console.error("")
+		console.error("Flags:")
+		console.error("  --url <url>            Override AGENT_URL")
+		console.error("  -u, --user <id>        User ID (default: anonymous)")
+		console.error("  -c, --chat <id>        Chat/session ID (default: random)")
+		console.error("  --convo <id>           Conversation ID (for scope & reminders)")
+		console.error("  --channel <ch>         Channel hint (web, slack, whatsapp, ...)")
+		console.error("  -n, --no-stream        Buffer and print full response at once")
+		console.error("")
+		console.error("Examples:")
+		console.error('  hybrid msg "Hello!"')
+		console.error('  hybrid msg "hi there" --url https://my-agent.sprites.dev')
+		console.error('  hybrid msg "remind me at 5pm" -u alice --convo slack-D123')
+		process.exit(1)
+	}
+
+	const agentUrl = urlFlag || process.env.AGENT_URL || "http://localhost:8454"
+	const chatIdValue = chatId || crypto.randomUUID()
+	const conversationIdValue = conversationId || undefined
+	const channelValue = channelFlag || "web"
+
+	// ── Resolve identity key ─────────────────────────────────────────────
+	// Priority: PRIVATE_KEY env > .hybrid-key.json in project root
+	const { signRequestBody, recoverRequestSigner } = await import("./lib/sign")
+
+	let privateKey = process.env.PRIVATE_KEY
+
+	// Fall back to local key file
+	if (!privateKey) {
+		const { existsSync, readFileSync } = await import("node:fs")
+		const { resolve } = await import("node:path")
+		const localKeyPath = resolve(projectRoot, ".hybrid-key.json")
+		if (existsSync(localKeyPath)) {
+			try {
+				const keyData = JSON.parse(readFileSync(localKeyPath, "utf-8"))
+				privateKey = keyData.privateKey
+			} catch { /* ignore */ }
+		}
+	}
+
+	// Build request body
+	const bodyObj = {
+		messages: [
+			{
+				id: crypto.randomUUID(),
+				role: "user" as const,
+				content: message
+			}
+		],
+		chatId: chatIdValue,
+		userId: "anonymous", // server overrides with recovered address when signed
+		conversationId: conversationIdValue,
+		channel: channelValue
+	}
+	const bodyStr = JSON.stringify(bodyObj)
+
+	// Sign if we have a key
+	let signature: string | undefined
+	let signerAddress: string | undefined
+	if (privateKey) {
+		signature = await signRequestBody(bodyStr, privateKey)
+		signerAddress = (await recoverRequestSigner(bodyStr, signature)) ?? undefined
+	}
+
+	const endpoint = `${agentUrl.replace(/\/+$/, "")}/api/chat`
+
+	console.error("")
+	console.error(`  → ${endpoint}`)
+	if (signerAddress) {
+		console.error(`  signed: ${signerAddress} | chat: ${chatIdValue.slice(0, 8)}… | channel: ${channelValue}`)
+	} else {
+		const anonId = userId || "anonymous"
+		console.error(`  user: ${anonId} | chat: ${chatIdValue.slice(0, 8)}… | channel: ${channelValue}`)
+		console.error(`  ⚠️  unsigned — set PRIVATE_KEY or create .hybrid-key.json`)
+	}
+	console.error("")
+
+	try {
+		const headers: Record<string, string> = {
+			"Content-Type": "application/json",
+			"X-Source": "cli"
+		}
+		if (signature) {
+			headers["X-Signature"] = signature
+		}
+
+		const response = await fetch(endpoint, {
+			method: "POST",
+			headers,
+			body: bodyStr,
+			redirect: "manual", // detect auth redirects explicitly
+		})
+
+		// Detect auth redirects (sprites.dev etc.)
+		if ([301, 302, 303, 307, 308].includes(response.status)) {
+			const location = response.headers.get("location") || ""
+			console.error(`  ❌ Auth required — the agent is behind a login wall`)
+			if (location) console.error(`  Redirect: ${location}`)
+			console.error(`  💡 Make sprite auth public: sprite url update --auth public`)
+			console.error(`  💡 Or run: sprite proxy 8454`)
+			console.error(`  Then:  AGENT_URL=http://localhost:8454 hybrid msg "hi"`)
+			process.exit(1)
+		}
+
+		if (!response.ok) {
+			const body = await response.text()
+			console.error(`  ❌ Agent returned ${response.status}: ${body}`)
+			process.exit(1)
+		}
+
+		const reader = response.body?.getReader()
+		if (!reader) {
+			console.error("  ❌ No response body")
+			process.exit(1)
+		}
+
+		const decoder = new TextDecoder()
+		let buffer = ""
+		let fullResponse = ""
+		let errorOutput: string | null = null
+		let usageInfo: object | null = null
+
+		while (true) {
+			const { done, value } = await reader.read()
+			if (done) break
+
+			const text = decoder.decode(value, { stream: true })
+			buffer += text
+
+			const lines = buffer.split("\n")
+			buffer = lines.pop() || ""
+
+			for (const line of lines) {
+				const trimmed = line.trim()
+				if (!trimmed.startsWith("data: ")) continue
+				if (trimmed === "data: [DONE]") break
+
+				try {
+					const parsed = JSON.parse(trimmed.slice(6))
+					if (parsed.type === "text" && parsed.content) {
+						if (noStream) {
+							fullResponse += parsed.content
+						} else {
+							process.stdout.write(parsed.content)
+						}
+					} else if (parsed.type === "error") {
+						errorOutput = parsed.content || "Unknown error"
+					} else if (parsed.type === "usage") {
+						usageInfo = parsed
+					}
+				} catch {
+					// skip malformed lines
+				}
+			}
+		}
+
+		if (errorOutput) {
+			console.error(`\n\n  ❌ ${errorOutput}`)
+			process.exit(1)
+		}
+
+		if (noStream && fullResponse) {
+			process.stdout.write(fullResponse + "\n")
+		}
+
+		if (usageInfo) {
+			const u = usageInfo as any
+			console.error("")
+			console.error(`  ${u.inputTokens ?? 0} in / ${u.outputTokens ?? 0} out | $${(u.totalCostUsd ?? 0).toFixed(4)}`)
+		}
+
+		if (!noStream) console.error("")
+	} catch (err) {
+		if (err instanceof Error && (err as any).code === "ECONNREFUSED") {
+			console.error(`  ❌ Connection refused: ${endpoint}`)
+			console.error("  💡 Is the agent running? Try 'hybrid dev'")
+		} else {
+			console.error(`  ❌ ${err instanceof Error ? err.message : "Unknown error"}`)
+		}
+		process.exit(1)
+	}
 }
 
 // ============================================================================

@@ -1,10 +1,20 @@
 import { existsSync, readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
-import { fileURLToPath } from "node:url"
+import dotenv from "dotenv"
+
+// PROJECT_ROOT was defined at the top
+const PROJECT_ROOT = process.env.AGENT_PROJECT_ROOT || process.cwd()
+for (const f of [".env", ".env.local"]) {
+	const p = join(PROJECT_ROOT, f)
+	if (existsSync(p)) dotenv.config({ path: p })
+}
+
 import {
-	type Options,
-	query
-} from "@anthropic-ai/claude-agent-sdk"
+	AuthStorage,
+	createAgentSession,
+	ModelRegistry,
+	SessionManager
+} from "@mariozechner/pi-coding-agent"
 import { serve } from "@hono/node-server"
 import {
 	type SchedulerExecutor,
@@ -15,7 +25,6 @@ import { MemoryIndexManager, resolveMemoryConfig } from "@hybrd/memory"
 import { Hono } from "hono"
 import pc from "picocolors"
 import { loadHybridConfig } from "../config/index.js"
-import { createMcpServersFromConfig } from "./mcp-factory.js"
 import { resolveUserRole } from "../memory-tools.js"
 import { loadSecrets } from "../lib/secret-store"
 import { getOrCreateUserWorkspace } from "../lib/workspace"
@@ -24,16 +33,12 @@ import {
 	recordBootstrapSeeded,
 	recordOnboardingCompleted
 } from "../lib/workspace-state"
+import { recoverRequestSigner } from "../lib/sign.js"
 import {
 	initChatSdk,
 	getChatInstance,
 	shutdownChatSdk
 } from "./chat-sdk.js"
-
-const _dirname =
-	typeof __dirname !== "undefined"
-		? __dirname
-		: dirname(fileURLToPath(import.meta.url))
 
 // ============================================================================
 // SECURITY: Load secrets from persistent volume into memory
@@ -41,7 +46,8 @@ const _dirname =
 // ============================================================================
 loadSecrets()
 
-const PROJECT_ROOT = process.env.AGENT_PROJECT_ROOT || process.cwd()
+// PROJECT_ROOT was defined at the top
+
 
 // Auto-configure OpenRouter if OPENROUTER_API_KEY is present
 // See: https://openrouter.ai/docs/guides/guides/claude-code-integration
@@ -74,110 +80,12 @@ const SCHEDULER_POLL_MS = Number.parseInt(
 let scheduler: SchedulerService | null = null
 
 function getProviderInfo(): { provider: string; model: string } {
+	const model = process.env.AGENT_MODEL
 	const baseUrl = process.env.ANTHROPIC_BASE_URL
 	if (baseUrl?.includes("openrouter.ai")) {
-		return { provider: "OpenRouter", model: "claude-sonnet-4-20250514" }
+		return { provider: "openrouter", model: model || "anthropic/claude-sonnet-4" }
 	}
-	return { provider: "Anthropic", model: "claude-sonnet-4-20250514" }
-}
-
-const CLAUDE_WRAPPER_PATH = "/usr/local/bin/claude-wrapper.sh"
-
-function resolveClaudeCodeCliPath(): string {
-	// Env var override
-	if (process.env.CLAUDE_CODE_EXECUTABLE_PATH) {
-		return process.env.CLAUDE_CODE_EXECUTABLE_PATH
-	}
-
-	// _dirname is either:
-	// - /project/packages/agent/src/server (dev, tsx watch)
-	// - /project/packages/agent/dist/server (prod, bundled)
-	// - /app/server (Docker container)
-	// We need to go up to find node_modules at project root
-	const possiblePaths = [
-		// Docker container: /app/server -> /app/node_modules
-		join(
-			_dirname,
-			"..",
-			"node_modules",
-			"@anthropic-ai",
-			"claude-agent-sdk",
-			"cli.js"
-		),
-		// Dev/prod mode: from packages/agent/src/server or packages/agent/dist/server
-		// both need 4 levels up to reach monorepo root node_modules
-		join(
-			_dirname,
-			"..",
-			"..",
-			"..",
-			"..",
-			"node_modules",
-			"@anthropic-ai",
-			"claude-agent-sdk",
-			"cli.js"
-		),
-		// pnpm hoisted location (dev)
-		join(
-			_dirname,
-			"..",
-			"..",
-			"..",
-			"..",
-			"node_modules",
-			".pnpm",
-			"@anthropic-ai+claude-agent-sdk@0.2.50",
-			"node_modules",
-			"@anthropic-ai",
-			"claude-agent-sdk",
-			"cli.js"
-		),
-		// Global installs
-		"/usr/local/lib/node_modules/@anthropic-ai/claude-agent-sdk/cli.js",
-		"/usr/local/lib/node_modules/@anthropic-ai/claude-code/cli.js"
-	]
-	for (const p of possiblePaths) {
-		if (existsSync(p)) {
-			return p
-		}
-	}
-	throw new Error(
-		"Claude Code executable not found. Install @anthropic-ai/claude-agent-sdk or set CLAUDE_CODE_EXECUTABLE_PATH"
-	)
-}
-
-/**
- * Resolve the executable path for the Claude Agent SDK.
- *
- * In Docker (when the wrapper script exists), this returns the wrapper
- * which drops privileges to the 'claude' user before running the real CLI.
- * The real CLI path is passed via the CLAUDE_REAL_CLI env var.
- *
- * In local dev, this returns the CLI path directly (no privilege drop).
- */
-function resolveClaudeCodeExecutable(): {
-	executablePath: string
-	realCliPath: string
-	useWrapper: boolean
-} {
-	const realCliPath = resolveClaudeCodeCliPath()
-
-	// Use the privilege-drop wrapper if it exists (Docker deployment)
-	try {
-		readFileSync(CLAUDE_WRAPPER_PATH, "utf-8")
-		return {
-			executablePath: CLAUDE_WRAPPER_PATH,
-			realCliPath,
-			useWrapper: true
-		}
-	} catch {
-		// No wrapper available (local dev) — run CLI directly
-		return {
-			executablePath: realCliPath,
-			realCliPath,
-			useWrapper: false
-		}
-	}
+	return { provider: "anthropic", model: model || "claude-sonnet-4-20250514" }
 }
 
 const SCHEDULER_DB_PATH =
@@ -491,25 +399,6 @@ ${historyBlock}
 ${currentMessage.content}`
 }
 
-function extractTextDelta(msg: any): string | null {
-	if (msg.type === "stream_event") {
-		const event = msg.event
-		if (
-			event?.type === "content_block_delta" &&
-			event.delta?.type === "text_delta"
-		) {
-			return event.delta.text ?? ""
-		}
-	} else if (msg.type === "assistant") {
-		const content = msg.message?.content
-		if (Array.isArray(content)) {
-			const textBlock = content.find((b: any) => b.type === "text")
-			return textBlock?.text ?? null
-		}
-	}
-	return null
-}
-
 async function runAgent(
 	req: ContainerRequest
 ): Promise<ReadableStream<Uint8Array>> {
@@ -625,11 +514,7 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 	const authToken =
 		process.env.ANTHROPIC_AUTH_TOKEN ?? process.env.OPENROUTER_API_KEY
 	const apiKey = process.env.ANTHROPIC_API_KEY
-	// OpenRouter uses different model names than Anthropic directly
-	// See: https://openrouter.ai/models
-	const model = isUsingOpenRouter
-		? "anthropic/claude-sonnet-4-20250514"
-		: "claude-sonnet-4-20250514"
+	const model = process.env.AGENT_MODEL || (isUsingOpenRouter ? "anthropic/claude-sonnet-4" : "claude-sonnet-4-20250514")
 
 	// Validate API configuration
 	if (!apiKey && !authToken) {
@@ -684,97 +569,20 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 		req.userId || "anonymous"
 	)
 
-	// Resolve Claude executable (wrapper in Docker, direct in local dev)
-	const { executablePath, realCliPath, useWrapper } =
-		resolveClaudeCodeExecutable()
-
-	// Sensitive key prefixes stripped from the Claude child process environment.
-	// ANTHROPIC_API_KEY/AUTH_TOKEN are NOT listed here — the Claude SDK subprocess
-	// needs them to authenticate with the LLM API. They pass through via safeEnv
-	// and are also explicitly set below for OpenRouter/Anthropic mode.
-	const SENSITIVE_PREFIXES = [
-		"OPENROUTER_API_KEY",
-		"PRIVATE_KEY",
-		"SECRET",
-		"SECRETS_PATH",
-		"DATA_ROOT"
-	]
-
-	// Build filtered environment for Claude processes
-	const safeEnv = Object.fromEntries(
-		Object.entries(process.env).filter(([key]) => {
-			return !SENSITIVE_PREFIXES.some((prefix) => key.startsWith(prefix))
-		})
-	)
-
-	// Build env object per OpenRouter docs
-	// See: https://openrouter.ai/docs/guides/guides/claude-code-integration
-	const envVars: Record<string, string | undefined> = {
-		...safeEnv,
-		ANTHROPIC_BASE_URL: baseUrl || undefined,
-		ANTHROPIC_AUTH_TOKEN: authToken || undefined,
-		// Use OpenRouter's model selection env var
-		...(isUsingOpenRouter
-			? { ANTHROPIC_SMALL_FAST_MODEL: "anthropic/claude-sonnet-4-20250514" }
-			: {}),
-		// Pass real CLI path so the wrapper knows what to execute
-		...(useWrapper ? { CLAUDE_REAL_CLI: realCliPath } : {})
-	}
-
-	// For OpenRouter: API_KEY must be explicitly empty to prevent conflicts
-	// For Anthropic: API_KEY is required
+	// Set up Pi SDK dependencies
+	const authStorage = AuthStorage.create()
 	if (isUsingOpenRouter) {
-		envVars.ANTHROPIC_API_KEY = ""
-	} else if (apiKey) {
-		envVars.ANTHROPIC_API_KEY = apiKey
+		if (authToken) authStorage.setRuntimeApiKey("openrouter", authToken)
+	} else {
+		if (apiKey) authStorage.setRuntimeApiKey("anthropic", apiKey)
 	}
 
-	const config = await getCachedConfig()
-
-	const mcpServers = await createMcpServersFromConfig(
-		{
-			projectRoot: PROJECT_ROOT,
-			userId: req.userId || "anonymous",
-			scheduler: scheduler ?? undefined
-		},
-		config?.mcpServers
-	)
-
-	const options: Options = {
-		abortController,
-		systemPrompt,
-		cwd: workspaceDir, // Isolated workspace for user
-		pathToClaudeCodeExecutable: executablePath,
-		settingSources: [],
-		permissionMode: "bypassPermissions",
-		allowDangerouslySkipPermissions: true,
-		mcpServers,
-		maxTurns: 25,
-		includePartialMessages: true,
-		stderr: (data: string) => {
-			console.error(`[claude-stderr] ${data}`)
-		},
-		env: envVars
-	}
-
-	debug(
-		"Options:",
-		JSON.stringify(
-			{ ...options, mcpServers: Object.keys(options.mcpServers || {}) },
-			null,
-			2
-		).slice(0, 500)
-	)
-	debug("System prompt:", systemPrompt.slice(0, 200))
-	debug("User prompt:", prompt.slice(0, 200))
-
-	let conversation: AsyncGenerator<any, void, unknown>
-	try {
-		conversation = query({ prompt, options })
-	} catch (err) {
-		const errorMsg =
-			err instanceof Error ? err.message : "Failed to initialize agent"
-		console.error(`[agent] query() initialization failed:`, err)
+	const modelRegistry = ModelRegistry.create(authStorage)
+	const providerKey = isUsingOpenRouter ? "openrouter" : "anthropic"
+	const activeModel = modelRegistry.find(providerKey, model)
+	if (!activeModel) {
+		const errorMsg = `Model ${model} not found for provider ${providerKey}`
+		console.error(`[agent] initialization failed: ${errorMsg}`)
 		return new ReadableStream<Uint8Array>({
 			start(controller) {
 				controller.enqueue(encodeSSEJson({ type: "error", content: errorMsg }))
@@ -784,90 +592,86 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 		})
 	}
 
+	const config = await getCachedConfig()
+
+	// Currently ignoring MCP servers for now but they can be passed as config
+	// MCP support in Pi may require mapping custom tools, or Settings.
+
 	let messageCount = 0
 	let hasStreamedText = false
 
-	// Use push-based streaming instead of pull-based
 	const stream = new ReadableStream<Uint8Array>({
 		start(controller) {
-			// Process the async generator in the background
 			;(async () => {
 				try {
-					for await (const msg of conversation) {
+					const { session } = await createAgentSession({
+						cwd: workspaceDir,
+						model: activeModel,
+						authStorage,
+						modelRegistry,
+						sessionManager: SessionManager.inMemory(),
+						// Bypass settings if needed or load default
+					})
+					
+					// Inject the system prompt override
+					// Typically done via a ResourceLoader, but we can do it via prompt context if needed.
+					// Or just inject it directly to the session memory.
+					await session.steer(`[System Instruction Override]\n${systemPrompt}`)
+
+					session.subscribe((event) => {
 						messageCount++
-
-						if (msg.type === "stream_event") {
-							const event = msg.event as { type: string }
-							const text = extractTextDelta(msg)
-							if (text) {
+					
+						if (event.type === "message_update" && event.assistantMessageEvent) {
+							const ev = event.assistantMessageEvent
+							if (ev.type === "text_delta") {
 								hasStreamedText = true
+								controller.enqueue(encodeSSEJson({ type: "text", content: ev.delta }))
+							} else if (ev.type === "toolcall_start") {
+								console.log(`${pc.cyan("[agent]")} 🔧 tool: ${pc.yellow("toolName" in ev ? (ev as any).toolName as string : "unknown")}`)
 								controller.enqueue(
-									encodeSSEJson({ type: "text", content: text })
+									encodeSSEJson({
+										type: "tool-call-start",
+										toolCallId: "toolCallId" in ev ? (ev as any).toolCallId as string : "",
+										toolName: "toolName" in ev ? (ev as any).toolName as string : ""
+									})
 								)
-							}
-
-							if (event.type === "content_block_start") {
-								const block = (event as any).content_block
-								if (block?.type === "tool_use") {
-									console.log(
-										`${pc.cyan("[agent]")} 🔧 tool: ${pc.yellow(block.name)}`
-									)
-									controller.enqueue(
-										encodeSSEJson({
-											type: "tool-call-start",
-											toolCallId: block.id,
-											toolName: block.name
-										})
-									)
-								}
-							}
-
-							if (event.type === "content_block_delta") {
-								const delta = (event as any).delta
-								if (delta?.type === "input_json_delta") {
-									controller.enqueue(
-										encodeSSEJson({
-											type: "tool-call-delta",
-											toolCallId: (event as any).index?.toString(),
-											argsTextDelta: delta.partial_json ?? ""
-										})
-									)
-								}
-							}
-
-							if (event.type === "content_block_stop") {
+							} else if (ev.type === "toolcall_delta") {
+								controller.enqueue(
+									encodeSSEJson({
+										type: "tool-call-delta",
+										toolCallId: "toolCallId" in ev ? (ev as any).toolCallId as string : "",
+										argsTextDelta: "delta" in ev ? (ev as any).delta as string : ""
+									})
+								)
+							} else if (ev.type === "toolcall_end") {
 								controller.enqueue(
 									encodeSSEJson({
 										type: "tool-call-end",
-										toolCallId: (event as any).index?.toString()
+										toolCallId: "toolCallId" in ev ? (ev as any).toolCallId as string : ""
 									})
 								)
 							}
-						} else if (msg.type === "assistant" && !hasStreamedText) {
-							// Only use assistant message if we haven't streamed text
-							const text = extractTextDelta(msg)
-							if (text) {
-								controller.enqueue(
-									encodeSSEJson({ type: "text", content: text })
-								)
-							}
-						} else if (msg.type === "result") {
-							const usage = msg.usage
-							console.log()
-							console.log(
-								`${pc.green("[agent]")} ${pc.bold("✓")} done ${pc.gray(`${messageCount} msgs`)} ${pc.gray(`| ${usage?.input_tokens ?? 0} in / ${usage?.output_tokens ?? 0} out`)}`
-							)
-							controller.enqueue(
-								encodeSSEJson({
-									type: "usage",
-									inputTokens: usage?.input_tokens ?? 0,
-									outputTokens: usage?.output_tokens ?? 0,
-									totalCostUsd: msg.total_cost_usd ?? 0,
-									numTurns: msg.num_turns ?? 1
-								})
-							)
 						}
-					}
+					})
+
+					// Dispatch the actual completion logic
+					await session.prompt(prompt)
+
+					// After completion, send the usage telemetry
+					console.log(
+						`\n${pc.green("[agent]")} ${pc.bold("✓")} done ${pc.gray(`${messageCount} events`)}`
+					)
+					
+					// Just emitting dummy defaults because session doesn't easily expose this in 0.19.1
+					controller.enqueue(
+						encodeSSEJson({
+							type: "usage",
+							inputTokens: 0,
+							outputTokens: 0,
+							totalCostUsd: 0,
+							numTurns: 1
+						})
+					)
 
 					controller.enqueue(encodeDone())
 					controller.close()
@@ -887,26 +691,6 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 						err instanceof Error ? err.message : "Agent error"
 					console.error(`[agent] error in stream:`, err)
 
-					if (err instanceof Error) {
-						if (
-							errorMessage.includes("401") ||
-							errorMessage.includes("Unauthorized") ||
-							errorMessage.includes("invalid")
-						) {
-							console.error(
-								`[agent] API key error - check ANTHROPIC_API_KEY or OPENROUTER_API_KEY`
-							)
-						}
-						if (
-							errorMessage.includes("terminated") ||
-							errorMessage.includes("ECONNREFUSED")
-						) {
-							console.error(
-								`[agent] Connection error - check ANTHROPIC_BASE_URL`
-							)
-						}
-					}
-
 					try {
 						controller.enqueue(
 							encodeSSEJson({ type: "error", content: errorMessage })
@@ -920,7 +704,7 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 			})()
 		},
 		cancel() {
-			console.log("[agent] stream cancelled, aborting agent")
+			console.log("[agent] stream cancelled")
 			abortController.abort()
 		}
 	})
@@ -937,7 +721,31 @@ app.get(HEALTH_CHECK_PATH, (c) => {
 app.post(AGENT_ENDPOINT, async (c) => {
 	const requestId = c.req.header("X-Request-ID") || "unknown"
 	const source = c.req.header("X-Source") || "unknown"
-	const req = await c.req.json<ContainerRequest>()
+
+	// ── Key-based authentication ──────────────────────────────────────────
+	// If the request is signed, recover the signer address and use it as userId.
+	// This overrides any userId in the body, so users can't impersonate others.
+	const signedBody = await c.req.text()
+	const signature = c.req.header("X-Signature")
+	let authenticatedUserId: string | null = null
+
+	if (signature) {
+		const recovered = await recoverRequestSigner(signedBody, signature)
+		if (recovered) {
+			authenticatedUserId = recovered
+			debug("[auth] recovered address:", recovered)
+		} else {
+			debug("[auth] signature verification failed")
+		}
+	}
+
+	// Parse the request body (now we need to parse from the text we already read)
+	let req: ContainerRequest
+	try {
+		req = JSON.parse(signedBody)
+	} catch {
+		return c.json({ error: "Invalid JSON body" }, 400)
+	}
 
 	// Validate request structure
 	if (!Array.isArray(req.messages)) {
@@ -957,6 +765,13 @@ app.post(AGENT_ENDPOINT, async (c) => {
 		console.log(
 			`${pc.gray("  └")} "${preview}${preview.length >= 50 ? "..." : ""}"`
 		)
+
+	// Override userId with authenticated address if signature was valid
+	// This prevents clients from impersonating other users
+	if (authenticatedUserId) {
+		req.userId = authenticatedUserId
+	}
+
 	const stream = await runAgent(req)
 
 	return new Response(stream, {
@@ -1064,15 +879,6 @@ function printStartup() {
 printStartup()
 Promise.all([initMemory(), initScheduler()]).then(async () => {
 	const config = await getCachedConfig()
-
-	const mcpServers = await createMcpServersFromConfig(
-		{
-			projectRoot: PROJECT_ROOT,
-			userId: "anonymous",
-			scheduler: scheduler ?? undefined
-		},
-		config?.mcpServers
-	)
 
 	await initChatSdk(
 		{

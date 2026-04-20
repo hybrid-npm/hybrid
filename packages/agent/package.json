@@ -23,7 +23,7 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@anthropic-ai/claude-agent-sdk": "^0.2.38",
+		"@mariozechner/pi-coding-agent": "^0.67.68",
 		"@chat-adapter/linear": "^4.25.0",
 		"@chat-adapter/slack": "^4.25.0",
 		"@chat-adapter/discord": "^4.25.0",
@@ -41,6 +41,7 @@
 		"hono": "^4.10.8",
 		"openai": "^4.0.0",
 		"picocolors": "^1.1.1",
+		"viem": "^2.46.2",
 		"zod": "^4.0.0"
 	},
 	"devDependencies": {

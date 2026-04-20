@@ -78,4 +78,9 @@ export interface DeployProvider {
 	 * Destroy the VM and all associated resources.
 	 */
 	teardown(instanceId: string): Promise<void>
+
+	/**
+	 * Optional: Set the sprite URL to public bypass auth wall
+	 */
+	makePublic?(instanceId: string): Promise<void>
 }

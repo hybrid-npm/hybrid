@@ -20,11 +20,11 @@ const external = [
 	"viem",
 	"hono",
 	"@hono/node-server",
-	"@anthropic-ai/claude-agent-sdk",
 	"sql.js",
 	"better-sqlite3",
 	"node-llama-cpp",
-	"sqlite-vec"
+	"sqlite-vec",
+	"dotenv"
 ]
 
 await esbuild.build({
@@ -43,8 +43,9 @@ await esbuild.build({
 	bundle: true,
 	platform: "node",
 	target: "node20",
-	outfile: resolve(outDir, "server/index.cjs"),
-	format: "cjs",
+	outfile: resolve(outDir, "server/index.mjs"),
+	format: "esm",
+	banner: { js: "import { createRequire as ___createRequire } from 'module'; const require = ___createRequire(import.meta.url);" },
 	external
 })
 

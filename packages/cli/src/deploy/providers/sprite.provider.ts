@@ -1,4 +1,4 @@
-import { execFileSync, spawn } from "node:child_process"
+import { execFileSync } from "node:child_process"
 import { existsSync, unlinkSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { basename, join } from "node:path"
@@ -178,42 +178,27 @@ export const spriteProvider: DeployProvider = {
 
 		// Set up and start the agent
 		console.log("\n🔧 Starting agent...")
-		const { writeFileSync } = await import("node:fs")
-		const scriptPath = join(tmpdir(), `hybrid-start-${Date.now()}.sh`)
-		const startupScript = `#!/bin/bash
+		const startupScript = `
 cd /app
 export NODE_ENV=production
-export AGENT_PORT=8454
-exec nohup node server/index.cjs > /app/agent.log 2>&1 &
+export AGENT_PORT=8080
+
+if [ -f /app/agent.pid ]; then
+	kill $(cat /app/agent.pid) 2>/dev/null
+	sleep 1
+	kill -9 $(cat /app/agent.pid) 2>/dev/null
+fi
+fuser -k 8080/tcp 2>/dev/null
+sleep 0.5
+
+node server/index.mjs > /app/agent.log 2>&1 &
 echo $! > /app/agent.pid
 `
-		writeFileSync(scriptPath, startupScript, { mode: 0o755 })
-
 		execFileSync(
 			"sprite",
-			[
-				"exec",
-				"-s",
-				instanceId,
-				"-file",
-				`${scriptPath}:/app/start-agent.sh`,
-				"--",
-				"chmod",
-				"+x",
-				"/app/start-agent.sh"
-			],
-			{ stdio: "pipe" }
-		)
-
-		execFileSync(
-			"sprite",
-			["exec", "-s", instanceId, "--", "bash", "/app/start-agent.sh"],
+			["exec", "-s", instanceId, "--", "bash", "-c", startupScript],
 			{ stdio: "inherit" }
 		)
-
-		try {
-			unlinkSync(scriptPath)
-		} catch {}
 
 		// Wait for agent to be ready
 		console.log("\n⏳ Waiting for agent to start...")
@@ -229,7 +214,7 @@ echo $! > /app/agent.pid
 						"--",
 						"curl",
 						"-s",
-						"http://localhost:8454/health"
+						"http://localhost:8080/health"
 					],
 					{ encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
 				)
@@ -305,15 +290,12 @@ echo $! > /app/agent.pid
 
 	async logs(instanceId: string, follow = true): Promise<void> {
 		const args = follow
-			? ["logs", "-s", instanceId, "-f"]
-			: ["logs", "-s", instanceId]
-		const child = spawn("sprite", args, { stdio: "inherit" })
-		return new Promise((resolve, reject) => {
-			child.on("exit", (code) => {
-				if (code === 0) resolve()
-				else reject(new Error(`sprite logs exited with code ${code}`))
-			})
-		})
+			? ["exec", "-s", instanceId, "--", "tail", "-n", "100", "-f", "/app/agent.log"]
+			: ["exec", "-s", instanceId, "--", "cat", "/app/agent.log"]
+
+		// Use execSync so Ctrl+C is handled naturally by the terminal.
+		// The sprite child inherits stdio and the signal goes directly to it.
+		execFileSync("sprite", args, { stdio: "inherit" })
 	},
 
 	async endpoint(instanceId: string): Promise<string> {
@@ -336,10 +318,18 @@ echo $! > /app/agent.pid
 	async teardown(instanceId: string): Promise<void> {
 		console.log(`\n🗑️  Destroying sprite: ${instanceId}`)
 		try {
-			execFileSync("sprite", ["delete", instanceId], { stdio: "inherit" })
+			execFileSync("sprite", ["destroy", "-force", instanceId], { stdio: "inherit" })
 			console.log("   ✓ Sprite destroyed")
 		} catch (err: any) {
 			throw new Error(`Failed to destroy sprite: ${err.stderr || err.message}`)
+		}
+	},
+
+	async makePublic(instanceId: string): Promise<void> {
+		try {
+			execFileSync("sprite", ["-s", instanceId, "url", "update", "--auth", "public"], { stdio: "inherit" })
+		} catch (err: any) {
+			throw new Error(`Failed to make sprite public: ${err.stderr || err.message}`)
 		}
 	}
 }
