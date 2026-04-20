@@ -103,17 +103,34 @@ my-agent/
 └── memory/                      # Agent memory (life/, logs/, MEMORY.md)
 ```
 
-### Key Template Files
+### Template Files
 
-| File | Purpose |
-|------|---------|
-| `SOUL.md` | Agent personality, principles, and behavior style |
-| `IDENTITY.md` | Name, creature type, vibe, emoji, avatar |
-| `USER.md` | Human profile — name, preferences, context |
-| `AGENTS.md` | Workspace rules, memory system, group chat behavior |
-| `TOOLS.md` | Local notes — tool-specific configuration |
-| `BOOTSTRAP.md` | First-run onboarding guide (deleted after setup) |
-| `HEARTBEAT.md` | Periodic task checklist for proactive behavior |
+Hybrid uses the **OpenClaw** standard for agent configuration. Each file is a markdown document loaded into the agent's system prompt on every request.
+
+| File | Purpose | When to Edit |
+|------|---------|--------------|
+| `IDENTITY.md` | Agent name, creature type, vibe, emoji, avatar | When you want to change who the agent "is" |
+| `SOUL.md` | Personality, core truths, boundaries, communication style | When shaping the agent's character and values |
+| `AGENTS.md` | Behavioral guidelines, memory rules, safety, group chat behavior | When setting work rules and conventions |
+| `USER.md` | Human's profile (name, timezone, preferences) — supports multi-tenant via `users/{userId}/USER.md` | When configuring user-specific settings |
+| `TOOLS.md` | Local environment notes (cameras, SSH hosts, TTS voices, device nicknames) — kept separate from skills so you can share skills without leaking infrastructure | When adding environment-specific configuration |
+| `BOOT.md` | Startup instructions executed on every agent restart | When you need setup steps on every restart |
+| `BOOTSTRAP.md` | First-run onboarding wizard — walks through identity setup, user intro, and channel config, then deletes itself | When onboarding new agents |
+| `HEARTBEAT.md` | Periodic task checklist for proactive behavior (empty by default to skip heartbeat calls) | When defining recurring background tasks |
+
+#### System Prompt Assembly Order
+
+On each `/api/chat` request, the agent builds the system prompt in this order:
+
+1. `IDENTITY.md` — Agent identity (name, emoji, avatar)
+2. `SOUL.md` — Agent personality and core truths
+3. Custom system prompt (if provided in request)
+4. `AGENTS.md` — Behavioral guidelines and workspace rules
+5. `TOOLS.md` — Local tool and environment notes
+6. `USER.md` — User profile (multi-tenant resolved)
+7. Current timestamp
+8. Conversation history as `<conversation_history>` XML block
+9. Memory search results from `@hybrid/memory` (seeded from last user message)
 
 ## Memory
 
