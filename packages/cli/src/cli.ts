@@ -1123,6 +1123,9 @@ async function msgCommand(msgArgs: string[]) {
 			const u = usageInfo as any
 			console.error("")
 			console.error(`  ${u.inputTokens ?? 0} in / ${u.outputTokens ?? 0} out | $${(u.totalCostUsd ?? 0).toFixed(4)}`)
+			if (u.telemetry) {
+				console.error(`  ⏱️  TTFB: ${u.telemetry.ttfbMs}ms | Latency: ${u.telemetry.llmLatencyMs}ms | Total: ${u.telemetry.totalMs}ms`)
+			}
 		}
 
 		if (!noStream) console.error("")

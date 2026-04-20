@@ -599,6 +599,11 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 
 	let messageCount = 0
 	let hasStreamedText = false
+	
+	// Timing metrics
+	const startTime = Date.now()
+	let ttfb = 0
+	let endOfLlmTime = 0
 
 	const stream = new ReadableStream<Uint8Array>({
 		start(controller) {
@@ -620,34 +625,45 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 
 					session.subscribe((event) => {
 						messageCount++
-					
+						
+						// Capture TTFB on first meaningful generation event
+						if (!ttfb && event.type === "message_update" && event.assistantMessageEvent) {
+							ttfb = Date.now() - startTime
+						}
+
 						if (event.type === "message_update" && event.assistantMessageEvent) {
 							const ev = event.assistantMessageEvent
 							if (ev.type === "text_delta") {
 								hasStreamedText = true
 								controller.enqueue(encodeSSEJson({ type: "text", content: ev.delta }))
 							} else if (ev.type === "toolcall_start") {
-								console.log(`${pc.cyan("[agent]")} 🔧 tool: ${pc.yellow("toolName" in ev ? (ev as any).toolName as string : "unknown")}`)
+								const block = (ev as any).partial?.content?.[(ev as any).contentIndex]
+								const toolName = block?.name || "unknown"
+								const toolCallId = block?.id || ""
+								console.log(`${pc.cyan("[agent]")} 🔧 tool: ${pc.yellow(toolName)}`)
 								controller.enqueue(
 									encodeSSEJson({
 										type: "tool-call-start",
-										toolCallId: "toolCallId" in ev ? (ev as any).toolCallId as string : "",
-										toolName: "toolName" in ev ? (ev as any).toolName as string : ""
+										toolCallId: toolCallId,
+										toolName: toolName
 									})
 								)
 							} else if (ev.type === "toolcall_delta") {
+								const block = (ev as any).partial?.content?.[(ev as any).contentIndex]
+								const toolCallId = block?.id || ""
 								controller.enqueue(
 									encodeSSEJson({
 										type: "tool-call-delta",
-										toolCallId: "toolCallId" in ev ? (ev as any).toolCallId as string : "",
-										argsTextDelta: "delta" in ev ? (ev as any).delta as string : ""
+										toolCallId: toolCallId,
+										argsTextDelta: (ev as any).delta || ""
 									})
 								)
 							} else if (ev.type === "toolcall_end") {
+								const toolCallId = (ev as any).toolCall?.id || ""
 								controller.enqueue(
 									encodeSSEJson({
 										type: "tool-call-end",
-										toolCallId: "toolCallId" in ev ? (ev as any).toolCallId as string : ""
+										toolCallId: toolCallId
 									})
 								)
 							}
@@ -656,20 +672,30 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 
 					// Dispatch the actual completion logic
 					await session.prompt(prompt)
+					endOfLlmTime = Date.now()
+
+					const { getLastAssistantUsage } = await import("@mariozechner/pi-coding-agent")
+					const usage = getLastAssistantUsage(session)
+					const totalTime = endOfLlmTime - startTime
+					const latency = ttfb ? endOfLlmTime - startTime - ttfb : 0
 
 					// After completion, send the usage telemetry
 					console.log(
-						`\n${pc.green("[agent]")} ${pc.bold("✓")} done ${pc.gray(`${messageCount} events`)}`
+						`\n${pc.green("[agent]")} ${pc.bold("✓")} done ${pc.gray(`${messageCount} events`)} ${usage ? pc.gray(`| ${usage.input} in / ${usage.output} out`) : ""}`
 					)
 					
-					// Just emitting dummy defaults because session doesn't easily expose this in 0.19.1
 					controller.enqueue(
 						encodeSSEJson({
 							type: "usage",
-							inputTokens: 0,
-							outputTokens: 0,
-							totalCostUsd: 0,
-							numTurns: 1
+							inputTokens: usage?.input ?? 0,
+							outputTokens: usage?.output ?? 0,
+							totalCostUsd: usage?.cost?.total ?? 0,
+							numTurns: 1,
+							telemetry: {
+								ttfbMs: ttfb,
+								totalMs: totalTime,
+								llmLatencyMs: latency,
+							}
 						})
 					)
 
