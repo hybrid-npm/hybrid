@@ -71,7 +71,7 @@ async function ensureAgentModel(projectRoot: string) {
 	const providerFilter = isUsingOpenRouter ? "openrouter" : "anthropic"
 	
 	const choices = models
-		.filter((m: any) => m.provider.name === providerFilter)
+		.filter((m: any) => m.provider === providerFilter)
 		.map((m: any) => ({ title: m.name, value: m.id }))
 	
 	if (choices.length === 0) {

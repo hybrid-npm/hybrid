@@ -12,7 +12,6 @@ for (const f of [".env", ".env.local"]) {
 import {
 	AuthStorage,
 	createAgentSession,
-	ModelRegistry,
 	SessionManager
 } from "@mariozechner/pi-coding-agent"
 import { serve } from "@hono/node-server"
@@ -577,11 +576,16 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 		if (apiKey) authStorage.setRuntimeApiKey("anthropic", apiKey)
 	}
 
-	const modelRegistry = ModelRegistry.create(authStorage)
 	const providerKey = isUsingOpenRouter ? "openrouter" : "anthropic"
-	const activeModel = modelRegistry.find(providerKey, model)
+	const fullModelName = `${providerKey}:${model}`
+
+	const config = await getCachedConfig()
+
+	// Parse model
+	const modelRegistry = ModelRegistry.create(authStorage)
+	const activeModel = modelRegistry.models.find(m => m.id === model)
 	if (!activeModel) {
-		const errorMsg = `Model ${model} not found for provider ${providerKey}`
+		const errorMsg = `Model ${model} not found`
 		console.error(`[agent] initialization failed: ${errorMsg}`)
 		return new ReadableStream<Uint8Array>({
 			start(controller) {
@@ -591,8 +595,6 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 			}
 		})
 	}
-
-	const config = await getCachedConfig()
 
 	// Currently ignoring MCP servers for now but they can be passed as config
 	// MCP support in Pi may require mapping custom tools, or Settings.
@@ -611,9 +613,8 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 				try {
 					const { session } = await createAgentSession({
 						cwd: workspaceDir,
-						model: activeModel,
+						model: fullModelName,
 						authStorage,
-						modelRegistry,
 						sessionManager: SessionManager.inMemory(),
 						// Bypass settings if needed or load default
 					})
@@ -675,7 +676,8 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 					endOfLlmTime = Date.now()
 
 					const { getLastAssistantUsage } = await import("@mariozechner/pi-coding-agent")
-					const usage = getLastAssistantUsage(session)
+					const entries = session.sessionManager.getEntries(session.sessionManager.getLeafId())
+					const usage = getLastAssistantUsage(entries)
 					const totalTime = endOfLlmTime - startTime
 					const latency = ttfb ? endOfLlmTime - startTime - ttfb : 0
 
