@@ -1,4 +1,5 @@
-import { createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk"
+import { Type } from "@sinclair/typebox"
+import { defineTool, type ToolDefinition } from "@mariozechner/pi-coding-agent"
 import {
 	type ACL,
 	type FactCategory,
@@ -22,20 +23,125 @@ import {
 	upsertACLPendingRequest
 } from "@hybrd/memory"
 import type { IdentityProvider } from "@hybrd/types"
-import { z } from "zod"
 import { createFileTools } from "./tools/file.js"
 
-export function createMemoryMcpServer(
-	workspaceDir: string,
-	userId: string,
-	role: Role,
-	acl: ACL | null,
-	projectRoot: string,
+// ── Helpers ────────────────────────────────────────────────
+
+function errorText(text: string) {
+	return { content: [{ type: "text" as const, text }], details: {} as unknown }
+}
+
+function okText(text: string) {
+	return { content: [{ type: "text" as const, text }], details: {} as unknown }
+}
+
+// ── TypeBox schemas ────────────────────────────────────────
+
+const memoryCategoryEnum = Type.Union([
+	Type.Literal("preferences"),
+	Type.Literal("learnings"),
+	Type.Literal("decisions"),
+	Type.Literal("context"),
+	Type.Literal("notes")
+])
+
+const memorySaveSchema = Type.Object({
+	category: memoryCategoryEnum,
+	content: Type.String()
+})
+
+const memoryReadSchema = Type.Object({
+	category: memoryCategoryEnum
+})
+
+const aclIdentitySchema = Type.Object({
+	identity: Type.String()
+})
+
+const aclPairingCodeSchema = Type.Object({
+	code: Type.String()
+})
+
+const paraCreateEntitySchema = Type.Object({
+	name: Type.String(),
+	bucket: Type.Union([
+		Type.Literal("projects"),
+		Type.Literal("areas"),
+		Type.Literal("resources"),
+		Type.Literal("archives")
+	]),
+	category: Type.Optional(
+		Type.Union([
+			Type.Literal("people"),
+			Type.Literal("companies"),
+			Type.Literal("topics")
+		])
+	)
+})
+
+const paraAddFactSchema = Type.Object({
+	entityName: Type.String(),
+	bucket: Type.Union([
+		Type.Literal("projects"),
+		Type.Literal("areas"),
+		Type.Literal("resources"),
+		Type.Literal("archives")
+	]),
+	category: Type.Optional(
+		Type.Union([
+			Type.Literal("people"),
+			Type.Literal("companies"),
+			Type.Literal("topics")
+		])
+	),
+	fact: Type.String(),
+	factCategory: Type.Union([
+		Type.Literal("relationship"),
+		Type.Literal("milestone"),
+		Type.Literal("status"),
+		Type.Literal("preference"),
+		Type.Literal("user-signal")
+	]),
+	relatedEntities: Type.Optional(Type.Array(Type.String()))
+})
+
+const paraSearchSchema = Type.Object({
+	query: Type.String(),
+	bucket: Type.Optional(
+		Type.Union([
+			Type.Literal("projects"),
+			Type.Literal("areas"),
+			Type.Literal("resources"),
+			Type.Literal("archives")
+		])
+	),
+	includeCold: Type.Optional(Type.Boolean())
+})
+
+const logSchema = Type.Object({
+	content: Type.String()
+})
+
+// ── Tool factory ───────────────────────────────────────────
+
+interface ToolCtx {
+	workspaceDir: string
+	userId: string
+	role: Role
+	acl: ACL | null
+	projectRoot: string
 	identityProvider?: IdentityProvider
-) {
-	const memorySaveTool = tool(
-		"MemorySave",
-		`Save information to THIS USER's persistent memory. Use this when the user asks you to remember something.
+}
+
+export function createMemoryTools(
+	ctx: ToolCtx
+): ToolDefinition<any, unknown, unknown>[] {
+	const { workspaceDir, userId, role, acl, projectRoot, identityProvider } = ctx
+
+	const memorySaveTool = defineTool({
+		name: "MemorySave",
+		label: "Memory Save",
+		description: `Save information to THIS USER's persistent memory. Use this when the user asks you to remember something.
 
 This writes to memory/users/{userId}/MEMORY.md - each user has their own private memory.
 
@@ -51,17 +157,8 @@ Categories:
 - decisions: Important decisions made
 - context: Project context and background
 - notes: General notes and reminders`,
-		{
-			category: z.enum([
-				"preferences",
-				"learnings",
-				"decisions",
-				"context",
-				"notes"
-			]),
-			content: z.string()
-		},
-		async (args) => {
+		parameters: memorySaveSchema,
+		execute: async (_toolCallId, args) => {
 			const result = await appendToMemory(
 				workspaceDir,
 				{
@@ -71,29 +168,20 @@ Categories:
 				userId,
 				role
 			)
-			return {
-				content: [{ type: "text", text: result.message }]
-			}
+			return okText(result.message)
 		}
-	)
+	})
 
-	const memoryReadTool = tool(
-		"MemoryRead",
-		`Read entries from a memory category. Use this to recall:
+	const memoryReadTool = defineTool({
+		name: "MemoryRead",
+		label: "Memory Read",
+		description: `Read entries from a memory category. Use this to recall:
 - User preferences
 - Past learnings
 - Previous decisions
 - Project context`,
-		{
-			category: z.enum([
-				"preferences",
-				"learnings",
-				"decisions",
-				"context",
-				"notes"
-			])
-		},
-		async (args) => {
+		parameters: memoryReadSchema,
+		execute: async (_toolCallId, args) => {
 			const entries = await readMemorySection(
 				workspaceDir,
 				args.category,
@@ -101,409 +189,197 @@ Categories:
 				role
 			)
 			if (entries.length === 0) {
-				return {
-					content: [
-						{ type: "text", text: `No entries found in ${args.category}` }
-					]
-				}
+				return okText(`No entries found in ${args.category}`)
 			}
-			return {
-				content: [
-					{ type: "text", text: entries.map((e) => `- ${e}`).join("\n") }
-				]
-			}
+			return okText(entries.map((e) => `- ${e}`).join("\n"))
 		}
-	)
+	})
 
-	const aclAddOwnerTool = tool(
-		"ACLAddOwner",
-		`Add an identity as an owner. Owners have full access to all memory sources.
+	const aclAddOwnerTool = defineTool({
+		name: "ACLAddOwner",
+		label: "ACL Add Owner",
+		description: `Add an identity as an owner. Owners have full access to all memory sources.
 Only current owners can use this tool.
 ${identityProvider ? `Identity format: ${identityProvider.name}` : "Identity must be a valid identifier."}`,
-		{
-			identity: z.string().describe("Identity identifier to add as owner")
-		},
-		async (args) => {
+		parameters: aclIdentitySchema,
+		execute: async (_toolCallId, args) => {
 			if (role !== "owner") {
-				return {
-					content: [
-						{
-							type: "text",
-							text: "Permission denied: Only owners can add new owners"
-						}
-					],
-					isError: true
-				}
+				return errorText(`Permission denied: Only owners can add new owners`)
 			}
-
 			try {
 				let identityToAdd = args.identity
 				if (identityProvider) {
 					const identity = await identityProvider.validate(args.identity)
 					if (!identity) {
-						return {
-							content: [
-								{
-									type: "text",
-									text: `Invalid identity for ${identityProvider.name}`
-								}
-							],
-							isError: true
-						}
+						return errorText(`Invalid identity for ${identityProvider.name}`)
 					}
 					identityToAdd = identityProvider.format(identity)
 				}
 				const result = await addOwner(workspaceDir, identityToAdd)
-				return {
-					content: [{ type: "text", text: result.message }]
-				}
+				return okText(result.message)
 			} catch (err) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Error: ${(err as Error).message}`
-						}
-					],
-					isError: true
-				}
+				return errorText(`Error: ${(err as Error).message}`)
 			}
 		}
-	)
+	})
 
-	const aclRemoveOwnerTool = tool(
-		"ACLRemoveOwner",
-		`Remove an identity from owners.
+	const aclRemoveOwnerTool = defineTool({
+		name: "ACLRemoveOwner",
+		label: "ACL Remove Owner",
+		description: `Remove an identity from owners.
 Only current owners can use this tool.`,
-		{
-			identity: z.string().describe("Identity identifier to remove from owners")
-		},
-		async (args) => {
+		parameters: aclIdentitySchema,
+		execute: async (_toolCallId, args) => {
 			if (role !== "owner") {
-				return {
-					content: [
-						{
-							type: "text",
-							text: "Permission denied: Only owners can remove owners"
-						}
-					],
-					isError: true
-				}
+				return errorText(`Permission denied: Only owners can remove owners`)
 			}
-
 			try {
 				let identityToRemove = args.identity
 				if (identityProvider) {
 					const identity = await identityProvider.validate(args.identity)
 					if (!identity) {
-						return {
-							content: [
-								{
-									type: "text",
-									text: `Invalid identity for ${identityProvider.name}`
-								}
-							],
-							isError: true
-						}
+						return errorText(`Invalid identity for ${identityProvider.name}`)
 					}
 					identityToRemove = identityProvider.format(identity)
 				}
 				const result = await removeOwner(workspaceDir, identityToRemove)
-				return {
-					content: [{ type: "text", text: result.message }]
-				}
+				return okText(result.message)
 			} catch (err) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Error: ${(err as Error).message}`
-						}
-					],
-					isError: true
-				}
+				return errorText(`Error: ${(err as Error).message}`)
 			}
 		}
-	)
+	})
 
-	const aclListOwnersTool = tool(
-		"ACLListOwners",
-		"List all identities that have owner role.",
-		{},
-		async () => {
+	const aclListOwnersTool = defineTool({
+		name: "ACLListOwners",
+		label: "ACL List Owners",
+		description: "List all identities that have owner role.",
+		parameters: Type.Object({}),
+		execute: async () => {
 			const owners = listOwners(acl)
 			if (owners.length === 0) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: "No owners configured. Everyone is a guest."
-						}
-					]
-				}
+				return okText("No owners configured. Everyone is a guest.")
 			}
-			return {
-				content: [
-					{
-						type: "text",
-						text: `Owners:\n${owners.map((o) => `- ${o}`).join("\n")}`
-					}
-				]
-			}
+			return okText(`Owners:\n${owners.map((o) => `- ${o}`).join("\n")}`)
 		}
-	)
+	})
 
-	const aclRequestPairingTool = tool(
-		"ACLRequestPairing",
-		`Request pairing to become an owner. Generates a pairing code that must be approved by an existing owner.
+	const aclRequestPairingTool = defineTool({
+		name: "ACLRequestPairing",
+		label: "ACL Request Pairing",
+		description: `Request pairing to become an owner. Generates a pairing code that must be approved by an existing owner.
 
 Use this when:
 - You want to request owner access
 - You're a guest and need elevated permissions
 
 The pairing code expires in 1 hour. Share it with an owner for approval.`,
-		{},
-		async () => {
+		parameters: Type.Object({}),
+		execute: async () => {
 			if (!userId) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: "Cannot request pairing: no user identity available"
-						}
-					],
-					isError: true
-				}
+				return errorText(`Cannot request pairing: no user identity available`)
 			}
-
 			if (role === "owner") {
-				return {
-					content: [
-						{
-							type: "text",
-							text: "You are already an owner"
-						}
-					]
-				}
+				return okText("You are already an owner")
 			}
-
 			try {
 				const result = await upsertACLPendingRequest(workspaceDir, userId)
 				if (!result.code) {
-					return {
-						content: [
-							{
-								type: "text",
-								text: "Too many pending requests. Wait for one to expire or be processed."
-							}
-						],
-						isError: true
-					}
+					return errorText("Too many pending requests. Wait for one to expire or be processed.")
 				}
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Pairing requested.\n\nYour code: \`${result.code}\`\n\nShare this code with an owner for approval. Code expires in 1 hour.`
-						}
-					]
-				}
+				return okText(`Pairing requested.\n\nYour code: \`${result.code}\`\n\nShare this code with an owner for approval. Code expires in 1 hour.`)
 			} catch (err) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Error: ${(err as Error).message}`
-						}
-					],
-					isError: true
-				}
+				return errorText(`Error: ${(err as Error).message}`)
 			}
 		}
-	)
+	})
 
-	const aclListPendingTool = tool(
-		"ACLListPending",
-		"List pending pairing requests. Only owners can use this tool.",
-		{},
-		async () => {
+	const aclListPendingTool = defineTool({
+		name: "ACLListPending",
+		label: "ACL List Pending",
+		description: "List pending pairing requests. Only owners can use this tool.",
+		parameters: Type.Object({}),
+		execute: async () => {
 			if (role !== "owner") {
-				return {
-					content: [
-						{
-							type: "text",
-							text: "Permission denied: Only owners can list pending requests"
-						}
-					],
-					isError: true
-				}
+				return errorText(`Permission denied: Only owners can list pending requests`)
 			}
-
 			try {
 				const requests = await listACLPendingRequests(workspaceDir)
 				if (requests.length === 0) {
-					return {
-						content: [
-							{
-								type: "text",
-								text: "No pending pairing requests"
-							}
-						]
-					}
+					return okText("No pending pairing requests")
 				}
-
 				const lines = requests.map(
 					(r) => `- Code: ${r.code} | ID: ${r.id} | Requested: ${r.createdAt}`
 				)
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Pending Requests:\n${lines.join("\n")}`
-						}
-					]
-				}
+				return okText(`Pending Requests:\n${lines.join("\n")}`)
 			} catch (err) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Error: ${(err as Error).message}`
-						}
-					],
-					isError: true
-				}
+				return errorText(`Error: ${(err as Error).message}`)
 			}
 		}
-	)
+	})
 
-	const aclApprovePairingTool = tool(
-		"ACLApprovePairing",
-		`Approve a pairing request by code. Only owners can use this tool.
+	const aclApprovePairingTool = defineTool({
+		name: "ACLApprovePairing",
+		label: "ACL Approve Pairing",
+		description: `Approve a pairing request by code. Only owners can use this tool.
 
 Use this when:
 - A user has shared their pairing code with you
 - You want to grant owner access to someone`,
-		{
-			code: z.string().describe("8-character pairing code (e.g., ABCD1234)")
-		},
-		async (args) => {
+		parameters: aclPairingCodeSchema,
+		execute: async (_toolCallId, args) => {
 			if (role !== "owner") {
-				return {
-					content: [
-						{
-							type: "text",
-							text: "Permission denied: Only owners can approve pairing requests"
-						}
-					],
-					isError: true
-				}
+				return errorText(`Permission denied: Only owners can approve pairing requests`)
 			}
-
 			try {
 				const result = await approveACLPairingCode(
 					workspaceDir,
 					args.code.toUpperCase()
 				)
 				if (!result) {
-					return {
-						content: [
-							{
-								type: "text",
-								text: "Invalid or expired pairing code"
-							}
-						],
-						isError: true
-					}
+					return errorText("Invalid or expired pairing code")
 				}
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Approved! ${result.id} is now an owner.`
-						}
-					]
-				}
+				return okText(`Approved! ${result.id} is now an owner.`)
 			} catch (err) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Error: ${(err as Error).message}`
-						}
-					],
-					isError: true
-				}
+				return errorText(`Error: ${(err as Error).message}`)
 			}
 		}
-	)
+	})
 
-	const aclRejectPairingTool = tool(
-		"ACLRejectPairing",
-		`Reject a pairing request by code. Only owners can use this tool.
+	const aclRejectPairingTool = defineTool({
+		name: "ACLRejectPairing",
+		label: "ACL Reject Pairing",
+		description: `Reject a pairing request by code. Only owners can use this tool.
 
 Use this when:
 - A pairing request should be denied
 - You want to remove a pending request without approving it`,
-		{
-			code: z.string().describe("8-character pairing code (e.g., ABCD1234)")
-		},
-		async (args) => {
+		parameters: aclPairingCodeSchema,
+		execute: async (_toolCallId, args) => {
 			if (role !== "owner") {
-				return {
-					content: [
-						{
-							type: "text",
-							text: "Permission denied: Only owners can reject pairing requests"
-						}
-					],
-					isError: true
-				}
+				return errorText(`Permission denied: Only owners can reject pairing requests`)
 			}
-
 			try {
 				const result = await rejectACLPairingCode(
 					workspaceDir,
 					args.code.toUpperCase()
 				)
 				if (!result) {
-					return {
-						content: [
-							{
-								type: "text",
-								text: "Invalid or expired pairing code"
-							}
-						],
-						isError: true
-					}
+					return errorText("Invalid or expired pairing code")
 				}
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Rejected pairing request from ${result.id}`
-						}
-					]
-				}
+				return okText(`Rejected pairing request from ${result.id}`)
 			} catch (err) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Error: ${(err as Error).message}`
-						}
-					],
-					isError: true
-				}
+				return errorText(`Error: ${(err as Error).message}`)
 			}
 		}
-	)
+	})
 
 	// PARA Tools (Layer 1 - Knowledge Graph)
 
-	const paraCreateEntityTool = tool(
-		"PARACreateEntity",
-		`Create a new entity in the PARA knowledge graph.
+	const paraCreateEntityTool = defineTool({
+		name: "PARACreateEntity",
+		label: "PARA Create Entity",
+		description: `Create a new entity in the PARA knowledge graph.
 
 PARA Buckets:
 - projects: Active work with defined goal + deadline
@@ -517,26 +393,11 @@ Categories (for areas):
 - topics: Subject areas worth tracking
 
 Create entity when: mentioned 3+ times, has direct relationship to operator, or represents significant project/milestone/risk.`,
-		{
-			name: z
-				.string()
-				.describe("Entity name (e.g., 'acme-corp', 'jane-smith')"),
-			bucket: z.enum(["projects", "areas", "resources", "archives"]),
-			category: z.enum(["people", "companies", "topics"]).optional()
-		},
-		async (args) => {
+		parameters: paraCreateEntitySchema,
+		execute: async (_toolCallId, args) => {
 			if (role !== "owner") {
-				return {
-					content: [
-						{
-							type: "text",
-							text: "Permission denied: Only owners can create entities"
-						}
-					],
-					isError: true
-				}
+				return errorText(`Permission denied: Only owners can create entities`)
 			}
-
 			try {
 				const result = await createEntity(
 					workspaceDir,
@@ -544,21 +405,17 @@ Create entity when: mentioned 3+ times, has direct relationship to operator, or 
 					args.bucket as ParaBucket,
 					args.category
 				)
-				return {
-					content: [{ type: "text", text: result.message }]
-				}
+				return okText(result.message)
 			} catch (err) {
-				return {
-					content: [{ type: "text", text: `Error: ${(err as Error).message}` }],
-					isError: true
-				}
+				return errorText(`Error: ${(err as Error).message}`)
 			}
 		}
-	)
+	})
 
-	const paraAddFactTool = tool(
-		"PARAAddFact",
-		`Add an atomic fact to an entity in the PARA knowledge graph.
+	const paraAddFactTool = defineTool({
+		name: "PARAAddFact",
+		label: "PARA Add Fact",
+		description: `Add an atomic fact to an entity in the PARA knowledge graph.
 
 One fact per record. No compound statements.
 
@@ -568,33 +425,11 @@ Fact Categories:
 - status: Current state of something
 - preference: Entity's preferences or tendencies
 - user-signal: Signal from the user about this entity`,
-		{
-			entityName: z.string().describe("Name of the entity"),
-			bucket: z.enum(["projects", "areas", "resources", "archives"]),
-			category: z.enum(["people", "companies", "topics"]).optional(),
-			fact: z.string().describe("Single atomic fact (one claim)"),
-			factCategory: z.enum([
-				"relationship",
-				"milestone",
-				"status",
-				"preference",
-				"user-signal"
-			]),
-			relatedEntities: z.array(z.string()).optional()
-		},
-		async (args) => {
+		parameters: paraAddFactSchema,
+		execute: async (_toolCallId, args) => {
 			if (role !== "owner") {
-				return {
-					content: [
-						{
-							type: "text",
-							text: "Permission denied: Only owners can add facts"
-						}
-					],
-					isError: true
-				}
+				return errorText(`Permission denied: Only owners can add facts`)
 			}
-
 			try {
 				const { join } = await import("node:path")
 				const {
@@ -628,21 +463,17 @@ Fact Categories:
 					args.factCategory as FactCategory,
 					args.relatedEntities
 				)
-				return {
-					content: [{ type: "text", text: result.message }]
-				}
+				return okText(result.message)
 			} catch (err) {
-				return {
-					content: [{ type: "text", text: `Error: ${(err as Error).message}` }],
-					isError: true
-				}
+				return errorText(`Error: ${(err as Error).message}`)
 			}
 		}
-	)
+	})
 
-	const paraSearchTool = tool(
-		"PARASearch",
-		`Search for facts across all PARA entities.
+	const paraSearchTool = defineTool({
+		name: "PARASearch",
+		label: "PARA Search",
+		description: `Search for facts across all PARA entities.
 
 Returns facts matching the query, sorted by decay tier (hot > warm > cold excluded by default).
 
@@ -650,24 +481,11 @@ Decay Tiers:
 - Hot: accessed within 7 days (always surfaced)
 - Warm: accessed 8-30 days ago (lower priority)
 - Cold: not accessed in 30+ days (excluded by default)`,
-		{
-			query: z.string().describe("Search query"),
-			bucket: z.enum(["projects", "areas", "resources", "archives"]).optional(),
-			includeCold: z.boolean().optional()
-		},
-		async (args) => {
+		parameters: paraSearchSchema,
+		execute: async (_toolCallId, args) => {
 			if (role !== "owner") {
-				return {
-					content: [
-						{
-							type: "text",
-							text: "Permission denied: Only owners can search PARA"
-						}
-					],
-					isError: true
-				}
+				return errorText(`Permission denied: Only owners can search PARA`)
 			}
-
 			try {
 				const results = await searchFacts(workspaceDir, args.query, {
 					bucket: args.bucket as ParaBucket | undefined,
@@ -675,9 +493,7 @@ Decay Tiers:
 				})
 
 				if (results.length === 0) {
-					return {
-						content: [{ type: "text", text: "No matching facts found" }]
-					}
+					return okText("No matching facts found")
 				}
 
 				const text = results
@@ -686,76 +502,60 @@ Decay Tiers:
 					)
 					.join("\n\n")
 
-				return {
-					content: [{ type: "text", text }]
-				}
+				return okText(text)
 			} catch (err) {
-				return {
-					content: [{ type: "text", text: `Error: ${(err as Error).message}` }],
-					isError: true
-				}
+				return errorText(`Error: ${(err as Error).message}`)
 			}
 		}
-	)
+	})
 
 	// Daily Log Tools (Layer 2)
 
-	const logFactTool = tool(
-		"LogFact",
-		"Log a fact to the GLOBAL session log (not user-specific). This is a daily log file visible to all users. For user-specific memories, use MemorySave instead.",
-		{
-			content: z.string().describe("The fact learned")
-		},
-		async (args) => {
+	const logFactTool = defineTool({
+		name: "LogFact",
+		label: "Log Fact",
+		description: "Log a fact to the GLOBAL session log (not user-specific). This is a daily log file visible to all users. For user-specific memories, use MemorySave instead.",
+		parameters: logSchema,
+		execute: async (_toolCallId, args) => {
 			await logFact(workspaceDir, args.content)
-			return {
-				content: [{ type: "text", text: "Fact logged to global session log" }]
-			}
+			return okText("Fact logged to global session log")
 		}
-	)
-
-	const logDecisionTool = tool(
-		"LogDecision",
-		"Log a decision to the GLOBAL session log (not user-specific). This is a daily log file visible to all users. For user-specific memories, use MemorySave instead.",
-		{
-			content: z.string().describe("The decision made")
-		},
-		async (args) => {
-			await logDecision(workspaceDir, args.content)
-			return {
-				content: [
-					{ type: "text", text: "Decision logged to global session log" }
-				]
-			}
-		}
-	)
-
-	return createSdkMcpServer({
-		name: "hybrid",
-		version: "1.0.0",
-		tools: [
-			memorySaveTool,
-			memoryReadTool,
-			aclAddOwnerTool,
-			aclRemoveOwnerTool,
-			aclListOwnersTool,
-			aclRequestPairingTool,
-			aclListPendingTool,
-			aclApprovePairingTool,
-			aclRejectPairingTool,
-			paraCreateEntityTool,
-			paraAddFactTool,
-			paraSearchTool,
-			logFactTool,
-			logDecisionTool,
-			...createFileTools({
-				workspaceDir,
-				userId,
-				role,
-				projectRoot
-			})
-		]
 	})
+
+	const logDecisionTool = defineTool({
+		name: "LogDecision",
+		label: "Log Decision",
+		description: "Log a decision to the GLOBAL session log (not user-specific). This is a daily log file visible to all users. For user-specific memories, use MemorySave instead.",
+		parameters: logSchema,
+		execute: async (_toolCallId, args) => {
+			await logDecision(workspaceDir, args.content)
+			return okText("Decision logged to global session log")
+		}
+	})
+
+	// Compose all tools: memory/ACL/PARA/log + file tools
+	return [
+		memorySaveTool,
+		memoryReadTool,
+		aclAddOwnerTool,
+		aclRemoveOwnerTool,
+		aclListOwnersTool,
+		aclRequestPairingTool,
+		aclListPendingTool,
+		aclApprovePairingTool,
+		aclRejectPairingTool,
+		paraCreateEntityTool,
+		paraAddFactTool,
+		paraSearchTool,
+		logFactTool,
+		logDecisionTool,
+		...createFileTools({
+			workspaceDir,
+			userId,
+			role,
+			projectRoot
+		})
+	]
 }
 
 export async function resolveUserRole(
@@ -772,4 +572,3 @@ export async function resolveUserRole(
 	const role = await getRole(acl, userId, identityProvider)
 	return { role, acl }
 }
-

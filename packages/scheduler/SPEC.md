@@ -49,7 +49,7 @@ Claude Agent SDK accepts tools via `options.tools` array. We need to create MCP-
 **File: `packages/scheduler/src/tools.ts`**
 
 ```typescript
-import type { Tool } from "@anthropic-ai/claude-agent-sdk"
+import type { Tool } from "@mariozechner/pi-coding-agent"
 import type { AgentScheduler } from "./index.js"
 
 export function createSchedulerTools(scheduler: AgentScheduler): Tool[] {

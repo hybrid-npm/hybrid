@@ -1,8 +1,8 @@
 import { existsSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { tool } from "@anthropic-ai/claude-agent-sdk"
+import { Type } from "@sinclair/typebox"
+import { defineTool, type ToolDefinition } from "@mariozechner/pi-coding-agent"
 import type { Role } from "@hybrd/memory"
-import { z } from "zod"
 import { editFileInWorkspace } from "../file-operations/edit"
 import { applyPatchToWorkspace } from "../file-operations/patch"
 import { readFileFromWorkspace } from "../file-operations/read"
@@ -20,8 +20,59 @@ const PROJECT_CONFIG_FILES = [
 	"USER.md"
 ]
 
+// ── TypeBox schemas ──────────────────────────────────────────────────────
+
+const readSchema = Type.Object({
+	path: Type.String(),
+	offset: Type.Optional(Type.Number()),
+	limit: Type.Optional(Type.Number())
+})
+
+const writeSchema = Type.Object({
+	path: Type.String(),
+	content: Type.String()
+})
+
+const editSchema = Type.Object({
+	path: Type.String(),
+	edits: Type.Array(
+		Type.Object({
+			oldText: Type.String(),
+			newText: Type.String()
+		})
+	)
+})
+
+const applyPatchSchema = Type.Object({
+	path: Type.String(),
+	patch: Type.String()
+})
+
+const deleteSchema = Type.Object({
+	path: Type.String()
+})
+
+// ── Helpers ──────────────────────────────────────────────────────────────
+
+function errorText(text: string) {
+	return { content: [{ type: "text" as const, text }], details: {} }
+}
+
+function okText(text: string) {
+	return { content: [{ type: "text" as const, text }], details: {} }
+}
+
+interface ToolContext {
+	workspaceDir: string
+	userId: string
+	role: Role
+	projectRoot: string
+}
+
+// ── Tool creators ────────────────────────────────────────────────────────
+
 /**
- * Create file operation tools for the MCP server.
+ * Create file operation tools for the Pi agent runtime.
  *
  * Security:
  * - Only owners can access file operations
@@ -29,44 +80,31 @@ const PROJECT_CONFIG_FILES = [
  * - All other paths are validated to be within user's workspace
  * - Path traversal and symlink escapes are prevented
  */
-export function createFileTools(params: {
-	workspaceDir: string
-	userId: string
-	role: Role
-	projectRoot: string
-}) {
-	const { workspaceDir, userId, role, projectRoot } = params
+export function createFileTools(
+	ctx: ToolContext
+): ToolDefinition<any, unknown, unknown>[] {
+	const { userId, role, projectRoot } = ctx
+	const userWorkspacePath = join(
+		projectRoot,
+		"workspace",
+		userId.replace(/[^a-zA-Z0-9_-]/g, "_")
+	)
 
-	// Read tool
-	const readTool = tool(
-		"read",
-		"Read file contents from workspace. Use for reading code, configs, and documentation. " +
+	const readTool = defineTool({
+		name: "read",
+		label: "Read",
+		description:
+			"Read file contents from workspace. Use for reading code, configs, and documentation. " +
 			"Supports adaptive paging for large files with line numbers. " +
 			"Use offset and limit to read specific sections of large files.",
-		{
-			path: z.string().describe("Relative path within workspace"),
-			offset: z
-				.number()
-				.optional()
-				.describe("Start line number (1-indexed, default: 1)"),
-			limit: z.number().optional().describe("Max lines to read (default: 2000)")
-		},
-		async (args) => {
-			// ACL check
+		parameters: readSchema,
+		execute: async (_toolCallId, args) => {
 			if (role !== "owner") {
-				return {
-					content: [
-						{
-							type: "text",
-							text: "Permission denied: Only owners can read files"
-						}
-					],
-					isError: true
-				}
+				return errorText(
+					"Permission denied: Only owners can read files"
+				)
 			}
 
-			// Validate path — use projectRoot for both validation and file operations
-			// to ensure the same base directory is used throughout
 			const validation = validatePathInWorkspace({
 				workspaceRoot: projectRoot,
 				userId,
@@ -74,14 +112,8 @@ export function createFileTools(params: {
 			})
 
 			if (!validation.valid) {
-				return {
-					content: [{ type: "text", text: `Error: ${validation.error}` }],
-					isError: true
-				}
+				return errorText(`Error: ${validation.error}`)
 			}
-
-			// Compute user workspace from the same root used for validation
-			const userWorkspacePath = join(projectRoot, "workspace", userId.replace(/[^a-zA-Z0-9_-]/g, "_"))
 
 			try {
 				const result = await readFileFromWorkspace({
@@ -90,76 +122,50 @@ export function createFileTools(params: {
 					offset: args.offset,
 					limit: args.limit
 				})
-
-				return {
-					content: [{ type: "text", text: result.content }]
-				}
+				return okText(result.content)
 			} catch (err) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Error reading file: ${(err as Error).message}`
-						}
-					],
-					isError: true
-				}
+				return errorText(
+					`Error reading file: ${(err as Error).message}`
+				)
 			}
 		}
-	)
+	})
 
-	// Write tool
-	const writeTool = tool(
-		"write",
-		"Create or overwrite files in workspace. Use for creating new files or replacing entire file contents. " +
+	const writeTool = defineTool({
+		name: "write",
+		label: "Write",
+		description:
+			"Create or overwrite files in workspace. Use for creating new files or replacing entire file contents. " +
 			"Will create parent directories if they don't exist. " +
 			"Use edit for making small changes to existing files.",
-		{
-			path: z.string().describe("Relative path within workspace"),
-			content: z.string().describe("File content to write")
-		},
-		async (args) => {
-			// ACL check
+		parameters: writeSchema,
+		execute: async (_toolCallId, args) => {
 			if (role !== "owner") {
-				return {
-					content: [
-						{
-							type: "text",
-							text: "Permission denied: Only owners can write files"
-						}
-					],
-					isError: true
-				}
+				return errorText(
+					"Permission denied: Only owners can write files"
+				)
 			}
 
 			// Handle project-level config files - write to project root
 			const baseName = args.path.split("/").pop()
-			if (baseName && args.path === baseName && PROJECT_CONFIG_FILES.includes(baseName)) {
+			if (
+				baseName &&
+				args.path === baseName &&
+				PROJECT_CONFIG_FILES.includes(baseName)
+			) {
 				try {
 					const configPath = join(projectRoot, baseName)
 					writeFileSync(configPath, args.content, "utf-8")
-					return {
-						content: [
-							{
-								type: "text",
-								text: `Wrote ${Buffer.byteLength(args.content, "utf-8")} bytes to ${baseName} (project root)`
-							}
-						]
-					}
+					return okText(
+						`Wrote ${Buffer.byteLength(args.content, "utf-8")} bytes to ${baseName} (project root)`
+					)
 				} catch (err) {
-					return {
-						content: [
-							{
-								type: "text",
-								text: `Error writing config file: ${(err as Error).message}`
-							}
-						],
-						isError: true
-					}
+					return errorText(
+						`Error writing config file: ${(err as Error).message}`
+					)
 				}
 			}
 
-			// Validate path
 			const validation = validatePathInWorkspace({
 				workspaceRoot: projectRoot,
 				userId,
@@ -167,14 +173,8 @@ export function createFileTools(params: {
 			})
 
 			if (!validation.valid) {
-				return {
-					content: [{ type: "text", text: `Error: ${validation.error}` }],
-					isError: true
-				}
+				return errorText(`Error: ${validation.error}`)
 			}
-
-			// Compute user workspace from the same root used for validation
-			const userWorkspacePath = join(projectRoot, "workspace", userId.replace(/[^a-zA-Z0-9_-]/g, "_"))
 
 			try {
 				const result = await writeFileToWorkspace({
@@ -182,75 +182,45 @@ export function createFileTools(params: {
 					path: args.path,
 					content: args.content
 				})
-
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Wrote ${result.bytesWritten} bytes to ${args.path}`
-						}
-					]
-				}
+				return okText(
+					`Wrote ${result.bytesWritten} bytes to ${args.path}`
+				)
 			} catch (err) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Error writing file: ${(err as Error).message}`
-						}
-					],
-					isError: true
-				}
+				return errorText(
+					`Error writing file: ${(err as Error).message}`
+				)
 			}
 		}
-	)
+	})
 
-	// Edit tool
-	const editTool = tool(
-		"edit",
-		"Make precise edits to existing files. Use for small changes without rewriting entire file. " +
+	const editTool = defineTool({
+		name: "edit",
+		label: "Edit",
+		description:
+			"Make precise edits to existing files. Use for small changes without rewriting entire file. " +
 			"Each edit finds oldText and replaces it with newText. " +
 			"All edits are applied in sequence. If any edit fails, previous edits are still applied.",
-		{
-			path: z.string().describe("Relative path within workspace"),
-			edits: z
-				.array(
-					z.object({
-						oldText: z.string().describe("Text to find and replace"),
-						newText: z.string().describe("Replacement text")
-					})
-				)
-				.describe("List of edits to apply")
-		},
-		async (args) => {
-			// ACL check
+		parameters: editSchema,
+		execute: async (_toolCallId, args) => {
 			if (role !== "owner") {
-				return {
-					content: [
-						{
-							type: "text",
-							text: "Permission denied: Only owners can edit files"
-						}
-					],
-					isError: true
-				}
+				return errorText(
+					"Permission denied: Only owners can edit files"
+				)
 			}
 
 			// Handle project-level config files - edit at project root
 			const baseName = args.path.split("/").pop()
-			if (baseName && args.path === baseName && PROJECT_CONFIG_FILES.includes(baseName)) {
+			if (
+				baseName &&
+				args.path === baseName &&
+				PROJECT_CONFIG_FILES.includes(baseName)
+			) {
 				try {
 					const configPath = join(projectRoot, baseName)
 					if (!existsSync(configPath)) {
-						return {
-							content: [
-								{
-									type: "text",
-									text: `${baseName} does not exist at project root`
-								}
-							],
-							isError: true
-						}
+						return errorText(
+							`${baseName} does not exist at project root`
+						)
 					}
 
 					let content = await import("node:fs/promises").then((fs) =>
@@ -262,54 +232,37 @@ export function createFileTools(params: {
 					for (const edit of args.edits) {
 						const idx = content.indexOf(edit.oldText)
 						if (idx !== -1) {
-							// Use indexOf + slice instead of String.replace to avoid
-							// interpreting $ patterns ($&, $', $1, etc.) in newText
 							content =
 								content.slice(0, idx) +
 								edit.newText +
 								content.slice(idx + edit.oldText.length)
 							applied++
 						} else {
-							failed.push({ oldText: edit.oldText, reason: "Text not found" })
+							failed.push({
+								oldText: edit.oldText,
+								reason: "Text not found"
+							})
 						}
 					}
 
 					writeFileSync(configPath, content, "utf-8")
 
 					if (failed.length > 0) {
-						return {
-							content: [
-								{
-									type: "text",
-									text: `Applied ${applied} edits to ${baseName}, failed ${failed.length}`
-								}
-							],
-							isError: true
-						}
+						return errorText(
+							`Applied ${applied} edits to ${baseName}, failed ${failed.length}`
+						)
 					}
 
-					return {
-						content: [
-							{
-								type: "text",
-								text: `Applied ${applied} edits to ${baseName} (project root)`
-							}
-						]
-					}
+					return okText(
+						`Applied ${applied} edits to ${baseName} (project root)`
+					)
 				} catch (err) {
-					return {
-						content: [
-							{
-								type: "text",
-								text: `Error editing config file: ${(err as Error).message}`
-							}
-						],
-						isError: true
-					}
+					return errorText(
+						`Error editing config file: ${(err as Error).message}`
+					)
 				}
 			}
 
-			// Validate path
 			const validation = validatePathInWorkspace({
 				workspaceRoot: projectRoot,
 				userId,
@@ -317,14 +270,8 @@ export function createFileTools(params: {
 			})
 
 			if (!validation.valid) {
-				return {
-					content: [{ type: "text", text: `Error: ${validation.error}` }],
-					isError: true
-				}
+				return errorText(`Error: ${validation.error}`)
 			}
-
-			// Compute user workspace from the same root used for validation
-			const userWorkspacePath = join(projectRoot, "workspace", userId.replace(/[^a-zA-Z0-9_-]/g, "_"))
 
 			try {
 				const result = await editFileInWorkspace({
@@ -337,64 +284,36 @@ export function createFileTools(params: {
 					const failedText = result.editsFailed
 						.map((e) => `- "${e.oldText}": ${e.reason}`)
 						.join("\n")
-
-					return {
-						content: [
-							{
-								type: "text",
-								text: `Applied ${result.editsApplied} edits, failed ${result.editsFailed.length}:\n${failedText}`
-							}
-						],
-						isError: true
-					}
+					return errorText(
+						`Applied ${result.editsApplied} edits, failed ${result.editsFailed.length}:\n${failedText}`
+					)
 				}
 
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Applied ${result.editsApplied} edits to ${args.path}`
-						}
-					]
-				}
+				return okText(
+					`Applied ${result.editsApplied} edits to ${args.path}`
+				)
 			} catch (err) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Error editing file: ${(err as Error).message}`
-						}
-					],
-					isError: true
-				}
+				return errorText(
+					`Error editing file: ${(err as Error).message}`
+				)
 			}
 		}
-	)
+	})
 
-	// Apply patch tool
-	const applyPatchTool = tool(
-		"apply_patch",
-		"Apply a unified diff patch to a file. Use for applying changes from git diffs. " +
+	const applyPatchTool = defineTool({
+		name: "apply_patch",
+		label: "Apply Patch",
+		description:
+			"Apply a unified diff patch to a file. Use for applying changes from git diffs. " +
 			"Supports standard unified diff format with hunk headers (@@ -a,b +c,d @@).",
-		{
-			path: z.string().describe("Relative path within workspace"),
-			patch: z.string().describe("Unified diff format patch")
-		},
-		async (args) => {
-			// ACL check
+		parameters: applyPatchSchema,
+		execute: async (_toolCallId, args) => {
 			if (role !== "owner") {
-				return {
-					content: [
-						{
-							type: "text",
-							text: "Permission denied: Only owners can patch files"
-						}
-					],
-					isError: true
-				}
+				return errorText(
+					"Permission denied: Only owners can patch files"
+				)
 			}
 
-			// Validate path
 			const validation = validatePathInWorkspace({
 				workspaceRoot: projectRoot,
 				userId,
@@ -402,14 +321,8 @@ export function createFileTools(params: {
 			})
 
 			if (!validation.valid) {
-				return {
-					content: [{ type: "text", text: `Error: ${validation.error}` }],
-					isError: true
-				}
+				return errorText(`Error: ${validation.error}`)
 			}
-
-			// Compute user workspace from the same root used for validation
-			const userWorkspacePath = join(projectRoot, "workspace", userId.replace(/[^a-zA-Z0-9_-]/g, "_"))
 
 			try {
 				const result = await applyPatchToWorkspace({
@@ -419,101 +332,61 @@ export function createFileTools(params: {
 				})
 
 				if (!result.success) {
-					return {
-						content: [
-							{
-								type: "text",
-								text: `Failed to apply patch to ${args.path}: ${result.hunksFailed} hunks failed`
-							}
-						],
-						isError: true
-					}
+					return errorText(
+						`Failed to apply patch to ${args.path}: ${result.hunksFailed} hunks failed`
+					)
 				}
 
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Applied patch to ${args.path}: ${result.hunksApplied} hunks applied`
-						}
-					]
-				}
+				return okText(
+					`Applied patch to ${args.path}: ${result.hunksApplied} hunks applied`
+				)
 			} catch (err) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Error applying patch: ${(err as Error).message}`
-						}
-					],
-					isError: true
-				}
+				return errorText(
+					`Error applying patch: ${(err as Error).message}`
+				)
 			}
 		}
-	)
+	})
 
-	// Delete tool
-	const deleteTool = tool(
-		"delete",
-		"Delete a file from the workspace. Use to remove files that are no longer needed. " +
+	const deleteTool = defineTool({
+		name: "delete",
+		label: "Delete",
+		description:
+			"Delete a file from the workspace. Use to remove files that are no longer needed. " +
 			"Cannot be undone - use with caution.",
-		{
-			path: z.string().describe("Relative path within workspace to delete")
-		},
-		async (args) => {
-			// ACL check
+		parameters: deleteSchema,
+		execute: async (_toolCallId, args) => {
 			if (role !== "owner") {
-				return {
-					content: [
-						{
-							type: "text",
-							text: "Permission denied: Only owners can delete files"
-						}
-					],
-					isError: true
-				}
+				return errorText(
+					"Permission denied: Only owners can delete files"
+				)
 			}
 
 			// Handle project-level config files - delete from project root
 			const baseName = args.path.split("/").pop()
-			if (baseName && args.path === baseName && PROJECT_CONFIG_FILES.includes(baseName)) {
+			if (
+				baseName &&
+				args.path === baseName &&
+				PROJECT_CONFIG_FILES.includes(baseName)
+			) {
 				try {
 					const configPath = join(projectRoot, baseName)
 					if (!existsSync(configPath)) {
-						return {
-							content: [
-								{
-									type: "text",
-									text: `${baseName} does not exist at project root`
-								}
-							],
-							isError: true
-						}
+						return errorText(
+							`${baseName} does not exist at project root`
+						)
 					}
-
 					rmSync(configPath, { force: true })
-					return {
-						content: [
-							{
-								type: "text",
-								text: `Deleted ${baseName} from project root`
-							}
-						]
-					}
+					return okText(
+						`Deleted ${baseName} from project root`
+					)
 				} catch (err) {
-					return {
-						content: [
-							{
-								type: "text",
-								text: `Error deleting config file: ${(err as Error).message}`
-							}
-						],
-						isError: true
-					}
+					return errorText(
+						`Error deleting config file: ${(err as Error).message}`
+					)
 				}
 			}
 
-			// Validate path
 			const validation = validatePathInWorkspace({
 				workspaceRoot: projectRoot,
 				userId,
@@ -521,65 +394,33 @@ export function createFileTools(params: {
 			})
 
 			if (!validation.valid) {
-				return {
-					content: [{ type: "text", text: `Error: ${validation.error}` }],
-					isError: true
-				}
+				return errorText(`Error: ${validation.error}`)
 			}
 
-			// Compute user workspace from the same root used for validation
-			const userWorkspacePath = join(projectRoot, "workspace", userId.replace(/[^a-zA-Z0-9_-]/g, "_"))
 			const fullPath = join(userWorkspacePath, args.path)
 
 			try {
 				if (!existsSync(fullPath)) {
-					return {
-						content: [
-							{
-								type: "text",
-								text: `File ${args.path} does not exist`
-							}
-						],
-						isError: true
-					}
+					return errorText(`File ${args.path} does not exist`)
 				}
 
 				const { statSync } = await import("node:fs")
 				const stat = statSync(fullPath)
 				if (stat.isDirectory()) {
-					return {
-						content: [
-							{
-								type: "text",
-								text: `Cannot delete directory: ${args.path}. Only files can be deleted.`
-							}
-						],
-						isError: true
-					}
+					return errorText(
+						`Cannot delete directory: ${args.path}. Only files can be deleted.`
+					)
 				}
 
 				rmSync(fullPath)
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Deleted ${args.path}`
-						}
-					]
-				}
+				return okText(`Deleted ${args.path}`)
 			} catch (err) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Error deleting file: ${(err as Error).message}`
-						}
-					],
-					isError: true
-				}
+				return errorText(
+					`Error deleting file: ${(err as Error).message}`
+				)
 			}
 		}
-	)
+	})
 
 	return [readTool, writeTool, editTool, applyPatchTool, deleteTool]
 }

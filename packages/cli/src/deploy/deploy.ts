@@ -256,7 +256,8 @@ async function runBuild(projectRoot: string, packageDir: string) {
 		version: "1.0.0",
 		type: "module",
 		dependencies: {
-			"@anthropic-ai/claude-agent-sdk": "^0.2.38",
+			"@mariozechner/pi-coding-agent": "^0.70.0",
+			"@sinclair/typebox": "^0.34.49",
 			"@hono/node-server": "^1.13.5",
 			ai: "^6.0.0",
 			"better-sqlite3": "^11.0.0",
