@@ -117,7 +117,7 @@ async function startAgent(projectPath: string): Promise<void> {
 
 	let agentOutput = ""
 	// Write ALL stderr to temp file for debugging
-	const stderrLogFile = "/tmp/hybrid-eval-agent.log"
+	stderrLogFile = "/tmp/hybrid-eval-agent.log"
 	try { require("node:fs").writeFileSync(stderrLogFile, "") } catch {}	agentProcess.stderr?.on("data", (data) => {
 		agentOutput += data.toString()
 		// Print first 1000 chars of ALL stderr for debugging
