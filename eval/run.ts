@@ -116,7 +116,9 @@ async function startAgent(projectPath: string): Promise<void> {
 	})
 
 	let agentOutput = ""
-	agentProcess.stderr?.on("data", (data) => {
+	// Write ALL stderr to temp file for debugging
+	const stderrLogFile = "/tmp/hybrid-eval-agent.log"
+	try { require("node:fs").writeFileSync(stderrLogFile, "") } catch {}	agentProcess.stderr?.on("data", (data) => {
 		agentOutput += data.toString()
 		// Print first 1000 chars of ALL stderr for debugging
 		console.error("[eval_stderr]", data.toString().slice(0, 1000).trim())
@@ -187,6 +189,14 @@ async function main() {
 	runner.addScenario(...createErrorsScenarios())
 
 	try {
+		// Print full agent stderr log for debugging
+		const { readFileSync, existsSync } = await import("node:fs")
+		if (existsSync(stderrLogFile)) {
+			console.error("=== FULL AGENT STDERR ===")
+			console.error(readFileSync(stderrLogFile, "utf-8"))
+			console.error("=== END AGENT STDERR ===")
+		}
+
 		const results = await runner.run(config)
 
 		const failed = results.filter((r) => r.status === "failed")
