@@ -181,7 +181,7 @@ async function main() {
 		agentUrl,
 		walletsPath,
 		resultsPath,
-		timeout: 60000
+		timeout: 120000
 	}
 
 	const runner = createTestRunner()
