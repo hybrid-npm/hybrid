@@ -118,13 +118,8 @@ async function startAgent(projectPath: string): Promise<void> {
 	let agentOutput = ""
 	agentProcess.stderr?.on("data", (data) => {
 		agentOutput += data.toString()
-		if (data.toString().includes("initialization failed") ||
-		    data.toString().includes("initialization error") ||
-		    data.toString().includes("Model") ||
-		    data.toString().includes("error") ||
-		    data.toString().includes("Error")) {
-			console.error("[eval agent]", data.toString().trim())
-		}
+		// Print first 1000 chars of ALL stderr for debugging
+		console.error("[eval_stderr]", data.toString().slice(0, 1000).trim())
 	})
 
 	agentProcess.on("exit", (code) => {
@@ -136,7 +131,7 @@ async function startAgent(projectPath: string): Promise<void> {
 			const response = await fetch("http://localhost:8454/health")
 			if (response.ok) {
 				console.log("Agent is ready!\n")
-		if (agentOutput) console.log("Startup stderr output:", agentOutput)
+		console.log("Agent stderr so far:", agentOutput.slice(-500))
 				return
 			}
 		} catch {}
