@@ -24,6 +24,7 @@ const __dirname = fileURLToPath(new URL(".", import.meta.url))
 
 let agentProcess: ReturnType<typeof spawn> | null = null
 let projectDir: string | null = null
+let stderrLogFile: string
 
 function createTestProject(): string {
 	const templateDir = join(
