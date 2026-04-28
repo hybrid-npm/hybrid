@@ -508,7 +508,7 @@ async function runAgent(req: ContainerRequest): Promise<ReadableStream<Uint8Arra
 				})
 
 				await session.steer(\`[System Instruction Override]\\n\${systemPrompt}\`)
-
+				await session.prompt(prompt)
 				for await (const event of session.stream()) {
 					if (event.type === "message_update" && event.assistantMessageEvent) {
 						const ev = event.assistantMessageEvent

@@ -507,7 +507,7 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 	const systemPrompt = systemPromptParts.filter(Boolean).join("\n\n")
 	const prompt = buildPromptWithHistory(req.messages)
 
-	const abortController = new AbortController()
+	let cancelSession: (() => Promise<void>) | null = null
 
 	const baseUrl = process.env.ANTHROPIC_BASE_URL
 	const isUsingOpenRouter = baseUrl?.includes("openrouter.ai")
@@ -633,6 +633,9 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 					// Or just inject it directly to the session memory.
 					await session.steer(`[System Instruction Override]\n${systemPrompt}`)
 
+					// Wire up cancellation so client disconnect aborts the LLM call
+					cancelSession = () => session.abort()
+
 					session.subscribe((event) => {
 						messageCount++
 						
@@ -738,9 +741,9 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 				}
 			})()
 		},
-		cancel() {
+		async cancel() {
 			console.log("[agent] stream cancelled")
-			abortController.abort()
+			await cancelSession?.()
 		}
 	})
 
