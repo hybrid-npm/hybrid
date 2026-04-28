@@ -3,7 +3,7 @@ import { defineConfig } from "tsup"
 export default defineConfig({
 	entry: ["src/index.ts"],
 	format: ["cjs", "esm"],
-	dts: process.env.CI ? false : true,
+	dts: true,
 	splitting: false,
 	sourcemap: true,
 	clean: true,
