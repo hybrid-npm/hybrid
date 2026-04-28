@@ -640,6 +640,8 @@ CMD ["node", "server/index.cjs"]
 
 async function dev(useDocker: boolean) {
 	const { spawn } = await import("node:child_process")
+	const { writeFileSync, existsSync, readFileSync } = await import("node:fs")
+	const { generatePrivateKey, privateKeyToAccount } = await import("viem/accounts")
 
 	if (useDocker) {
 		console.log("\n🐳 Docker dev not yet implemented for new structure")
@@ -649,17 +651,39 @@ async function dev(useDocker: boolean) {
 
 	const projectDir = projectRoot
 	const agentSource = resolve(packageDir, "..", "agent", "src", "server", "index.ts")
+	const keyPath = resolve(projectDir, ".hybrid-key.json")
 
-	console.log("\n🚀 Starting development server...\n")
-	console.log(`   Project: ${projectDir}`)
-	console.log(`   Agent:   ${agentSource}\n`)
+	// Generate or load keypair for auth (dev mode allows unsigned requests)
+	let privateKey: `0x${string}`
+	let address: string
+	if (existsSync(keyPath)) {
+		const keyData = JSON.parse(readFileSync(keyPath, "utf-8"))
+		privateKey = keyData.privateKey
+		const account = privateKeyToAccount(privateKey)
+		address = account.address
+	} else {
+		privateKey = generatePrivateKey()
+		const account = privateKeyToAccount(privateKey)
+		address = account.address
+		writeFileSync(keyPath, JSON.stringify({ privateKey }, null, 2))
+	}
+
+	console.log(`  Agent address: ${address}`)
+	console.log(`  Key saved to:  ${keyPath}`)
+	console.log(`\n  Chat with:  hybrid msg "hello"`)
+	console.log(`  API:        http://localhost:8454/api/chat\n`)
 
 	const server = spawn("npx", ["tsx", agentSource], {
 		cwd: resolve(packageDir, "..", "agent"),
 		stdio: "inherit",
 		env: {
 			...process.env,
-			AGENT_PROJECT_ROOT: projectDir
+			AGENT_PROJECT_ROOT: projectDir,
+			PRIVATE_KEY: privateKey,
+			ANThROPIC_API_KEY: process.env.ANThROPIC_API_KEY,
+			OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
+			ANTHROPIC_BASE_URL: process.env.ANThROPIC_BASE_URL,
+			ANTHROPIC_AUTH_TOKEN: process.env.ANThROPIC_AUTH_TOKEN
 		}
 	})
 
