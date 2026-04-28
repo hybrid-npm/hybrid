@@ -507,8 +507,6 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 	const systemPrompt = systemPromptParts.filter(Boolean).join("\n\n")
 	const prompt = buildPromptWithHistory(req.messages)
 
-	let cancelSession: (() => Promise<void>) | null = null
-
 	const baseUrl = process.env.ANTHROPIC_BASE_URL
 	const isUsingOpenRouter = baseUrl?.includes("openrouter.ai")
 	const authToken =
@@ -520,7 +518,6 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 	if (!apiKey && !authToken) {
 		const error =
 			"No API key configured. Set ANTHROPIC_API_KEY or OPENROUTER_API_KEY"
-		console.error(`[agent] ${error}`)
 		return new ReadableStream<Uint8Array>({
 			start(controller) {
 				controller.enqueue(encodeSSEJson({ type: "error", content: error }))
@@ -534,7 +531,6 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 	if (isUsingOpenRouter && !authToken) {
 		const error =
 			"OpenRouter requires ANTHROPIC_AUTH_TOKEN (set OPENROUTER_API_KEY)"
-		console.error(`[agent] ${error}`)
 		return new ReadableStream<Uint8Array>({
 			start(controller) {
 				controller.enqueue(encodeSSEJson({ type: "error", content: error }))
@@ -547,7 +543,6 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 	// For direct Anthropic, apiKey is required
 	if (!isUsingOpenRouter && !apiKey) {
 		const error = "Anthropic requires ANTHROPIC_API_KEY"
-		console.error(`[agent] ${error}`)
 		return new ReadableStream<Uint8Array>({
 			start(controller) {
 				controller.enqueue(encodeSSEJson({ type: "error", content: error }))
@@ -556,13 +551,6 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 			}
 		})
 	}
-
-	debug("API config:", {
-		baseUrl: baseUrl || "(default Anthropic)",
-		model,
-		hasAuthToken: !!authToken,
-		hasApiKey: !!apiKey
-	})
 
 	// Get or create isolated workspace for user
 	const { workspaceDir } = await getOrCreateUserWorkspace(
@@ -581,13 +569,9 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 
 	// Parse model
 	const modelRegistry = ModelRegistry.create(authStorage)
-	const allModels = modelRegistry.getAll()
-	console.error(`[model-registry] found ${allModels.length} models, looking for "${model}"`)
-	console.error(`[model-registry] available:`, allModels.map(m => m.id).join(", "))
-	const activeModel = allModels.find(m => m.id === model)
+	const activeModel = modelRegistry.getAll().find(m => m.id === model)
 	if (!activeModel) {
 		const errorMsg = `Model ${model} not found`
-		console.error(`[agent] initialization failed: ${errorMsg}`)
 		return new ReadableStream<Uint8Array>({
 			start(controller) {
 				controller.enqueue(encodeSSEJson({ type: "error", content: errorMsg }))
@@ -608,116 +592,100 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 		config?.mcpServers
 	)
 
-	debug("Creating Pi session", {
-		cwd: workspaceDir,
-		model: activeModel.id,
-		customTools: customTools.length,
-	})
-
-	let messageCount = 0
-	let hasStreamedText = false
-	
 	// Timing metrics
 	const startTime = Date.now()
 	let ttfb = 0
 	let endOfLlmTime = 0
 
-	const stream = new ReadableStream<Uint8Array>({
-		start(controller) {
-			;(async () => {
-				try {
-										const { session } = await createAgentSession({
-							cwd: workspaceDir,
-							model: activeModel,
-							authStorage,
-							sessionManager: SessionManager.inMemory(),
-							customTools,
-					})
-					
-					// Inject the system prompt override
-					// Typically done via a ResourceLoader, but we can do it via prompt context if needed.
-					// Or just inject it directly to the session memory.
-					await session.steer(`[System Instruction Override]\n${systemPrompt}`)
+	let cancelSession: (() => Promise<void>) | null = null
 
-					// Wire up cancellation so client disconnect aborts the LLM call
+	return new ReadableStream<Uint8Array>({
+		start(controller) {
+			(async () => {
+				let textBuffer = ""
+				let messageCount = 0
+				let hasToolStart = false
+				try {
+					const { session } = await createAgentSession({
+						cwd: workspaceDir,
+						model: activeModel,
+						authStorage,
+						sessionManager: SessionManager.inMemory(),
+						customTools,
+					})
+
+					await session.steer(`[System Instruction Override]\n${systemPrompt}`)
 					cancelSession = () => session.abort()
 
-					session.subscribe((event) => {
-						messageCount++
-						
-						// Capture TTFB on first meaningful generation event
-						if (!ttfb && event.type === "message_update" && event.assistantMessageEvent) {
-							ttfb = Date.now() - startTime
-						}
+					// Use session.stream() which returns an async iterator
+					// of assistant messages. This is the documented Pi SDK pattern.
+					const streamPromise = session.prompt(prompt)
 
-						if (event.type === "message_update" && event.assistantMessageEvent) {
-							const ev = event.assistantMessageEvent
-							if (ev.type === "text_delta") {
-								hasStreamedText = true
-								controller.enqueue(encodeSSEJson({ type: "text", content: ev.delta }))
-							} else if (ev.type === "toolcall_start") {
-								const block = (ev as any).partial?.content?.[(ev as any).contentIndex]
-								const toolName = block?.name || "unknown"
-								const toolCallId = block?.id || ""
-								console.log(`${pc.cyan("[agent]")} 🔧 tool: ${pc.yellow(toolName)}`)
-								controller.enqueue(
-									encodeSSEJson({
-										type: "tool-call-start",
-										toolCallId: toolCallId,
-										toolName: toolName
-									})
-								)
-							} else if (ev.type === "toolcall_delta") {
-								const block = (ev as any).partial?.content?.[(ev as any).contentIndex]
-								const toolCallId = block?.id || ""
-								controller.enqueue(
-									encodeSSEJson({
-										type: "tool-call-delta",
-										toolCallId: toolCallId,
-										argsTextDelta: (ev as any).delta || ""
-									})
-								)
-							} else if (ev.type === "toolcall_end") {
-								const toolCallId = (ev as any).toolCall?.id || ""
-								controller.enqueue(
-									encodeSSEJson({
-										type: "tool-call-end",
-										toolCallId: toolCallId
-									})
-								)
+					// Collect events before prompt() resolves
+					const textPromise = new Promise<string>((resolve, reject) => {
+						session.subscribe((event) => {
+							messageCount++
+							if (!ttfb && event.type === "message_update" && event.assistantMessageEvent) {
+								ttfb = Date.now() - startTime
 							}
-						}
+
+							if (event.type === "message_update" && event.assistantMessageEvent) {
+								const ev = event.assistantMessageEvent as any
+								if (ev.type === "text_delta" && ev.delta) {
+									textBuffer += ev.delta
+								} else if (ev.type === "toolcall_start") {
+									hasToolStart = true
+									const block = ev.partial?.content?.[ev.contentIndex]
+									controller.enqueue(encodeSSEJson({
+										type: "tool-call-start",
+										toolCallId: block?.id ?? "",
+										toolName: block?.name ?? "unknown"
+									}))
+								} else if (ev.type === "toolcall_delta") {
+									const block = ev.partial?.content?.[ev.contentIndex]
+									controller.enqueue(encodeSSEJson({
+										type: "tool-call-delta",
+										toolCallId: block?.id ?? "",
+										argsTextDelta: ev.delta ?? ""
+									}))
+								} else if (ev.type === "toolcall_end") {
+									controller.enqueue(encodeSSEJson({
+										type: "tool-call-end",
+										toolCallId: ev.toolCall?.id ?? ""
+									}))
+								}
+							}
+						})
+
+						streamPromise
+							.then(() => resolve(textBuffer))
+							.catch(reject)
 					})
 
-					// Dispatch the actual completion logic
-						console.log(`[agent] calling session.prompt(), prompt length: ${prompt.length}`)
-					await session.prompt(prompt)
-					console.log(`[agent] session.prompt() completed, events received: ${messageCount}`)
+					const text = await textPromise
 					endOfLlmTime = Date.now()
 
 					const stats = session.getSessionStats()
 					const totalTime = endOfLlmTime - startTime
 					const latency = ttfb ? endOfLlmTime - startTime - ttfb : 0
 
-					// After completion, send the usage telemetry
-					console.log(
-						`\n${pc.green("[agent]")} ${pc.bold("✓")} done ${pc.gray(`${messageCount} events`)} ${pc.gray(`| ${stats.tokens.input} in / ${stats.tokens.output} out`)}`
-					)
-					
-					controller.enqueue(
-						encodeSSEJson({
-							type: "usage",
-							inputTokens: stats.tokens.input,
-							outputTokens: stats.tokens.output,
-							totalCostUsd: stats.cost,
-							numTurns: 1,
-							telemetry: {
-								ttfbMs: ttfb,
-								totalMs: totalTime,
-								llmLatencyMs: latency,
-							}
-						})
-					)
+					// Emit buffered text as SSE
+					if (textBuffer) {
+						controller.enqueue(encodeSSEJson({ type: "text", content: textBuffer }))
+					}
+
+					controller.enqueue(encodeSSEJson({
+						type: "usage",
+						inputTokens: stats.tokens.input,
+						outputTokens: stats.tokens.output,
+						totalCostUsd: stats.cost,
+						numTurns: 1,
+						telemetry: {
+							ttfbMs: ttfb,
+							totalMs: totalTime,
+							llmLatencyMs: latency,
+						}
+					}))
 
 					controller.enqueue(encodeDone())
 					controller.close()
@@ -726,9 +694,7 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 						const bootstrapStillExists =
 							loadMarkdownFile("BOOTSTRAP.md").length > 0
 						if (!bootstrapStillExists) {
-							console.log(
-								`${pc.green("[agent]")} ${pc.bold("✓")} onboarding complete`
-							)
+							console.log(`${pc.green("[agent]")} ${pc.bold("✓")} onboarding complete`)
 							recordOnboardingCompleted(PROJECT_ROOT)
 						}
 					}
@@ -737,25 +703,21 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 						err instanceof Error ? err.message : "Agent error"
 					console.error(`[agent] error in stream:`, err)
 
-					try {
-						controller.enqueue(
-							encodeSSEJson({ type: "error", content: errorMessage })
-						)
-						controller.enqueue(encodeDone())
-						controller.close()
-					} catch {
-						// Stream already cancelled
+					// Emit buffered text if any
+					if (textBuffer) {
+						controller.enqueue(encodeSSEJson({ type: "text", content: textBuffer }))
 					}
+
+					controller.enqueue(encodeSSEJson({ type: "error", content: errorMessage }))
+					controller.enqueue(encodeDone())
+					controller.close()
 				}
 			})()
 		},
 		async cancel() {
-			console.log("[agent] stream cancelled")
 			await cancelSession?.()
 		}
 	})
-
-	return stream
 }
 
 const app = new Hono()
