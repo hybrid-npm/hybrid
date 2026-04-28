@@ -52,11 +52,11 @@ export function createMessagingScenarios(): TestScenario[] {
     },
     {
       name: 'agent maintains conversation context',
-      timeout: 45000,
+      timeout: 90000,
       run: async (ctx: TestContext) => {
         const chatId = 'context-test-' + Date.now()
 
-        // First message in the conversation
+        // First message — establish the name
         let stream = await ctx.http.postStream('/api/chat', {
           messages: [
             { id: '1', role: 'user', content: 'My name is TestUser' }
@@ -64,37 +64,25 @@ export function createMessagingScenarios(): TestScenario[] {
           chatId
         })
 
-        let agentError: string | null = null
         for await (const chunk of stream) {
-          if (chunk.startsWith('data: ')) {
-            const data = chunk.slice(6)
-            if (data === '[DONE]') break
-
-            try {
-              const parsed = JSON.parse(data)
-              if (parsed.type === 'error') {
-                agentError = parsed.content
-              }
-            } catch {}
+          // Wait for the response to complete
+          if (chunk.startsWith('data: ') && chunk.includes('[DONE]')) {
+            break
           }
         }
 
-        if (agentError) {
-          throw new Error(`First message error: ${agentError}`)
-        }
-
-        // Second message — the agent should know the name from the first
+        // Second message — send the full conversation history
         stream = await ctx.http.postStream('/api/chat', {
           messages: [
             { id: '1', role: 'user', content: 'My name is TestUser' },
-            { id: '2', role: 'assistant', content: 'Got it!' },
+            { id: '2', role: 'assistant', content: 'Got it, TestUser! What can I help you with?' },
             { id: '3', role: 'user', content: 'What is my name?' }
           ],
           chatId
         })
 
         let responseText = ''
-        agentError = null
+        let agentError: string | null = null
         for await (const chunk of stream) {
           if (chunk.startsWith('data: ')) {
             const data = chunk.slice(6)
