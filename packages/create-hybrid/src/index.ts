@@ -417,6 +417,13 @@ function loadMarkdownFile(relativePath: string): string {
 	}
 }
 
+function loadUserMarkdown(userId?: string): string {
+	if (!userId) return loadMarkdownFile("USER.md")
+	const userPath = join("users", userId, "USER.md")
+	const userFile = loadMarkdownFile(userPath)
+	return userFile || loadMarkdownFile("USER.md")
+}
+
 const IDENTITY_MD = loadMarkdownFile("IDENTITY.md")
 const SOUL_MD = loadMarkdownFile("SOUL.md")
 const AGENTS_MD = loadMarkdownFile("AGENTS.md")
