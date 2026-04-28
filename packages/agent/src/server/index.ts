@@ -599,11 +599,14 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 
 	// Build custom tools for this session
 	const { createCustomTools } = await import("./mcp-factory.js")
-	const customTools = await createCustomTools({
-		projectRoot: PROJECT_ROOT,
-		userId: req.userId || "anonymous",
-		scheduler: scheduler ?? undefined
-	})
+	const customTools = await createCustomTools(
+		{
+			projectRoot: PROJECT_ROOT,
+			userId: req.userId || "anonymous",
+			scheduler: scheduler ?? undefined
+		},
+		config?.mcpServers
+	)
 
 	let messageCount = 0
 	let hasStreamedText = false

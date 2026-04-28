@@ -28,7 +28,7 @@ export async function signRequestBody(
 
 	const derSignature = sign(messageHash, privateKeyBytes, {
 		prehash: false,
-		format: "compact",
+		format: "recovered",
 	}) as unknown as Uint8Array
 
 	const v = derSignature[64]
@@ -55,7 +55,7 @@ export async function recoverRequestSigner(
 		const canonical = new Uint8Array(sig)
 		canonical[64] = v - 27
 
-		const publicKey = recoverPublicKey(messageHash, canonical, { prehash: false })
+		const publicKey = recoverPublicKey(canonical, messageHash, { prehash: false })
 		const pubKeyBytes = typeof publicKey === "string" ? hexDecode(publicKey) : (publicKey as Uint8Array)
 
 		const hash = hexDecode(keccak256Hex(pubKeyBytes.slice(1)))
