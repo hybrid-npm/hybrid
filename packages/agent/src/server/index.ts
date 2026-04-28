@@ -687,7 +687,9 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 					})
 
 					// Dispatch the actual completion logic
+						console.log(`[agent] calling session.prompt(), prompt length: ${prompt.length}`)
 					await session.prompt(prompt)
+					console.log(`[agent] session.prompt() completed, events received: ${messageCount}`)
 					endOfLlmTime = Date.now()
 
 					const stats = session.getSessionStats()
