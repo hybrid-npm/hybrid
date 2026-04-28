@@ -5,7 +5,8 @@ import {
 	mkdirSync,
 	mkdtempSync,
 	readFileSync,
-	rmSync
+	rmSync,
+	writeFileSync
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
@@ -24,7 +25,7 @@ const __dirname = fileURLToPath(new URL(".", import.meta.url))
 
 let agentProcess: ReturnType<typeof spawn> | null = null
 let projectDir: string | null = null
-let stderrLogFile: string
+const stderrLogFile = `${tmpdir()}/hybrid-eval-stderr.log`
 
 function createTestProject(): string {
 	const templateDir = join(
@@ -55,7 +56,6 @@ async function startAgent(projectPath: string): Promise<void> {
 	console.log("Starting agent...")
 
 	const agentDir = join(__dirname, "..", "packages", "agent")
-
 	const rootDir = join(__dirname, "..")
 	const envFiles = [
 		join(agentDir, ".env"),
@@ -84,7 +84,7 @@ async function startAgent(projectPath: string): Promise<void> {
 		}
 	}
 
-	// If using OpenRouter, set the base URL so the agent knows
+	// If using OpenRouter, configure the agent to route through it
 	if (env.OPENROUTER_API_KEY) {
 		env.ANTHROPIC_BASE_URL = "https://openrouter.ai/api"
 		env.ANTHROPIC_AUTH_TOKEN = env.OPENROUTER_API_KEY
@@ -100,7 +100,6 @@ async function startAgent(projectPath: string): Promise<void> {
 		console.error("  export ANTHROPIC_API_KEY=your-key")
 		console.error("  export OPENROUTER_API_KEY=your-key")
 		console.error("")
-		console.error("Or add to your .env file in packages/agent/")
 		process.exit(1)
 	}
 
@@ -109,8 +108,8 @@ async function startAgent(projectPath: string): Promise<void> {
 		envFiles.some((f) => existsSync(f)) ? ".env file" : "environment"
 	)
 
-	stderrLogFile = `${tmpdir()}/hybrid-eval-stderr.log`
-	try { readFileSync } catch {}
+	// Clear the stderr log
+	try { rmSync(stderrLogFile, { force: true }) } catch {}
 
 	agentProcess = spawn("pnpm", ["tsx", "src/server/index.ts"], {
 		cwd: agentDir,
@@ -130,13 +129,11 @@ async function startAgent(projectPath: string): Promise<void> {
 	agentProcess.stderr?.on("data", (data) => {
 		const str = data.toString()
 		agentOutput += str
-		// Write ALL stderr to temp file for debugging
+		// Append to log file (use try/catch in case of async write issues)
 		try {
-			rmSync(stderrLogFile)
+			writeFileSync(stderrLogFile, str, { flag: "a" })
 		} catch {}
-		const { writeFileSync } = require("node:fs")
-		writeFileSync(stderrLogFile, str, { flag: "a" })
-		// Also print to stderr for the first 1000 chars of each chunk
+		// Print first 1000 chars to stderr for visibility
 		console.error("[eval_stderr]", str.slice(0, 1000).trim())
 	})
 
@@ -149,7 +146,9 @@ async function startAgent(projectPath: string): Promise<void> {
 			const response = await fetch("http://localhost:8454/health")
 			if (response.ok) {
 				console.log("Agent is ready!\n")
-				if (agentOutput) console.log("Startup stderr output:", agentOutput.slice(-500))
+				if (agentOutput) {
+					console.log("Startup stderr output:", agentOutput.slice(-500))
+				}
 				return
 			}
 		} catch {}
@@ -205,8 +204,7 @@ async function main() {
 	runner.addScenario(...createErrorsScenarios())
 
 	try {
-		// Print full agent stderr log for debugging
-		if (stderrLogFile && existsSync(stderrLogFile)) {
+		if (existsSync(stderrLogFile)) {
 			console.error("=== FULL AGENT STDERR ===")
 			console.error(readFileSync(stderrLogFile, "utf-8"))
 			console.error("=== END AGENT STDERR ===")
