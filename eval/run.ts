@@ -84,6 +84,13 @@ async function startAgent(projectPath: string): Promise<void> {
 		}
 	}
 
+	// If using OpenRouter, set the base URL so the agent knows
+	if (env.OPENROUTER_API_KEY) {
+		env.ANTHROPIC_BASE_URL = "https://openrouter.ai/api"
+		env.ANTHROPIC_AUTH_TOKEN = env.OPENROUTER_API_KEY
+		env.ANTHROPIC_API_KEY = ""
+	}
+
 	if (!env.ANTHROPIC_API_KEY && !env.OPENROUTER_API_KEY) {
 		console.error(
 			"Error: ANTHROPIC_API_KEY or OPENROUTER_API_KEY required to run evals"
@@ -102,6 +109,9 @@ async function startAgent(projectPath: string): Promise<void> {
 		envFiles.some((f) => existsSync(f)) ? ".env file" : "environment"
 	)
 
+	stderrLogFile = `${tmpdir()}/hybrid-eval-stderr.log`
+	try { readFileSync } catch {}
+
 	agentProcess = spawn("pnpm", ["tsx", "src/server/index.ts"], {
 		cwd: agentDir,
 		env,
@@ -117,12 +127,17 @@ async function startAgent(projectPath: string): Promise<void> {
 	})
 
 	let agentOutput = ""
-	// Write ALL stderr to temp file for debugging
-	stderrLogFile = "/tmp/hybrid-eval-agent.log"
-	try { require("node:fs").writeFileSync(stderrLogFile, "") } catch {}	agentProcess.stderr?.on("data", (data) => {
-		agentOutput += data.toString()
-		// Print first 1000 chars of ALL stderr for debugging
-		console.error("[eval_stderr]", data.toString().slice(0, 1000).trim())
+	agentProcess.stderr?.on("data", (data) => {
+		const str = data.toString()
+		agentOutput += str
+		// Write ALL stderr to temp file for debugging
+		try {
+			rmSync(stderrLogFile)
+		} catch {}
+		const { writeFileSync } = require("node:fs")
+		writeFileSync(stderrLogFile, str, { flag: "a" })
+		// Also print to stderr for the first 1000 chars of each chunk
+		console.error("[eval_stderr]", str.slice(0, 1000).trim())
 	})
 
 	agentProcess.on("exit", (code) => {
@@ -134,7 +149,7 @@ async function startAgent(projectPath: string): Promise<void> {
 			const response = await fetch("http://localhost:8454/health")
 			if (response.ok) {
 				console.log("Agent is ready!\n")
-		console.log("Agent stderr so far:", agentOutput.slice(-500))
+				if (agentOutput) console.log("Startup stderr output:", agentOutput.slice(-500))
 				return
 			}
 		} catch {}
@@ -191,8 +206,7 @@ async function main() {
 
 	try {
 		// Print full agent stderr log for debugging
-		const { readFileSync, existsSync } = await import("node:fs")
-		if (existsSync(stderrLogFile)) {
+		if (stderrLogFile && existsSync(stderrLogFile)) {
 			console.error("=== FULL AGENT STDERR ===")
 			console.error(readFileSync(stderrLogFile, "utf-8"))
 			console.error("=== END AGENT STDERR ===")
