@@ -1,21 +1,3 @@
-FROM node:22-slim AS builder
-
-WORKDIR /app
-
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY packages/agent/package.json ./packages/agent/
-COPY packages/memory/package.json ./packages/memory/
-COPY packages/scheduler/package.json ./packages/scheduler/
-COPY packages/types/package.json ./packages/types/
-RUN corepack enable && pnpm install --frozen-lockfile
-
-COPY packages/agent/src ./packages/agent/src
-COPY packages/agent/build.mjs ./packages/agent/
-COPY packages/agent/src/skills ./packages/agent/skills/
-RUN pnpm --filter @hybrd/agent build
-
-# ── Runtime image ───────────────────────────────────────────────────────────
-
 FROM node:22-slim
 
 # rename existing node:node to app:app (1000:1000) so tests pass
@@ -31,10 +13,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends sudo \
 
 WORKDIR /app
 
-# Copy build artifacts from builder — both as dist/ (runtime) and dist/agent/ (tests)
-COPY --from=builder /app/packages/agent/dist ./dist/agent/
-COPY --from=builder /app/packages/agent/dist/server/index.cjs ./dist/server/index.cjs
-COPY --from=builder /app/packages/agent/skills ./skills/
+# Build artifacts are produced by the CI job before docker build.
+COPY packages/agent/dist ./dist/agent/
+COPY packages/agent/dist/server/index.cjs ./dist/server/index.cjs
+COPY packages/agent/skills ./skills/
 COPY packages/cli/templates/agent/*.md ./
 
 RUN mkdir -p /usr/local/bin \

@@ -21,8 +21,8 @@
 		}
 	},
 	"scripts": {
-		"build": "tsup",
-		"build:watch": "tsup --watch",
+		"build": "tsup --dts-resolve",
+		"build:watch": "tsup --watch --dts-resolve",
 		"clean": "rm -rf .turbo dist",
 		"test": "vitest run",
 		"test:watch": "vitest",
