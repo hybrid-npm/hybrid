@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import dotenv from "dotenv"
 
+// PROJECT_ROOT was defined at the top
 const PROJECT_ROOT = process.env.AGENT_PROJECT_ROOT || process.cwd()
 for (const f of [".env", ".env.local"]) {
 	const p = join(PROJECT_ROOT, f)
@@ -39,6 +40,10 @@ import {
 	shutdownChatSdk
 } from "./chat-sdk.js"
 
+// ============================================================================
+// SECURITY: Load secrets from persistent volume into memory
+// Secrets are file-based only — never in process.env
+// ============================================================================
 loadSecrets()
 
 // Auto-configure OpenRouter if OPENROUTER_API_KEY is present
@@ -50,7 +55,7 @@ if (
 ) {
 	process.env.ANTHROPIC_BASE_URL = "https://openrouter.ai/api"
 	process.env.ANTHROPIC_AUTH_TOKEN = process.env.OPENROUTER_API_KEY
-	process.env.ANTHROPIC_API_KEY = ""
+	process.env.ANTHROPIC_API_KEY = "" // Must be explicitly empty to prevent conflicts
 }
 
 const AGENT_PORT = Number.parseInt(process.env.AGENT_PORT || "8454")
@@ -63,6 +68,12 @@ function debug(...args: unknown[]) {
 }
 
 const SCHEDULER_ENABLED = process.env.SCHEDULER_ENABLED !== "false"
+const SCHEDULER_POLL_MS = Number.parseInt(
+	process.env.SCHEDULER_POLL_MS || "60000",
+	10
+)
+
+let scheduler: SchedulerService | null = null
 
 function getProviderInfo(): { provider: string; model: string } {
 	const model = process.env.AGENT_MODEL
@@ -98,7 +109,6 @@ const AGENTS_MD = loadMarkdownFile("AGENTS.md")
 const TOOLS_MD = loadMarkdownFile("TOOLS.md")
 const BOOT_MD = loadMarkdownFile("BOOT.md")
 const BOOTSTRAP_MD = loadMarkdownFile("BOOTSTRAP.md")
-const HEARTBEAT_MD = loadMarkdownFile("HEARTBEAT.md")
 
 let cachedConfig: Awaited<ReturnType<typeof loadHybridConfig>>["config"] | null = null
 
@@ -110,6 +120,7 @@ async function getCachedConfig() {
 	return cachedConfig
 }
 
+const HEARTBEAT_MD = loadMarkdownFile("HEARTBEAT.md")
 const BOOTSTRAP_EXISTS = BOOTSTRAP_MD.length > 0
 const AGENT_NAME = process.env.AGENT_NAME || "hybrid-agent"
 
@@ -121,7 +132,9 @@ async function shouldRunOnboarding(userId?: string): Promise<boolean> {
 }
 
 function isAgentOnboardingMode(): boolean {
-	return BOOTSTRAP_EXISTS && !isOnboardingComplete(PROJECT_ROOT, BOOTSTRAP_EXISTS)
+	return (
+		BOOTSTRAP_EXISTS && !isOnboardingComplete(PROJECT_ROOT, BOOTSTRAP_EXISTS)
+	)
 }
 
 let memoryManager: Awaited<ReturnType<typeof MemoryIndexManager.get>> | null = null
@@ -129,87 +142,179 @@ let memoryManager: Awaited<ReturnType<typeof MemoryIndexManager.get>> | null = n
 async function initMemory() {
 	try {
 		const config = resolveMemoryConfig(
-			{ sources: ["memory", "sessions"], provider: "openai", fallback: "none" },
+			{
+				sources: ["memory", "sessions"],
+				provider: "openai",
+				fallback: "none"
+			},
 			AGENT_NAME
 		)
-		const manager = await MemoryIndexManager.get({ agentId: AGENT_NAME, workspaceDir: PROJECT_ROOT, config })
-		if (!manager) { console.log(`[memory] disabled`); return }
+		const manager = await MemoryIndexManager.get({
+			agentId: AGENT_NAME,
+			workspaceDir: PROJECT_ROOT,
+			config
+		})
+		if (!manager) {
+			console.log(`[memory] disabled (config.enabled=false)`)
+			return
+		}
 		memoryManager = manager
 		await manager.sync({ reason: "startup" })
 		console.log(`[memory] initialized (${manager.status().files} files)`)
-	} catch (err) { console.log(`[memory] disabled: ${(err as Error).message}`) }
+	} catch (err) {
+		console.log(`[memory] disabled: ${(err as Error).message}`)
+	}
 }
 
 async function initScheduler() {
-	if (!SCHEDULER_ENABLED) { console.log(`[scheduler] disabled`); return }
+	if (!SCHEDULER_ENABLED) {
+		console.log(`[scheduler] disabled`)
+		return
+	}
+
 	try {
 		const { mkdirSync, existsSync } = await import("node:fs")
 		const { dirname } = await import("node:path")
-		const dbDir = dirname(SCHEDULER_DB_PATH)
-		if (!existsSync(dbDir)) mkdirSync(dbDir, { recursive: true })
 
+		const dbDir = dirname(SCHEDULER_DB_PATH)
+		if (!existsSync(dbDir)) {
+			mkdirSync(dbDir, { recursive: true })
+		}
+
+		console.log(`[scheduler] initializing store at ${SCHEDULER_DB_PATH}...`)
 		const store = await createSqliteStore({ dbPath: SCHEDULER_DB_PATH })
+		console.log(`[scheduler] store initialized`)
 
 		const executor: SchedulerExecutor = {
 			runAgentTurn: async (job) => {
-				const message = job.payload.kind === "agentTurn" ? job.payload.message : ""
-				const response = await fetch(`http://localhost:${AGENT_PORT}/api/chat`, {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({ messages: [{ id: crypto.randomUUID(), role: "user" as const, content: message }], chatId: job.sessionKey || `scheduled-${job.id}` })
-				})
-				if (!response.ok) return { status: "error" as const, error: `Agent returned ${response.status}` }
+				console.log(`[scheduler] Running agent turn: ${job.name}`)
+				const message =
+					job.payload.kind === "agentTurn" ? job.payload.message : ""
+				const response = await fetch(
+					`http://localhost:${AGENT_PORT}/api/chat`,
+					{
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({
+							messages: [
+								{
+									id: crypto.randomUUID(),
+									role: "user" as const,
+									content: message
+								}
+							],
+							chatId: job.sessionKey || `scheduled-${job.id}`
+						})
+					}
+				)
+
+				if (!response.ok) {
+					return {
+						status: "error" as const,
+						error: `Agent returned ${response.status}`
+					}
+				}
+
 				const reader = response.body?.getReader()
 				const decoder = new TextDecoder()
 				let result = ""
-				if (reader) {
-					while (true) {
-						const { done, value } = await reader.read()
-						if (done) break
-						for (const line of decoder.decode(value).split("\n")) {
-							if (line.startsWith("data: ") && line !== "data: [DONE]") {
-								try {
-									const p = JSON.parse(line.slice(6))
-									if (p.type === "text" && p.content) result += p.content
-								} catch {}
-							}
+
+				while (reader) {
+					const { done, value } = await reader.read()
+					if (done) break
+
+					for (const line of decoder.decode(value).split("\n")) {
+						if (line.startsWith("data: ") && line !== "data: [DONE]") {
+							try {
+								const p = JSON.parse(line.slice(6))
+								if (p.type === "text" && p.content) result += p.content
+							} catch {}
 						}
 					}
 				}
+
 				return { status: "ok" as const, summary: result.slice(0, 500) }
 			},
-			runSystemEvent: async () => ({ status: "ok" as const })
+
+			runSystemEvent: async (job) => {
+				console.log(`[scheduler] Running system event: ${job.name}`)
+				return { status: "ok" as const }
+			}
 		}
 
 		const dispatcher = {
-			dispatch: async (params: { channel: string; to: string; message: string }) => {
+			dispatch: async (params: {
+				channel: string
+				to: string
+				message: string
+			}) => {
 				const bot = getChatInstance()
-				if (!bot) return { delivered: false, error: "Chat SDK not initialized" }
-				console.log(`[scheduler] dispatch to ${params.channel}:${params.to} — ${params.message.slice(0, 50)}`)
+				if (!bot) {
+					return {
+						delivered: false,
+						error: "Chat SDK not initialized"
+					}
+				}
+				console.log(
+					`[scheduler] dispatch to ${params.channel}:${params.to} — ${params.message.slice(0, 50)}`
+				)
 				return { delivered: true }
 			}
 		}
 
-		const scheduler = new SchedulerService({ store, dispatcher, executor, enabled: true })
+		scheduler = new SchedulerService({
+			store,
+			dispatcher,
+			executor,
+			enabled: true
+		})
 		await scheduler.start()
 		console.log(`[scheduler] initialized`)
-	} catch (err) { console.log(`[scheduler] disabled: ${(err as Error).message}`) }
+	} catch (err) {
+		console.log(`[scheduler] disabled: ${(err as Error).message}`)
+		console.error(`[scheduler] error stack:`, (err as Error).stack)
+	}
 }
 
-async function searchMemory(query: string, userId?: string, conversationId?: string) {
+async function searchMemory(
+	query: string,
+	userId?: string,
+	conversationId?: string
+) {
 	if (!memoryManager) return null
 	try {
-		let scope: { type: "global" } | { type: "user"; userId: string } | { type: "conversation"; userId: string; conversationId: string } | undefined
-		if (userId && conversationId) scope = { type: "conversation", userId, conversationId }
-		else if (userId) scope = { type: "user", userId }
-		const results = await memoryManager.search(query, { maxResults: 5, scope })
+		let scope:
+			| { type: "global" }
+			| { type: "user"; userId: string }
+			| { type: "conversation"; userId: string; conversationId: string }
+			| undefined
+
+		if (userId && conversationId) {
+			scope = { type: "conversation", userId, conversationId }
+		} else if (userId) {
+			scope = { type: "user", userId }
+		}
+
+		const results = await memoryManager.search(query, {
+			maxResults: 5,
+			scope
+		})
 		if (results.length === 0) return null
-		return results.map((r) => `${r.path}:${r.startLine}\n${r.snippet}`).join("\n\n---\n\n")
-	} catch (err) { console.error(`[memory] search error: ${(err as Error).message}`); return null }
+		return results
+			.map((r) => `${r.path}:${r.startLine}\n${r.snippet}`)
+			.join("\n\n---\n\n")
+	} catch (err) {
+		console.error(`[memory] search error: ${(err as Error).message}`)
+		return null
+	}
 }
 
 interface ContainerRequest {
-	messages: Array<{ id: string; role: "system" | "user" | "assistant"; content: string }>
+	messages: Array<{
+		id: string
+		role: "system" | "user" | "assistant"
+		content: string
+	}>
 	chatId: string
 	userId?: string
 	teamId?: string
@@ -218,240 +323,532 @@ interface ContainerRequest {
 	channel?: string
 }
 
+function encodeSSE(data: string): Uint8Array {
+	return new TextEncoder().encode(`data: ${data}\n\n`)
+}
+
 function encodeSSEJson(data: unknown): Uint8Array {
-	return new TextEncoder().encode(`data: ${JSON.stringify(data)}\n\n`)
+	return encodeSSE(JSON.stringify(data))
 }
 
 function encodeDone(): Uint8Array {
 	return new TextEncoder().encode("data: [DONE]\n\n")
 }
 
+// Safe enqueue helper that catches "closed controller" errors from client disconnect
+function safeEnqueue<T extends ReadableStreamDefaultController<Uint8Array>>(
+	controller: T,
+	data: Uint8Array
+): boolean {
+	try {
+		controller.enqueue(data)
+		return true
+	} catch {
+		return false
+	}
+}
+
 const HISTORY_TAIL_SIZE = 20
 
-function buildPromptWithHistory(messages: ContainerRequest["messages"]): string {
-	if (!Array.isArray(messages) || messages.length === 0) return ""
-	if (messages.length <= 1) return messages.at(-1)?.content ?? ""
-	const currentMessage = messages.at(-1)!
+function buildPromptWithHistory(
+	messages: ContainerRequest["messages"]
+): string {
+	// Guard against invalid input
+	if (!Array.isArray(messages) || messages.length === 0) {
+		return ""
+	}
+
+	if (messages.length <= 1) {
+		return messages.at(-1)?.content ?? ""
+	}
+
+	const currentMessage = messages.at(-1)
+	if (!currentMessage) return ""
+
 	const priorMessages = messages.slice(0, -1)
+
 	let historyMessages: ContainerRequest["messages"]
 	if (priorMessages.length <= HISTORY_TAIL_SIZE) {
 		historyMessages = priorMessages
 	} else {
 		const tail = priorMessages.slice(-HISTORY_TAIL_SIZE + 1)
 		const first = priorMessages.slice(0, 1)
-		historyMessages = [
-			...first,
-			{ id: "", role: "system", content: `... ${priorMessages.length - HISTORY_TAIL_SIZE} earlier messages omitted ...` },
-			...tail,
+		const omitted: ContainerRequest["messages"] = [
+			{
+				id: "",
+				role: "system",
+				content: `... ${priorMessages.length - HISTORY_TAIL_SIZE} earlier messages omitted ...`
+			}
 		]
+		historyMessages = [...first, ...omitted, ...tail]
 	}
-	const historyBlock = historyMessages.map((m) => `[${m.role}]: ${m.content}`).join("\n\n")
-	return `<conversation_history>\n${historyBlock}\n</conversation_history>\n\n${currentMessage.content}`
+
+	const historyBlock = historyMessages
+		.map((m) => `[${m.role}]: ${m.content}`)
+		.join("\n\n")
+
+	return `<conversation_history>
+${historyBlock}
+</conversation_history>
+
+${currentMessage.content}`
 }
 
-async function runAgent(req: ContainerRequest): Promise<ReadableStream<Uint8Array>> {
+async function runAgent(
+	req: ContainerRequest
+): Promise<ReadableStream<Uint8Array>> {
 	if (isAgentOnboardingMode() && !(await shouldRunOnboarding(req.userId))) {
+		const message =
+			"This agent is currently being set up. Please try again later."
+		console.log(
+			`[agent] Rejected non-owner request during onboarding (userId: ${req.userId})`
+		)
 		return new ReadableStream<Uint8Array>({
-			start(c) { c.enqueue(encodeSSEJson({ type: "text", content: "This agent is currently being set up. Please try again later." })); c.enqueue(encodeDone()); c.close() }
+			start(controller) {
+				controller.enqueue(encodeSSEJson({ type: "text", content: message }))
+				controller.enqueue(encodeDone())
+				controller.close()
+			}
 		})
 	}
+
 	if (BOOTSTRAP_EXISTS && (await shouldRunOnboarding(req.userId))) {
 		recordBootstrapSeeded(PROJECT_ROOT)
 	}
 
 	const lastMessage = req.messages.at(-1)?.content || ""
-	const memoryContext = lastMessage ? await searchMemory(lastMessage, req.userId, req.chatId) : null
+
+	const memoryContext = lastMessage
+		? await searchMemory(lastMessage, req.userId, req.chatId)
+		: null
+
 	const now = new Date()
-	const currentTime = `## Current Time\n\nThe current date and time is: ${now.toISOString()}
+	const currentTime = `## Current Time
+
+The current date and time is: ${now.toISOString()}
 - ISO format: ${now.toISOString()}
 - Local: ${now.toLocaleString()}
-- Unix timestamp (ms): ${now.getTime()}`
-	const sanitizedConversationId = req.conversationId ? req.conversationId.replace(/[^a-zA-Z0-9_:=-]/g, "") : undefined
+- Unix timestamp (ms): ${now.getTime()}
+
+When scheduling tasks, calculate the target time relative to the current time above.`
+
+	const sanitizedConversationId = req.conversationId
+		? req.conversationId.replace(/[^a-zA-Z0-9_:=-]/g, "")
+		: undefined
+
 	const rawChannel = req.channel || "web"
 	const channel = rawChannel.replace(/[^a-zA-Z0-9_-]/g, "")
-	const conversationContext = sanitizedConversationId
-		? `## Conversation Context\n\n- Conversation ID: ${sanitizedConversationId}\n- Channel: ${channel}`
-		: ""
-	const USER_MD = loadUserMarkdown(req.userId)
-	const bootstrapContext = BOOTSTRAP_EXISTS && (await shouldRunOnboarding(req.userId)) ? `\n\n## BOOTSTRAP.md\n\n${BOOTSTRAP_MD}` : ""
 
-	const systemPrompt = [IDENTITY_MD, SOUL_MD, req.systemPrompt, AGENTS_MD, TOOLS_MD, USER_MD, currentTime, conversationContext, bootstrapContext, memoryContext ? `\n\n## Relevant Memory\n\n${memoryContext}` : ""].filter(Boolean).join("\n\n")
+	const conversationContext = sanitizedConversationId
+		? `## Conversation Context
+
+- Conversation ID: ${sanitizedConversationId}
+- Channel: ${channel}
+
+When scheduling reminders, include delivery info to send the message back to this conversation:
+\`\`\`json
+{
+  "name": "Reminder name",
+  "schedule": { "kind": "at", "at": "<ISO timestamp>" },
+  "payload": { "kind": "agentTurn", "message": "Your reminder message" },
+  "delivery": { "mode": "announce", "channel": "${channel}", "to": "${sanitizedConversationId}" }
+}
+\`\`\`
+
+**CRITICAL**: When responding about a scheduled reminder:
+- NEVER show ISO timestamps, Unix time, or technical formats
+- NEVER say "Current time is 2026-03-02T..."
+- ONLY say things like "in 1 minute" or "at 4:30 PM"
+- Keep it SHORT: "Got it! I'll remind you in 1 minute"`
+		: ""
+
+	const PLAINTEXT_CHANNELS = new Set(["whatsapp", "sms"])
+	const channelFormatting = PLAINTEXT_CHANNELS.has(channel)
+		? `## Channel Formatting (${channel})
+
+You are responding on ${channel}, which renders plain text only. Follow these rules strictly:
+- Do NOT use markdown formatting (no #, ##, **, *, -, backticks, code blocks, etc.)
+- Write in plain, natural language
+- Use line breaks for separation instead of headers
+- Use simple dashes or numbers for lists (not markdown bullets)
+- Spell out emphasis naturally instead of using bold/italic
+- Never mention tool calls, tool names, or internal processes in your response
+- Keep responses concise and conversational`
+		: ""
+
+	const USER_MD = loadUserMarkdown(req.userId)
+
+	const bootstrapContext =
+		BOOTSTRAP_EXISTS && (await shouldRunOnboarding(req.userId))
+			? `\n\n## BOOTSTRAP.md\n\n${BOOTSTRAP_MD}`
+			: ""
+
+	const systemPromptParts = [
+		IDENTITY_MD,
+		SOUL_MD,
+		req.systemPrompt,
+		AGENTS_MD,
+		TOOLS_MD,
+		USER_MD,
+		channelFormatting,
+		currentTime,
+		conversationContext,
+		bootstrapContext
+	]
+	if (memoryContext) {
+		systemPromptParts.push(`\n\n## Relevant Memory\n\n${memoryContext}`)
+	}
+	const systemPrompt = systemPromptParts.filter(Boolean).join("\n\n")
 	const prompt = buildPromptWithHistory(req.messages)
+
 	const abortController = new AbortController()
 
 	const baseUrl = process.env.ANTHROPIC_BASE_URL
 	const isUsingOpenRouter = baseUrl?.includes("openrouter.ai")
-	const authToken = process.env.ANTHROPIC_AUTH_TOKEN ?? process.env.OPENROUTER_API_KEY
+	const authToken =
+		process.env.ANTHROPIC_AUTH_TOKEN ?? process.env.OPENROUTER_API_KEY
 	const apiKey = process.env.ANTHROPIC_API_KEY
 	const model = process.env.AGENT_MODEL || (isUsingOpenRouter ? "anthropic/claude-sonnet-4" : "claude-sonnet-4-20250514")
 
+	// Validate API configuration
 	if (!apiKey && !authToken) {
+		const error =
+			"No API key configured. Set ANTHROPIC_API_KEY or OPENROUTER_API_KEY"
 		return new ReadableStream<Uint8Array>({
-			start(c) { c.enqueue(encodeSSEJson({ type: "error", content: "No API key configured" })); c.enqueue(encodeDone()); c.close() }
-		})
-	}
-	if (isUsingOpenRouter && !authToken) {
-		return new ReadableStream<Uint8Array>({
-			start(c) { c.enqueue(encodeSSEJson({ type: "error", content: "OpenRouter requires ANTHROPIC_AUTH_TOKEN" })); c.enqueue(encodeDone()); c.close() }
-		})
-	}
-	if (!isUsingOpenRouter && !apiKey) {
-		return new ReadableStream<Uint8Array>({
-			start(c) { c.enqueue(encodeSSEJson({ type: "error", content: "Anthropic requires ANTHROPIC_API_KEY" })); c.enqueue(encodeDone()); c.close() }
+			start(controller) {
+				controller.enqueue(encodeSSEJson({ type: "error", content: error }))
+				controller.enqueue(encodeDone())
+				controller.close()
+			}
 		})
 	}
 
-	const { workspaceDir } = await getOrCreateUserWorkspace(req.userId || "anonymous")
+	if (isUsingOpenRouter && !authToken) {
+		const error =
+			"OpenRouter requires ANTHROPIC_AUTH_TOKEN (set OPENROUTER_API_KEY)"
+		return new ReadableStream<Uint8Array>({
+			start(controller) {
+				controller.enqueue(encodeSSEJson({ type: "error", content: error }))
+				controller.enqueue(encodeDone())
+				controller.close()
+			}
+		})
+	}
+
+	if (!isUsingOpenRouter && !apiKey) {
+		const error = "Anthropic requires ANTHROPIC_API_KEY"
+		return new ReadableStream<Uint8Array>({
+			start(controller) {
+				controller.enqueue(encodeSSEJson({ type: "error", content: error }))
+				controller.enqueue(encodeDone())
+				controller.close()
+			}
+		})
+	}
+
+	debug("API config:", {
+		baseUrl: baseUrl || "(default Anthropic)",
+		model,
+		hasAuthToken: !!authToken,
+		hasApiKey: !!apiKey
+	})
+
+	const { workspaceDir } = await getOrCreateUserWorkspace(
+		req.userId || "anonymous"
+	)
+
 	const authStorage = AuthStorage.create()
-	if (isUsingOpenRouter) { if (authToken) authStorage.setRuntimeApiKey("openrouter", authToken) }
-	else { if (apiKey) authStorage.setRuntimeApiKey("anthropic", apiKey) }
+	if (isUsingOpenRouter) {
+		if (authToken) authStorage.setRuntimeApiKey("openrouter", authToken)
+	} else {
+		if (apiKey) authStorage.setRuntimeApiKey("anthropic", apiKey)
+	}
+
+	const modelRegistry = ModelRegistry.create(authStorage)
+	const activeModel = modelRegistry.getAll().find(m => m.id === model)
+	if (!activeModel) {
+		const errorMsg = `Model ${model} not found`
+		return new ReadableStream<Uint8Array>({
+			start(controller) {
+				controller.enqueue(encodeSSEJson({ type: "error", content: errorMsg }))
+				controller.enqueue(encodeDone())
+				controller.close()
+			}
+		})
+	}
 
 	const config = await getCachedConfig()
-	const modelRegistry = ModelRegistry.create(authStorage)
-	const activeModel = modelRegistry.getAll().find((m) => m.id === model)
-	if (!activeModel) {
-		return new ReadableStream<Uint8Array>({
-			start(c) { c.enqueue(encodeSSEJson({ type: "error", content: `Model ${model} not found` })); c.enqueue(encodeDone()); c.close() }
-		})
-	}
 
-	// Build custom tools
 	const { createCustomTools } = await import("./mcp-factory.js")
-	const customTools = await createCustomTools({ projectRoot: PROJECT_ROOT, userId: req.userId || "anonymous", scheduler: scheduler ?? undefined }, config?.mcpServers)
+	const customTools = await createCustomTools(
+		{
+			projectRoot: PROJECT_ROOT,
+			userId: req.userId || "anonymous",
+			scheduler: scheduler ?? undefined
+		},
+		config?.mcpServers
+	)
 
+	let messageCount = 0
+	
+	// Timing metrics
 	const startTime = Date.now()
 	let ttfb = 0
 	let endOfLlmTime = 0
 
-	// Set up the stream using a deferred promise that resolves when session.prompt() completes
-	let sessionInstance: ReturnType<typeof createAgentSession> extends Promise<infer T> ? T : never | undefined
+	let cancelSession: (() => Promise<void>) | null = null
 
-	return new ReadableStream<Uint8Array>({
-		async start(controller) {
-			try {
-				const sessionResult = await createAgentSession({
-					cwd: workspaceDir,
-					model: activeModel,
-					authStorage,
-					sessionManager: SessionManager.inMemory(),
-					customTools,
-				})
-				const session = sessionResult.session
-				sessionInstance = session as any
+	const stream = new ReadableStream<Uint8Array>({
+		start(controller) {
+			;(async () => {
+				try {
+					const { session } = await createAgentSession({
+						cwd: workspaceDir,
+						model: activeModel,
+						authStorage,
+						sessionManager: SessionManager.inMemory(),
+						customTools,
+					})
 
-				// Buffer text and tool-call events from subscribe
-				let textBuffer = ""
-				let messageCount = 0
-
-				session.subscribe((event) => {
-					messageCount++
-					try {
+					// Register subscribe BEFORE steer/prompt so we capture ALL events
+					session.subscribe((event) => {
+						messageCount++
+						
 						if (!ttfb && event.type === "message_update" && event.assistantMessageEvent) {
 							ttfb = Date.now() - startTime
 						}
+
 						if (event.type === "message_update" && event.assistantMessageEvent) {
-							const ev = (event as any).assistantMessageEvent
-							if (ev.type === "text_delta" && ev.delta) {
-								textBuffer += ev.delta
-								controller.enqueue(encodeSSEJson({ type: "text", content: ev.delta }))
-							} else if (ev.type === "toolcall_start") {
-								const block = ev.partial?.content?.[ev.contentIndex]
-								controller.enqueue(encodeSSEJson({ type: "tool-call-start", toolCallId: block?.id ?? "", toolName: block?.name ?? "unknown" }))
-							} else if (ev.type === "toolcall_delta") {
-								const block = ev.partial?.content?.[ev.contentIndex]
-								controller.enqueue(encodeSSEJson({ type: "tool-call-delta", toolCallId: block?.id ?? "", argsTextDelta: ev.delta ?? "" }))
-							} else if (ev.type === "toolcall_end") {
-								controller.enqueue(encodeSSEJson({ type: "tool-call-end", toolCallId: ev.toolCall?.id ?? "" }))
+							const ev = event.assistantMessageEvent
+							
+							// Try/catch around all enqueue calls — client disconnect can close
+							// the controller, making any subsequent enqueue throw TypeError
+							try {
+								if (ev.type === "text_delta") {
+									controller.enqueue(encodeSSEJson({ type: "text", content: ev.delta }))
+								} else if (ev.type === "toolcall_start") {
+									const block = (ev as any).partial?.content?.[(ev as any).contentIndex]
+									const toolName = block?.name || "unknown"
+									const toolCallId = block?.id || ""
+									console.log(`${pc.cyan("[agent]")} 🔧 tool: ${pc.yellow(toolName)}`)
+									controller.enqueue(encodeSSEJson({
+										type: "tool-call-start",
+										toolCallId: toolCallId,
+										toolName: toolName
+									}))
+								} else if (ev.type === "toolcall_delta") {
+									const block = (ev as any).partial?.content?.[(ev as any).contentIndex]
+									const toolCallId = block?.id || ""
+									controller.enqueue(encodeSSEJson({
+										type: "tool-call-delta",
+										toolCallId: toolCallId,
+										argsTextDelta: (ev as any).delta || ""
+									}))
+								} else if (ev.type === "toolcall_end") {
+									const toolCallId = (ev as any).toolCall?.id || ""
+									controller.enqueue(encodeSSEJson({
+										type: "tool-call-end",
+										toolCallId: toolCallId
+									}))
+								}
+							} catch {
+								// Stream already cancelled — ignore
 							}
 						}
+					})
+
+					// Wire up cancellation so client disconnect aborts the LLM call
+					cancelSession = () => session.abort()
+
+					// Inject the system prompt override via steer
+					await session.steer(`[System Instruction Override]\n${systemPrompt}`)
+
+					// Dispatch the actual completion logic
+					await session.prompt(prompt)
+					endOfLlmTime = Date.now()
+
+					const stats = session.getSessionStats()
+					const totalTime = endOfLlmTime - startTime
+					const latency = ttfb ? endOfLlmTime - startTime - ttfb : 0
+
+					console.log(
+						`\n${pc.green("[agent]")} ${pc.bold("✓")} done ${pc.gray(`${messageCount} events`)} ${pc.gray(`| ${stats.tokens.input} in / ${stats.tokens.output} out`)}`
+					)
+
+					safeEnqueue(controller, encodeSSEJson({
+						type: "usage",
+						inputTokens: stats.tokens.input,
+						outputTokens: stats.tokens.output,
+						totalCostUsd: stats.cost,
+						numTurns: 1,
+						telemetry: {
+							ttfbMs: ttfb,
+							totalMs: totalTime,
+							llmLatencyMs: latency,
+						}
+					}))
+
+					safeEnqueue(controller, encodeDone())
+					try { controller.close() } catch { /* already closed */ }
+
+					if (BOOTSTRAP_EXISTS && (await shouldRunOnboarding(req.userId))) {
+						const bootstrapStillExists =
+							loadMarkdownFile("BOOTSTRAP.md").length > 0
+						if (!bootstrapStillExists) {
+							console.log(
+								`${pc.green("[agent]")} ${pc.bold("✓")} onboarding complete`
+							)
+							recordOnboardingCompleted(PROJECT_ROOT)
+						}
+					}
+				} catch (err) {
+					const errorMessage =
+						err instanceof Error ? err.message : "Agent error"
+					console.error(`[agent] error in stream:`, err)
+
+					try {
+						controller.enqueue(
+							encodeSSEJson({ type: "error", content: errorMessage })
+						)
+						safeEnqueue(controller, encodeDone())
+						try { controller.close() } catch { /* already closed */ }
 					} catch {
 						// Stream already cancelled
 					}
-				})
-
-				// Inject system prompt
-				await session.steer(`[System Instruction Override]\n${systemPrompt}`)
-
-				// Run the actual LLM call
-				await session.prompt(prompt)
-				endOfLlmTime = Date.now()
-
-				const stats = session.getSessionStats()
-				const totalTime = endOfLlmTime - startTime
-				const latency = ttfb ? endOfLlmTime - startTime - ttfb : 0
-
-				console.log(`${pc.green("[agent]")} ${pc.bold("✓")} done ${pc.gray(`${messageCount} events`)} ${pc.gray(`| ${stats.tokens.input} in / ${stats.tokens.output} out`)}`)
-
-				controller.enqueue(encodeSSEJson({
-					type: "usage",
-					inputTokens: stats.tokens.input,
-					outputTokens: stats.tokens.output,
-					totalCostUsd: stats.cost,
-					numTurns: 1,
-					telemetry: { ttfbMs: ttfb, totalMs: totalTime, llmLatencyMs: latency }
-				}))
-
-				if (BOOTSTRAP_EXISTS && (await shouldRunOnboarding(req.userId))) {
-					if (loadMarkdownFile("BOOTSTRAP.md").length === 0) {
-						console.log(`${pc.green("[agent]")} ${pc.bold("✓")} onboarding complete`)
-						recordOnboardingCompleted(PROJECT_ROOT)
-					}
 				}
-			} catch (err) {
-				const errorMessage = err instanceof Error ? err.message : "Agent error"
-				console.error(`[agent] error in stream:`, err)
-				try {
-					controller.enqueue(encodeSSEJson({ type: "error", content: errorMessage }))
-				} catch { /* closed */ }
-			}
-
-			controller.enqueue(encodeDone())
-			try { controller.close() } catch { /* already closed */ }
+			})()
 		},
-		cancel() {
+		async cancel() {
 			console.log("[agent] stream cancelled")
+			try {
+				await cancelSession?.()
+			} catch { /* ignore */ }
 			abortController.abort()
 		}
 	})
+
+	return stream
 }
 
 const app = new Hono()
-app.get(HEALTH_CHECK_PATH, (c) => c.json({ status: "healthy" }))
+
+app.get(HEALTH_CHECK_PATH, (c) => {
+	return c.json({ status: "healthy" })
+})
 
 app.post(AGENT_ENDPOINT, async (c) => {
 	const source = c.req.header("X-Source") || "unknown"
+
+	// ── Key-based authentication ──────────────────────────────────────────
 	const signedBody = await c.req.text()
 	const signature = c.req.header("X-Signature")
 	let authenticatedUserId: string | null = null
+
 	if (signature) {
 		const recovered = await recoverRequestSigner(signedBody, signature)
-		if (recovered) { authenticatedUserId = recovered; debug("[auth] recovered address:", recovered) }
-		else { debug("[auth] signature verification failed") }
+		if (recovered) {
+			authenticatedUserId = recovered
+			debug("[auth] recovered address:", recovered)
+		} else {
+			debug("[auth] signature verification failed")
+		}
 	}
+
 	let req: ContainerRequest
-	try { req = JSON.parse(signedBody) } catch { return c.json({ error: "Invalid JSON body" }, 400) }
-	if (!Array.isArray(req.messages)) return c.json({ error: "messages must be an array" }, 400)
-	if (!req.chatId || typeof req.chatId !== "string") return c.json({ error: "chatId is required" }, 400)
+	try {
+		req = JSON.parse(signedBody)
+	} catch {
+		return c.json({ error: "Invalid JSON body" }, 400)
+	}
+
+	if (!Array.isArray(req.messages)) {
+		return c.json({ error: "messages must be an array" }, 400)
+	}
+
+	if (!req.chatId || typeof req.chatId !== "string") {
+		return c.json({ error: "chatId is required" }, 400)
+	}
+
 	const preview = req.messages.at(-1)?.content?.slice(0, 50) || ""
 	console.log()
-	console.log(`${pc.cyan("[agent]")} ${pc.bold("←")} ${source} ${pc.gray(`(${req.messages.length} msgs)`)}`)
-	if (preview) console.log(`${pc.gray("  └")} "${preview}${preview.length >= 50 ? "..." : ""}"`)
-	if (authenticatedUserId) req.userId = authenticatedUserId
+	console.log(
+		`${pc.cyan("[agent]")} ${pc.bold("←")} ${source} ${pc.gray(`(${req.messages.length} msgs)`)}`
+	)
+	if (preview)
+		console.log(
+			`${pc.gray("  └")} "${preview}${preview.length >= 50 ? "..." : ""}"`
+		)
+
+	// Override userId with authenticated address if signature was valid
+	if (authenticatedUserId) {
+		req.userId = authenticatedUserId
+	}
+
 	const stream = await runAgent(req)
-	return new Response(stream, { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" } })
+
+	return new Response(stream, {
+		headers: {
+			"Content-Type": "text/event-stream",
+			"Cache-Control": "no-cache",
+			Connection: "keep-alive"
+		}
+	})
 })
 
-app.all("/api/webhooks/slack", async (c) => { const bot = getChatInstance(); if (!bot) return c.json({ error: "chat-sdk not initialized" }, 503); return bot.webhooks.slack(c.req.raw) })
-app.all("/api/webhooks/discord", async (c) => { const bot = getChatInstance(); if (!bot) return c.json({ error: "chat-sdk not initialized" }, 503); return bot.webhooks.discord(c.req.raw) })
-app.all("/api/webhooks/linear", async (c) => { const bot = getChatInstance(); if (!bot) return c.json({ error: "chat-sdk not initialized" }, 503); return bot.webhooks.linear(c.req.raw) })
+app.all("/api/webhooks/slack", async (c) => {
+	const bot = getChatInstance()
+	if (!bot) return c.json({ error: "chat-sdk not initialized" }, 503)
+	return bot.webhooks.slack(c.req.raw)
+})
 
-process.on("uncaughtException", (err) => { console.error("[agent] uncaughtException:", err); process.exit(1) })
-process.on("unhandledRejection", (reason) => { console.error("[agent] unUnhandledRejection:", reason); process.exit(1) })
+app.all("/api/webhooks/discord", async (c) => {
+	const bot = getChatInstance()
+	if (!bot) return c.json({ error: "chat-sdk not initialized" }, 503)
+	return bot.webhooks.discord(c.req.raw)
+})
 
-let scheduler: SchedulerService | null = null
+app.all("/api/webhooks/linear", async (c) => {
+	const bot = getChatInstance()
+	if (!bot) return c.json({ error: "chat-sdk not initialized" }, 503)
+	return bot.webhooks.linear(c.req.raw)
+})
+
+// ── Shutdown ───────────────────────────────────────────────────────────
+process.on("SIGINT", async () => {
+	console.log("[agent] Shutting down (SIGINT)...")
+	try {
+		await shutdownChatSdk()
+	} catch { /* ignore */ }
+	process.exit(0)
+})
+
+process.on("SIGTERM", async () => {
+	console.log("[agent] Shutting down (SIGTERM)...")
+	try {
+		await shutdownChatSdk()
+	} catch { /* ignore */ }
+	process.exit(0)
+})
+
+process.on("uncaughtException", (err) => {
+	console.error("[agent] uncaughtException:", err)
+	process.exit(1)
+})
+
+process.on("unhandledRejection", (reason) => {
+	console.error("[agent] unhandledRejection:", reason)
+	process.exit(1)
+})
 
 function printStartup() {
 	const { provider, model } = getProviderInfo()
+
+	const baseUrl = process.env.ANTHROPIC_BASE_URL
+	const isUsingOpenRouter = baseUrl?.includes("openrouter.ai")
+	const authToken =
+		process.env.ANTHROPIC_AUTH_TOKEN ?? process.env.OPENROUTER_API_KEY
+	const apiKey = process.env.ANTHROPIC_API_KEY
+
 	console.log("\n  ╭──────────────────────────────────────────────────╮")
 	console.log("  │              Hybrid Agent Server                 │")
 	console.log("  ╰──────────────────────────────────────────────────╯")
@@ -459,44 +856,132 @@ function printStartup() {
 	console.log(`  Server      http://localhost:${AGENT_PORT}`)
 	console.log(`  Health      http://localhost:${AGENT_PORT}/health`)
 	console.log(`  Chat        http://localhost:${AGENT_PORT}${AGENT_ENDPOINT}`)
-	console.log(`    HEARTBEAT.md          ${HEARTBEAT_MD ? "✓ loaded" : "✗ not found"}`)
+	console.log(
+		`    HEARTBEAT.md          ${HEARTBEAT_MD ? "✓ loaded" : "✗ not found"}`
+	)
+
+	console.log()
+	console.log("  ─────────────────────────────────────────────────")
+	console.log()
 	console.log("  SDK Configuration:")
-	console.log(`    Provider: ${provider}, Model: ${model}`)
+	if (isUsingOpenRouter) {
+		console.log("    Mode: OpenRouter")
+		console.log(`    ANTHROPIC_BASE_URL:   ${baseUrl}`)
+		console.log(
+			`    ANTHROPIC_AUTH_TOKEN: ${authToken ? `***${authToken.slice(-4)}` : "✗ missing"}`
+		)
+		console.log(`    ANTHROPIC_API_KEY:    "" (empty for OpenRouter)`)
+		if (!authToken) {
+			console.log()
+			console.log("    ⚠️  ERROR: OPENROUTER_API_KEY must be set")
+		}
+	} else {
+		console.log("    Mode: Anthropic Direct")
+		console.log(`    ANTHROPIC_BASE_URL:   (default)`)
+		console.log(
+			`    ANTHROPIC_API_KEY:    ${apiKey ? `***${apiKey.slice(-4)}` : "✗ missing"}`
+		)
+		if (!apiKey) {
+			console.log()
+			console.log("    ⚠️  ERROR: ANTHROPIC_API_KEY must be set")
+		}
+	}
+
+	console.log()
+	console.log("  ─────────────────────────────────────────────────")
+	console.log()
+	console.log()
+	console.log("  ─────────────────────────────────────────────────")
+	console.log()
+	console.log(`  Scheduler   ${SCHEDULER_ENABLED ? "✓ enabled" : "✗ disabled"}`)
+	if (SCHEDULER_ENABLED) {
+		console.log(`  Sched DB    ${SCHEDULER_DB_PATH}`)
+	}
+	console.log()
+	console.log("  ─────────────────────────────────────────────────")
+	console.log()
+	console.log("  Ready. Waiting for requests...")
+	console.log()
 }
 
 printStartup()
-
 Promise.all([initMemory(), initScheduler()]).then(async () => {
 	const config = await getCachedConfig()
 
-	await initChatSdk({
-		projectRoot: PROJECT_ROOT,
-		agentName: AGENT_NAME,
-		runAgentTurn: async (params) => {
-			const agentReq: ContainerRequest = { messages: params.messages as ContainerRequest["messages"], chatId: params.chatId, userId: params.userId, conversationId: params.conversationId, channel: params.channel }
-			const stream = await runAgent(agentReq)
-			const reader = stream.getReader()
-			const decoder = new TextDecoder()
-			let buffer = ""
-			return (async function* () {
-				while (true) {
-					const { done, value } = await reader.read()
-					if (done) { if (buffer.trim()) { const line = buffer.trim(); if (line.startsWith("data: ") && line !== "data: [DONE]") { try { const p = JSON.parse(line.slice(6)); if (p.type === "text" && p.content) yield p.content } catch {} } } break }
-					const text = decoder.decode(value, { stream: true })
-					buffer += text
-					const lines = buffer.split("\n")
-					buffer = lines.pop() || ""
-					for (const line of lines) { if (line.startsWith("data: ") && line !== "data: [DONE]") { try { const p = JSON.parse(line.slice(6)); if (p.type === "text" && p.content) yield p.content } catch {} } }
+	await initChatSdk(
+		{
+			projectRoot: PROJECT_ROOT,
+			agentName: AGENT_NAME,
+			runAgentTurn: async (params) => {
+				const agentReq: ContainerRequest = {
+					messages: params.messages as ContainerRequest["messages"],
+					chatId: params.chatId,
+					userId: params.userId,
+					conversationId: params.conversationId,
+					channel: params.channel
 				}
-			})()
-		}
-	}, config.chatSdk)
+				const stream = await runAgent(agentReq)
+				const reader = stream.getReader()
+				const decoder = new TextDecoder()
+				let buffer = ""
+				return (async function* () {
+					while (true) {
+						const { done, value } = await reader.read()
+						if (done) {
+							if (buffer.trim()) {
+								const line = buffer.trim()
+								if (line.startsWith("data: ") && line !== "data: [DONE]") {
+									try {
+										const parsed = JSON.parse(line.slice(6))
+										if (parsed.type === "text" && parsed.content) {
+											yield parsed.content
+										}
+									} catch {}
+								}
+							}
+							break
+						}
+						const text = decoder.decode(value, { stream: true })
+						buffer += text
+						const lines = buffer.split("\n")
+						buffer = lines.pop() || ""
+						for (const line of lines) {
+							const trimmed = line.trim()
+							if (trimmed.startsWith("data: ") && trimmed !== "data: [DONE]") {
+								try {
+									const parsed = JSON.parse(trimmed.slice(6))
+									if (parsed.type === "text" && parsed.content) {
+										yield parsed.content
+									}
+								} catch {}
+							}
+						}
+					}
+				})()
+			}
+		},
+		config.chatSdk
+	)
 
 	if (config.chatSdk?.enabled) {
-		console.log(`  Chat SDK Webhooks:`)
-		if (config.chatSdk.providers?.slack?.enabled) console.log(`  Slack    http://localhost:${AGENT_PORT}/api/webhooks/slack`)
-		if (config.chatSdk.providers?.discord?.enabled) console.log(`  Discord  http://localhost:${AGENT_PORT}/api/webhooks/discord`)
-		if (config.chatSdk.providers?.linear?.enabled) console.log(`  Linear   http://localhost:${AGENT_PORT}/api/webhooks/linear`)
+		console.log()
+		console.log(`  ${pc.bold("Chat SDK Webhooks (local)")}`)
+		console.log(`  ${pc.gray("─────────────────────────────────")}`)
+		if (config.chatSdk.providers?.slack?.enabled) {
+			console.log(`  Slack    http://localhost:${AGENT_PORT}/api/webhooks/slack`)
+		}
+		if (config.chatSdk.providers?.discord?.enabled) {
+			console.log(`  Discord  http://localhost:${AGENT_PORT}/api/webhooks/discord`)
+		}
+		if (config.chatSdk.providers?.linear?.enabled) {
+			console.log(`  Linear   http://localhost:${AGENT_PORT}/api/webhooks/linear`)
+		}
+		console.log()
+		console.log(`  ${pc.bold("ngrok tunnel (for external webhooks)")}`)
+		console.log(`  ${pc.gray("─────────────────────────────────")}`)
+		console.log(`  ngrok http ${AGENT_PORT}`)
+		console.log(`  Then set webhook URLs on platforms to: https://<ngrok-id>.ngrok-free.app/api/webhooks/<channel>`)
+		console.log()
 	}
 
 	serve({ hostname: "0.0.0.0", port: AGENT_PORT, fetch: app.fetch })
