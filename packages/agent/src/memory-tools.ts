@@ -28,7 +28,7 @@ import { createFileTools } from "./tools/file.js"
 // ── Helpers ────────────────────────────────────────────────
 
 function errorText(text: string) {
-	return { content: [{ type: "text" as const, text }], details: {} as unknown }
+	return { content: [{ type: "text" as const, text }], details: {} as unknown, isError: true }
 }
 
 function okText(text: string) {

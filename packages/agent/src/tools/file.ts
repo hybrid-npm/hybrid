@@ -55,7 +55,7 @@ const deleteSchema = Type.Object({
 // ── Helpers ──────────────────────────────────────────────────────────────
 
 function errorText(text: string) {
-	return { content: [{ type: "text" as const, text }], details: {} }
+	return { content: [{ type: "text" as const, text }], details: {} as unknown, isError: true }
 }
 
 function okText(text: string) {

@@ -577,9 +577,6 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 		if (apiKey) authStorage.setRuntimeApiKey("anthropic", apiKey)
 	}
 
-	const providerKey = isUsingOpenRouter ? "openrouter" : "anthropic"
-	const fullModelName = `${providerKey}:${model}`
-
 	const config = await getCachedConfig()
 
 	// Parse model
