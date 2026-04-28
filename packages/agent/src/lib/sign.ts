@@ -37,8 +37,12 @@ export async function recoverRequestSigner(
 	body: string,
 	signatureHex: string
 ): Promise<`0x${string}` | null> {
-	return await recoverMessageAddress({
-		message: body,
-		signature: signatureHex as `0x${string}`
-	})
+	try {
+		return await recoverMessageAddress({
+			message: body,
+			signature: signatureHex as `0x${string}`
+		})
+	} catch {
+		return null
+	}
 }
