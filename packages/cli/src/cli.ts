@@ -696,7 +696,7 @@ async function dev(useDocker: boolean) {
 
 async function msgCommand(msgArgs: string[]) {
 	const { find } = msgArgs;
-	let message = msgArgs.find((a, i) => !a.startsWith("--"));
+	const message = msgArgs.find((a, i) => !a.startsWith("--"));
 	const urlFlag = msgArgs.find((_, i) => {
 		const prev = msgArgs[i - 1];
 		return prev === "--url";
