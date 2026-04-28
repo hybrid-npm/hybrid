@@ -522,7 +522,11 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 	}
 
 	const modelRegistry = ModelRegistry.create(authStorage)
-	const activeModel = modelRegistry.getAll().find(m => m.id === model)
+	// When using OpenRouter, find the openrouter provider version specifically
+	// (getAll().find() may pick up the "anthropic" direct version which has no auth)
+	const activeModel = isUsingOpenRouter
+		? modelRegistry.find("openrouter", model)
+		: modelRegistry.getAll().find(m => m.id === model)
 	if (!activeModel) {
 		const errorMsg = `Model ${model} not found`
 		return new ReadableStream<Uint8Array>({
