@@ -37,7 +37,7 @@ RUN mkdir -p /usr/local/bin \
   && chown app:app /app/data/secrets \
   && chmod 700 /app/data/secrets \
   && chown -R app:app /app/data/memory \
-  && chown -R app:app /app/data/workspaces \
+  && chmod 777 /app/data/workspaces \
   && chown -R app:app /app/data/credentials
 
 COPY --chmod=755 entrypoint.sh /entrypoint.sh
