@@ -50,8 +50,11 @@ export function createBootstrappingScenarios(): TestScenario[] {
 							const parsed = JSON.parse(data)
 							if (parsed.type === "text") {
 								responseText += parsed.content
+							} else if (parsed.type === "error") {
+								throw new Error(`Agent returned error: ${parsed.content}`)
 							}
 						} catch {
+							if (typeof responseText === "string") throw // rethrow our error
 							// Skip invalid JSON
 						}
 					}

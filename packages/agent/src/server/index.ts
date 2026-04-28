@@ -605,6 +605,12 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 		config?.mcpServers
 	)
 
+	debug("Creating Pi session", {
+		cwd: workspaceDir,
+		model: activeModel.id,
+		customTools: customTools.length,
+	})
+
 	let messageCount = 0
 	let hasStreamedText = false
 	

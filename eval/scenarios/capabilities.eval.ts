@@ -43,7 +43,7 @@ export function createCapabilitiesScenarios(): TestScenario[] {
 
 				let hasSchedulerToolCall = false
 				for await (const chunk of stream) {
-					if (chunk.includes("list_tasks") || chunk.includes("schedule")) {
+					if (chunk.includes("list_scheduled_tasks") || chunk.includes("schedule")) {
 						hasSchedulerToolCall = true
 						break
 					}

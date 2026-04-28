@@ -25,10 +25,13 @@ export function createMessagingScenarios(): TestScenario[] {
               const parsed = JSON.parse(data)
               if (parsed.type === 'text') {
                 responseText += parsed.content
+              } else if (parsed.type === 'error') {
+                throw new Error(`Agent error: ${parsed.content}`)
               } else if (parsed.type === 'usage') {
                 hasUsage = true
               }
             } catch {
+              if (!(responseText === '')) throw
               // Skip invalid JSON
             }
           }
