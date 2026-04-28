@@ -74,7 +74,7 @@ function getProviderInfo(): { provider: string; model: string } {
 	const model = process.env.AGENT_MODEL
 	const baseUrl = process.env.ANTHROPIC_BASE_URL
 	if (baseUrl?.includes("openrouter.ai")) {
-		return { provider: "openrouter", model: model || "claude-sonnet-4" }
+		return { provider: "openrouter", model: model || "anthropic/claude-sonnet-4" }
 	}
 	return { provider: "anthropic", model: model || "claude-sonnet-4-20250514" }
 }
@@ -465,7 +465,7 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 	const authToken =
 		process.env.ANTHROPIC_AUTH_TOKEN ?? process.env.OPENROUTER_API_KEY
 	const apiKey = process.env.ANTHROPIC_API_KEY
-	const model = process.env.AGENT_MODEL || (isUsingOpenRouter ? "claude-sonnet-4" : "claude-sonnet-4-20250514")
+	const model = process.env.AGENT_MODEL || (isUsingOpenRouter ? "anthropic/claude-sonnet-4" : "claude-sonnet-4-20250514")
 
 	// Validate API configuration
 	if (!apiKey && !authToken) {
