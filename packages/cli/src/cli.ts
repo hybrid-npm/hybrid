@@ -383,16 +383,6 @@ async function init(name?: string) {
 		version: 1,
 		allowFrom: []
 	}
-	const ownerResponse = await prompts({
-		type: "text",
-		name: "address",
-		message: "Enter your wallet address (owner, optional)"
-	})
-	const ownerAddress = ownerResponse?.address?.trim() || ""
-	if (ownerAddress) {
-		acl.allowFrom.push(ownerAddress.toLowerCase())
-		console.log(`\n✅ Added owner: ${ownerAddress.toLowerCase()}`)
-	}
 	writeFileSync(
 		resolve(credentialsDir, "allowFrom.json"),
 		JSON.stringify(acl, null, 2)
