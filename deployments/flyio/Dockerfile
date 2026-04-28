@@ -21,7 +21,7 @@ FROM node:22-slim
 
 RUN groupadd -g 1000 app \
   && useradd -u 1000 -g app -m -s /bin/bash app \
-  && groupadd -g 1001 claude \
+  && (groupadd -g 1001 claude || true) \
   && useradd -u 1001 -g claude -m -s /bin/bash claude
 
 RUN apt-get update && apt-get install -y --no-install-recommends sudo \
