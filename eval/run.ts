@@ -233,3 +233,16 @@ main().catch((error) => {
 	cleanupTestProject()
 	process.exit(1)
 })
+
+// Handle graceful shutdown
+process.on("SIGTERM", () => {
+	stopAgent()
+	cleanupTestProject()
+	process.exit(0)
+})
+
+process.on("SIGINT", () => {
+	stopAgent()
+	cleanupTestProject()
+	process.exit(1)
+})
