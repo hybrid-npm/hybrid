@@ -581,7 +581,10 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 
 	// Parse model
 	const modelRegistry = ModelRegistry.create(authStorage)
-	const activeModel = modelRegistry.getAll().find(m => m.id === model)
+	const allModels = modelRegistry.getAll()
+	console.error(`[model-registry] found ${allModels.length} models, looking for "${model}"`)
+	console.error(`[model-registry] available:`, allModels.map(m => m.id).join(", "))
+	const activeModel = allModels.find(m => m.id === model)
 	if (!activeModel) {
 		const errorMsg = `Model ${model} not found`
 		console.error(`[agent] initialization failed: ${errorMsg}`)
