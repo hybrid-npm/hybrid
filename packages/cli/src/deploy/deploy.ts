@@ -233,7 +233,6 @@ async function runBuild(projectRoot: string, packageDir: string) {
 		"IDENTITY.md",
 		"TOOLS.md",
 		"BOOT.md",
-		"BOOTSTRAP.md",
 		"HEARTBEAT.md",
 		"USER.md"
 	]

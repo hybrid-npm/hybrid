@@ -15,7 +15,6 @@ const PROJECT_CONFIG_FILES = [
 	"SOUL.md",
 	"TOOLS.md",
 	"BOOT.md",
-	"BOOTSTRAP.md",
 	"HEARTBEAT.md",
 	"USER.md"
 ]

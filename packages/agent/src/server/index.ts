@@ -28,11 +28,6 @@ import { loadHybridConfig } from "../config/index.js"
 import { resolveUserRole } from "../memory-tools.js"
 import { loadSecrets } from "../lib/secret-store"
 import { getOrCreateUserWorkspace } from "../lib/workspace"
-import {
-	isOnboardingComplete,
-	recordBootstrapSeeded,
-	recordOnboardingCompleted
-} from "../lib/workspace-state"
 import { recoverRequestSigner } from "../lib/sign.js"
 import {
 	initChatSdk,
@@ -108,7 +103,6 @@ const SOUL_MD = loadMarkdownFile("SOUL.md")
 const AGENTS_MD = loadMarkdownFile("AGENTS.md")
 const TOOLS_MD = loadMarkdownFile("TOOLS.md")
 const BOOT_MD = loadMarkdownFile("BOOT.md")
-const BOOTSTRAP_MD = loadMarkdownFile("BOOTSTRAP.md")
 
 let cachedConfig: Awaited<ReturnType<typeof loadHybridConfig>>["config"] | null = null
 
@@ -121,21 +115,8 @@ async function getCachedConfig() {
 }
 
 const HEARTBEAT_MD = loadMarkdownFile("HEARTBEAT.md")
-const BOOTSTRAP_EXISTS = BOOTSTRAP_MD.length > 0
 const AGENT_NAME = process.env.AGENT_NAME || "hybrid-agent"
 
-async function shouldRunOnboarding(userId?: string): Promise<boolean> {
-	if (!BOOTSTRAP_EXISTS) return false
-	if (isOnboardingComplete(PROJECT_ROOT, BOOTSTRAP_EXISTS)) return false
-	const { role } = await resolveUserRole(PROJECT_ROOT, userId || "anonymous")
-	return role === "owner"
-}
-
-function isAgentOnboardingMode(): boolean {
-	return (
-		BOOTSTRAP_EXISTS && !isOnboardingComplete(PROJECT_ROOT, BOOTSTRAP_EXISTS)
-	)
-}
 
 let memoryManager: Awaited<ReturnType<typeof MemoryIndexManager.get>> | null = null
 
@@ -397,25 +378,6 @@ ${currentMessage.content}`
 async function runAgent(
 	req: ContainerRequest
 ): Promise<ReadableStream<Uint8Array>> {
-	if (isAgentOnboardingMode() && !(await shouldRunOnboarding(req.userId))) {
-		const message =
-			"This agent is currently being set up. Please try again later."
-		console.log(
-			`[agent] Rejected non-owner request during onboarding (userId: ${req.userId})`
-		)
-		return new ReadableStream<Uint8Array>({
-			start(controller) {
-				controller.enqueue(encodeSSEJson({ type: "text", content: message }))
-				controller.enqueue(encodeDone())
-				controller.close()
-			}
-		})
-	}
-
-	if (BOOTSTRAP_EXISTS && (await shouldRunOnboarding(req.userId))) {
-		recordBootstrapSeeded(PROJECT_ROOT)
-	}
-
 	const lastMessage = req.messages.at(-1)?.content || ""
 
 	const memoryContext = lastMessage
@@ -478,10 +440,6 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 
 	const USER_MD = loadUserMarkdown(req.userId)
 
-	const bootstrapContext =
-		BOOTSTRAP_EXISTS && (await shouldRunOnboarding(req.userId))
-			? `\n\n## BOOTSTRAP.md\n\n${BOOTSTRAP_MD}`
-			: ""
 
 	const systemPromptParts = [
 		IDENTITY_MD,
@@ -493,7 +451,6 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 		channelFormatting,
 		currentTime,
 		conversationContext,
-		bootstrapContext
 	]
 	if (memoryContext) {
 		systemPromptParts.push(`\n\n## Relevant Memory\n\n${memoryContext}`)
@@ -691,16 +648,6 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 					safeEnqueue(controller, encodeDone())
 					try { controller.close() } catch { /* already closed */ }
 
-					if (BOOTSTRAP_EXISTS && (await shouldRunOnboarding(req.userId))) {
-						const bootstrapStillExists =
-							loadMarkdownFile("BOOTSTRAP.md").length > 0
-						if (!bootstrapStillExists) {
-							console.log(
-								`${pc.green("[agent]")} ${pc.bold("✓")} onboarding complete`
-							)
-							recordOnboardingCompleted(PROJECT_ROOT)
-						}
-					}
 				} catch (err) {
 					const errorMessage =
 						err instanceof Error ? err.message : "Agent error"

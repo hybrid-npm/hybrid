@@ -159,7 +159,6 @@ Hybrid uses the **OpenClaw** standard for agent template files. This is an open 
 | `USER.md` | Human's profile (name, timezone, preferences) | When configuring user-specific settings |
 | `TOOLS.md` | Local environment notes (cameras, SSH, voices, tool specifics) | When adding environment-specific configuration |
 | `BOOT.md` | Startup instructions (executed on agent start) | When you need setup steps on every restart |
-| `BOOTSTRAP.md` | First-run setup wizard (deleted after completion) | When onboarding new agents |
 | `HEARTBEAT.md` | Periodic check tasks | When defining recurring background tasks |
 
 All templates follow OpenClaw's format exactly.

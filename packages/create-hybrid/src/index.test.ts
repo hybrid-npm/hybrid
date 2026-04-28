@@ -38,7 +38,6 @@ describe("create-hybrid CLI", () => {
 			"IDENTITY.md",
 			"USER.md",
 			"TOOLS.md",
-			"BOOTSTRAP.md",
 			"HEARTBEAT.md"
 		]
 
@@ -130,7 +129,6 @@ describe("create-hybrid CLI", () => {
 			"USER.md",
 			"TOOLS.md",
 			"BOOT.md",
-			"BOOTSTRAP.md",
 			"HEARTBEAT.md"
 		]
 

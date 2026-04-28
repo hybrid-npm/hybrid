@@ -493,7 +493,6 @@ async function build(target?: string) {
 		"IDENTITY.md",
 		"TOOLS.md",
 		"BOOT.md",
-		"BOOTSTRAP.md",
 		"HEARTBEAT.md",
 		"USER.md"
 	]) {
@@ -607,7 +606,6 @@ function generateDockerfile(distDir: string): string {
 		"IDENTITY.md",
 		"TOOLS.md",
 		"BOOT.md",
-		"BOOTSTRAP.md",
 		"HEARTBEAT.md",
 		"USER.md",
 	]
