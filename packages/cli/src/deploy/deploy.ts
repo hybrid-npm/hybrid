@@ -264,6 +264,7 @@ async function runBuild(projectRoot: string, packageDir: string) {
 			dotenv: "^16.4.5",
 			hono: "^4.10.8",
 			"sql.js": "^1.11.0",
+			viem: "^2.46.2",
 			zod: "^4.0.0"
 		}
 	}

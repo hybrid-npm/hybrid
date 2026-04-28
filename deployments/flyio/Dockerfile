@@ -13,6 +13,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends sudo \
 
 WORKDIR /app
 
+# Install runtime dependencies that are marked external in build.mjs
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/agent/package.json ./packages/agent/
+COPY packages/memory/package.json ./packages/memory/
+COPY packages/scheduler/package.json ./packages/scheduler/
+COPY packages/types/package.json ./packages/types/
+RUN corepack enable && pnpm install --frozen-lockfile --prod
+
 # Build artifacts are produced by the CI job before docker build.
 COPY packages/agent/dist ./dist/agent/
 COPY packages/agent/dist/server/index.cjs ./dist/server/index.cjs
