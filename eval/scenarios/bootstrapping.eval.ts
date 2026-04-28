@@ -54,7 +54,6 @@ export function createBootstrappingScenarios(): TestScenario[] {
 								throw new Error(`Agent returned error: ${parsed.content}`)
 							}
 						} catch {
-							if (typeof responseText === "string") throw // rethrow our error
 							// Skip invalid JSON
 						}
 					}

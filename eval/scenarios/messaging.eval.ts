@@ -15,6 +15,7 @@ export function createMessagingScenarios(): TestScenario[] {
 
         let responseText = ''
         let hasUsage = false
+        let lastError: string | undefined
 
         for await (const chunk of stream) {
           if (chunk.startsWith('data: ')) {
@@ -26,15 +27,18 @@ export function createMessagingScenarios(): TestScenario[] {
               if (parsed.type === 'text') {
                 responseText += parsed.content
               } else if (parsed.type === 'error') {
-                throw new Error(`Agent error: ${parsed.content}`)
+                lastError = parsed.content
               } else if (parsed.type === 'usage') {
                 hasUsage = true
               }
             } catch {
-              if (!(responseText === '')) throw
               // Skip invalid JSON
             }
           }
+        }
+
+        if (lastError) {
+          throw new Error(`Agent returned error: ${lastError}`)
         }
 
         if (!responseText) {
