@@ -36,7 +36,7 @@ COPY packages/agent/src/skills ./dist/skills
 COPY packages/agent/dist/server/index.cjs ./dist/server/
 COPY packages/agent/dist/index.cjs ./dist/
 
-COPY AGENTS.md SOUL.md IDENTITY.md USER.md TOOLS.md BOOT.md BOOTSTRAP.md HEARTBEAT.md ./
+COPY packages/cli/templates/agent/*.md ./
 
 RUN mkdir -p /app/data/memory/users \
   && mkdir -p /app/data/workspaces \
@@ -48,21 +48,9 @@ RUN mkdir -p /app/data/memory/users \
   && chown -R app:app /app/data/workspaces \
   && chown -R app:app /app/data/credentials
 
-RUN mkdir -p /usr/local/bin \
-  && cat > /usr/local/bin/claude-wrapper.sh << 'WRAPPER'
-#!/bin/sh
-# Scrub secret env vars before passing to Claude
-unset WALLET_KEY WALLET_PRIVATE_KEY SECRET_KEY || true
-exec "$@"
-WRAPPER
-  && chmod +x /usr/local/bin/claude-wrapper.sh \
-  && cat > /entrypoint.sh << 'ENTRY'
-#!/bin/sh
-# Clean potentially leaked secret env vars
-unset WALLET_KEY WALLET_PRIVATE_KEY SECRET_KEY || true
-exec "$@"
-ENTRY
-  && chmod +x /entrypoint.sh
+RUN mkdir -p /usr/local/bin && printf '#!/bin/sh\nunset WALLET_KEY WALLET_PRIVATE_KEY SECRET_KEY || true\nexec "$@"' > /usr/local/bin/claude-wrapper.sh && chmod +x /usr/local/bin/claude-wrapper.sh
+
+COPY --chmod=755 entrypoint.sh /entrypoint.sh
 
 ENV AGENT_PORT=8454
 ENTRYPOINT ["/entrypoint.sh"]
