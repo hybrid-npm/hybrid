@@ -222,6 +222,7 @@ COPY package.json ./
 RUN npm install --omit=dev --legacy-peer-deps
 
 COPY dist/server/ ./dist/server/
+COPY AGENTS.md SOUL.md IDENTITY.md USER.md TOOLS.md BOOT.md HEARTBEAT.md ./
 COPY start.sh ./
 RUN chmod +x start.sh
 
