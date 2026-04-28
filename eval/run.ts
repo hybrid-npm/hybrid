@@ -85,10 +85,13 @@ async function startAgent(projectPath: string): Promise<void> {
 	}
 
 	// If using OpenRouter, configure the agent to route through it
+	console.error(`[eval debug] OPENROUTER_API_KEY present: ${!!env.OPENROUTER_API_KEY}, length: ${env.OPENROUTER_API_KEY?.length ?? 0}`)
 	if (env.OPENROUTER_API_KEY) {
 		env.ANTHROPIC_BASE_URL = "https://openrouter.ai/api"
 		env.ANTHROPIC_AUTH_TOKEN = env.OPENROUTER_API_KEY
-		env.ANTHROPIC_API_KEY = ""
+		// Remove ANTHROPIC_API_KEY so the agent doesn't think it has a direct key
+		delete env.ANTHROPIC_API_KEY
+		console.error(`[eval debug] Configured for OpenRouter, key length: ${env.ANTHROPIC_AUTH_TOKEN.length}`)
 	}
 
 	if (!env.ANTHROPIC_API_KEY && !env.OPENROUTER_API_KEY) {
