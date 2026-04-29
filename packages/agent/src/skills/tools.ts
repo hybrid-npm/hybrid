@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process"
-import { createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk"
+import { Type } from "@sinclair/typebox"
+import { defineTool, type ToolDefinition } from "@mariozechner/pi-coding-agent"
 import { getRole, parseACL } from "@hybrd/memory"
-import { z } from "zod"
 import { getSkills, uninstallSkill } from "../server/routes/skills.js"
 import {
 	getAvailableSkills,
@@ -25,13 +25,24 @@ async function addSkillFromClawHub(
 	}
 }
 
-export async function createSkillMcpServer(userId: string) {
+function errorText(text: string) {
+	return { content: [{ type: "text" as const, text }], details: {} as unknown, isError: true }
+}
+
+function okText(text: string) {
+	return { content: [{ type: "text" as const, text }], details: {} as unknown }
+}
+
+export async function createSkillTools(
+	userId: string
+): Promise<ToolDefinition<any, unknown, unknown>[]> {
 	const acl = parseACL(PROJECT_ROOT)
 	const role = await getRole(acl, userId)
 
-	const addSkillTool = tool(
-		"AddSkill",
-		`Add a skill to the agent. Owner only.
+	const addSkillTool = defineTool({
+		name: "AddSkill",
+		label: "Add Skill",
+		description: `Add a skill to the agent. Owner only.
 
 Sources:
 - Claw Hub slug: any skill from clawhub.com (e.g., "blog-writer-cn", "ws-agent-browser")
@@ -41,24 +52,13 @@ Sources:
 Use when user asks to add/install a skill.
 
 Tip: Use ListSkills to see available skills from Claw Hub first.`,
-		{
-			source: z
-				.string()
-				.describe("Skill source (Claw Hub slug, GitHub URL, or npm package)")
-		},
-		async (args) => {
+		parameters: Type.Object({
+			source: Type.String()
+		}),
+		execute: async (_toolCallId, args) => {
 			if (role !== "owner") {
-				return {
-					content: [
-						{
-							type: "text",
-							text: "Permission denied: Only owners can add skills"
-						}
-					],
-					isError: true
-				}
+				return errorText(`Permission denied: Only owners can add skills`)
 			}
-
 			try {
 				const source = args.source
 
@@ -70,14 +70,9 @@ Tip: Use ListSkills to see available skills from Claw Hub first.`,
 				if (isSimpleSlug) {
 					const result = await addSkillFromClawHub(source)
 					if (result.success) {
-						return {
-							content: [
-								{
-									type: "text",
-									text: `Successfully added skill: ${result.skill} from Claw Hub. You can now use it!`
-								}
-							]
-						}
+						return okText(
+							`Successfully added skill: ${result.skill} from Claw Hub. You can now use it!`
+						)
 					}
 				}
 
@@ -86,102 +81,55 @@ Tip: Use ListSkills to see available skills from Claw Hub first.`,
 				const result = await installSkill(source)
 
 				if (result.success) {
-					return {
-						content: [
-							{
-								type: "text",
-								text: `Successfully added skill: ${result.skill}. You can now use it!`
-							}
-						]
-					}
+					return okText(
+						`Successfully added skill: ${result.skill}. You can now use it!`
+					)
 				} else {
-					return {
-						content: [
-							{
-								type: "text",
-								text: `Failed to add skill: ${result.error}`
-							}
-						],
-						isError: true
-					}
+					return errorText(`Failed to add skill: ${result.error}`)
 				}
 			} catch (err) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Error adding skill: ${(err as Error).message}`
-						}
-					],
-					isError: true
-				}
+				return errorText(
+					`Error adding skill: ${(err as Error).message}`
+				)
 			}
 		}
-	)
+	})
 
-	const removeSkillTool = tool(
-		"RemoveSkill",
-		`Remove a skill from the agent. Owner only.
+	const removeSkillTool = defineTool({
+		name: "RemoveSkill",
+		label: "Remove Skill",
+		description: `Remove a skill from the agent. Owner only.
 
 Use when user asks to remove/uninstall a skill.
 
 Note: Core skills cannot be removed.`,
-		{
-			name: z.string().describe("Name of skill to remove")
-		},
-		async (args) => {
+		parameters: Type.Object({
+			name: Type.String()
+		}),
+		execute: async (_toolCallId, args) => {
 			if (role !== "owner") {
-				return {
-					content: [
-						{
-							type: "text",
-							text: "Permission denied: Only owners can remove skills"
-						}
-					],
-					isError: true
-				}
+				return errorText(`Permission denied: Only owners can remove skills`)
 			}
-
 			try {
 				const result = await uninstallSkill(args.name)
 
 				if (result.success) {
-					return {
-						content: [
-							{
-								type: "text",
-								text: `Successfully removed skill: ${args.name}`
-							}
-						]
-					}
+					return okText(`Successfully removed skill: ${args.name}`)
 				} else {
-					return {
-						content: [
-							{
-								type: "text",
-								text: `Failed to remove skill: ${result.error}`
-							}
-						],
-						isError: true
-					}
+					return errorText(`Failed to remove skill: ${result.error}`)
 				}
 			} catch (err) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Error removing skill: ${(err as Error).message}`
-						}
-					],
-					isError: true
-				}
+				return errorText(
+					`Error removing skill: ${(err as Error).message}`
+				)
 			}
 		}
-	)
+	})
 
-	const listSkillsTool = tool(
-		"ListSkills",
-		`List installed and available skills.
+	const listSkillsTool = defineTool({
+		name: "ListSkills",
+		label: "List Skills",
+		description: `List installed and available skills.
 
 Shows:
 - Installed skills (in ./skills/ directory)
@@ -190,8 +138,8 @@ Shows:
 Use when user asks "what skills do you have?", "list skills", or "what skills are available"?
 
 Tip: Use SearchClawHub to find specific skills.`,
-		{},
-		async () => {
+		parameters: Type.Object({}),
+		execute: async () => {
 			const installed = getSkills()
 			const clawHubInstalled = getInstalledSkills()
 			const clawHubAvailable = getAvailableSkills()
@@ -208,69 +156,37 @@ Tip: Use SearchClawHub to find specific skills.`,
 				}
 			}
 
-			return {
-				content: [
-					{
-						type: "text",
-						text: JSON.stringify(response, null, 2)
-					}
-				]
-			}
+			return okText(JSON.stringify(response, null, 2))
 		}
-	)
+	})
 
-	const searchClawHubTool = tool(
-		"SearchClawHub",
-		`Search for skills on Claw Hub.
+	const searchClawHubTool = defineTool({
+		name: "SearchClawHub",
+		label: "Search Claw Hub",
+		description: `Search for skills on Claw Hub.
 
 Use this to discover skills when the user wants to find something specific or browse what's available.
 
 Returns skills matching the query with descriptions.`,
-		{
-			query: z
-				.string()
-				.describe("Search query (e.g., 'browser', 'memory', 'twitter')")
-		},
-		async (args) => {
+		parameters: Type.Object({
+			query: Type.String()
+		}),
+		execute: async (_toolCallId, args) => {
 			try {
 				const results = await searchClawHub(args.query)
 
 				if (results.length === 0) {
-					return {
-						content: [
-							{
-								type: "text",
-								text: "No skills found matching that query. Try a different search term."
-							}
-						]
-					}
+					return okText("No skills found matching that query. Try a different search term.")
 				}
 
-				return {
-					content: [
-						{
-							type: "text",
-							text: JSON.stringify(results, null, 2)
-						}
-					]
-				}
+				return okText(JSON.stringify(results, null, 2))
 			} catch (err) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Error searching Claw Hub: ${(err as Error).message}`
-						}
-					],
-					isError: true
-				}
+				return errorText(
+					`Error searching Claw Hub: ${(err as Error).message}`
+				)
 			}
 		}
-	)
-
-	return createSdkMcpServer({
-		name: "skills",
-		version: "1.0.0",
-		tools: [addSkillTool, removeSkillTool, listSkillsTool, searchClawHubTool]
 	})
+
+	return [addSkillTool, removeSkillTool, listSkillsTool, searchClawHubTool]
 }

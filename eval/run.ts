@@ -5,7 +5,8 @@ import {
 	mkdirSync,
 	mkdtempSync,
 	readFileSync,
-	rmSync
+	rmSync,
+	writeFileSync
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
@@ -24,6 +25,7 @@ const __dirname = fileURLToPath(new URL(".", import.meta.url))
 
 let agentProcess: ReturnType<typeof spawn> | null = null
 let projectDir: string | null = null
+const stderrLogFile = `${tmpdir()}/hybrid-eval-stderr.log`
 
 function createTestProject(): string {
 	const templateDir = join(
@@ -54,7 +56,6 @@ async function startAgent(projectPath: string): Promise<void> {
 	console.log("Starting agent...")
 
 	const agentDir = join(__dirname, "..", "packages", "agent")
-
 	const rootDir = join(__dirname, "..")
 	const envFiles = [
 		join(agentDir, ".env"),
@@ -83,6 +84,16 @@ async function startAgent(projectPath: string): Promise<void> {
 		}
 	}
 
+	// If using OpenRouter, configure the agent to route through it
+	console.error(`[eval debug] OPENROUTER_API_KEY present: ${!!env.OPENROUTER_API_KEY}, length: ${env.OPENROUTER_API_KEY?.length ?? 0}`)
+	if (env.OPENROUTER_API_KEY) {
+		env.ANTHROPIC_BASE_URL = "https://openrouter.ai/api"
+		env.ANTHROPIC_AUTH_TOKEN = env.OPENROUTER_API_KEY
+		// Remove ANTHROPIC_API_KEY so the agent doesn't think it has a direct key
+		delete env.ANTHROPIC_API_KEY
+		console.error(`[eval debug] Configured for OpenRouter, key length: ${env.ANTHROPIC_AUTH_TOKEN.length}`)
+	}
+
 	if (!env.ANTHROPIC_API_KEY && !env.OPENROUTER_API_KEY) {
 		console.error(
 			"Error: ANTHROPIC_API_KEY or OPENROUTER_API_KEY required to run evals"
@@ -92,7 +103,6 @@ async function startAgent(projectPath: string): Promise<void> {
 		console.error("  export ANTHROPIC_API_KEY=your-key")
 		console.error("  export OPENROUTER_API_KEY=your-key")
 		console.error("")
-		console.error("Or add to your .env file in packages/agent/")
 		process.exit(1)
 	}
 
@@ -100,6 +110,9 @@ async function startAgent(projectPath: string): Promise<void> {
 		"Using API key from:",
 		envFiles.some((f) => existsSync(f)) ? ".env file" : "environment"
 	)
+
+	// Clear the stderr log
+	try { rmSync(stderrLogFile, { force: true }) } catch {}
 
 	agentProcess = spawn("pnpm", ["tsx", "src/server/index.ts"], {
 		cwd: agentDir,
@@ -115,8 +128,16 @@ async function startAgent(projectPath: string): Promise<void> {
 		}
 	})
 
+	let agentOutput = ""
 	agentProcess.stderr?.on("data", (data) => {
-		console.error("Agent error:", data.toString().slice(0, 200))
+		const str = data.toString()
+		agentOutput += str
+		// Append to log file (use try/catch in case of async write issues)
+		try {
+			writeFileSync(stderrLogFile, str, { flag: "a" })
+		} catch {}
+		// Print first 1000 chars to stderr for visibility
+		console.error("[eval_stderr]", str.slice(0, 1000).trim())
 	})
 
 	agentProcess.on("exit", (code) => {
@@ -128,6 +149,9 @@ async function startAgent(projectPath: string): Promise<void> {
 			const response = await fetch("http://localhost:8454/health")
 			if (response.ok) {
 				console.log("Agent is ready!\n")
+				if (agentOutput) {
+					console.log("Startup stderr output:", agentOutput.slice(-500))
+				}
 				return
 			}
 		} catch {}
@@ -160,7 +184,7 @@ async function main() {
 		agentUrl,
 		walletsPath,
 		resultsPath,
-		timeout: 60000
+		timeout: 120000
 	}
 
 	const runner = createTestRunner()
@@ -183,6 +207,12 @@ async function main() {
 	runner.addScenario(...createErrorsScenarios())
 
 	try {
+		if (existsSync(stderrLogFile)) {
+			console.error("=== FULL AGENT STDERR ===")
+			console.error(readFileSync(stderrLogFile, "utf-8"))
+			console.error("=== END AGENT STDERR ===")
+		}
+
 		const results = await runner.run(config)
 
 		const failed = results.filter((r) => r.status === "failed")
@@ -202,6 +232,19 @@ async function main() {
 
 main().catch((error) => {
 	console.error("Fatal error:", error)
+	stopAgent()
+	cleanupTestProject()
+	process.exit(1)
+})
+
+// Handle graceful shutdown
+process.on("SIGTERM", () => {
+	stopAgent()
+	cleanupTestProject()
+	process.exit(0)
+})
+
+process.on("SIGINT", () => {
 	stopAgent()
 	cleanupTestProject()
 	process.exit(1)

@@ -41,8 +41,12 @@ async function build() {
 			"viem",
 			"hono",
 			"@hono/node-server",
-			"@anthropic-ai/claude-agent-sdk",
-			"sql.js"
+			"sql.js",
+			"@mariozechner/pi-coding-agent",
+			"@mariozechner/pi-ai",
+			"@mariozechner/pi-agent-core",
+			"@mariozechner/pi-tui",
+			"@sinclair/typebox",
 		]
 	})
 

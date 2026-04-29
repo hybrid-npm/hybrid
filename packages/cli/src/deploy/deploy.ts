@@ -233,7 +233,6 @@ async function runBuild(projectRoot: string, packageDir: string) {
 		"IDENTITY.md",
 		"TOOLS.md",
 		"BOOT.md",
-		"BOOTSTRAP.md",
 		"HEARTBEAT.md",
 		"USER.md"
 	]
@@ -256,13 +255,15 @@ async function runBuild(projectRoot: string, packageDir: string) {
 		version: "1.0.0",
 		type: "module",
 		dependencies: {
-			"@anthropic-ai/claude-agent-sdk": "^0.2.38",
+			"@mariozechner/pi-coding-agent": "^0.70.0",
+			"@sinclair/typebox": "^0.34.49",
 			"@hono/node-server": "^1.13.5",
 			ai: "^6.0.0",
 			"better-sqlite3": "^11.0.0",
 			dotenv: "^16.4.5",
 			hono: "^4.10.8",
 			"sql.js": "^1.11.0",
+			viem: "^2.46.2",
 			zod: "^4.0.0"
 		}
 	}

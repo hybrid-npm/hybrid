@@ -23,16 +23,17 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@anthropic-ai/claude-agent-sdk": "^0.2.38",
+		"@chat-adapter/discord": "^4.25.0",
 		"@chat-adapter/linear": "^4.25.0",
 		"@chat-adapter/slack": "^4.25.0",
-		"@chat-adapter/discord": "^4.25.0",
 		"@chat-adapter/state-pg": "^4.25.0",
 		"@google/generative-ai": "^0.21.0",
 		"@hono/node-server": "^1.13.5",
-		"@hybrd/scheduler": "workspace:*",
 		"@hybrd/memory": "workspace:*",
+		"@hybrd/scheduler": "workspace:*",
 		"@hybrd/types": "workspace:*",
+		"@mariozechner/pi-coding-agent": "^0.70.2",
+		"@sinclair/typebox": "^0.34.49",
 		"ai": "^6.0.0",
 		"better-sqlite3": "^11.0.0",
 		"chat": "^4.25.0",
@@ -41,6 +42,7 @@
 		"hono": "^4.10.8",
 		"openai": "^4.0.0",
 		"picocolors": "^1.1.1",
+		"viem": "^2.46.2",
 		"zod": "^4.0.0"
 	},
 	"devDependencies": {

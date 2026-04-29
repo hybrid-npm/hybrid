@@ -41,20 +41,23 @@ export function createBootstrappingScenarios(): TestScenario[] {
 				})
 
 				let responseText = ""
+				let agentError: string | null = null
 				for await (const chunk of stream) {
 					if (chunk.startsWith("data: ")) {
 						const data = chunk.slice(6)
 						if (data === "[DONE]") break
 
-						try {
-							const parsed = JSON.parse(data)
-							if (parsed.type === "text") {
-								responseText += parsed.content
-							}
-						} catch {
-							// Skip invalid JSON
+						const parsed = JSON.parse(data)
+						if (parsed.type === "text") {
+							responseText += parsed.content
+						} else if (parsed.type === "error") {
+							agentError = parsed.content
 						}
 					}
+				}
+
+				if (agentError) {
+					throw new Error(`Agent returned error: ${agentError}`)
 				}
 
 				if (!responseText.toLowerCase().includes("pong")) {

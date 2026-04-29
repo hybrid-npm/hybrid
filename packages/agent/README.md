@@ -8,7 +8,20 @@ The agent package runs:
 
 1. **Agent Server** — A Hono HTTP server that accepts chat requests, drives the Pi agent SDK to generate responses, and streams Server-Sent Events (SSE) back to callers.
 
-## Architecture
+## Configuration Files
+
+Agent behavior is controlled by markdown files in the project root. Edit these directly or have your AI agent generate them:
+
+| File | Purpose |
+|------|--------|
+| `IDENTITY.md` | Agent name, emoji, personality |
+| `SOUL.md` | Core truths, behavioral rules |
+| `AGENTS.md` | Guidelines for the agent's own tool use |
+| `TOOLS.md` | Local tool and environment notes |
+| `USER.md` | Information about the primary user |
+| `HEARTBEAT.md` | Periodic tasks the agent should run |
+
+**Note:** Hybrid does not use a `BOOTSTRAP.md` file. There is no onboarding flow. You configure the agent by editing the markdown files above in your repository — directly, or by instructing your AI agent to generate them. When the agent starts, it loads all available files and begins accepting requests immediately.
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -159,7 +172,6 @@ Hybrid uses the **OpenClaw** standard for agent template files. This is an open 
 | `USER.md` | Human's profile (name, timezone, preferences) | When configuring user-specific settings |
 | `TOOLS.md` | Local environment notes (cameras, SSH, voices, tool specifics) | When adding environment-specific configuration |
 | `BOOT.md` | Startup instructions (executed on agent start) | When you need setup steps on every restart |
-| `BOOTSTRAP.md` | First-run setup wizard (deleted after completion) | When onboarding new agents |
 | `HEARTBEAT.md` | Periodic check tasks | When defining recurring background tasks |
 
 All templates follow OpenClaw's format exactly.

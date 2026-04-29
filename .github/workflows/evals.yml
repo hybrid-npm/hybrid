@@ -50,7 +50,7 @@ jobs:
         run: pnpm build:packages
 
       - name: Run evals (auto-spawns agent)
-        run: pnpm evals:run
+        run: pnpm evals
 
       - name: Upload test results
         if: always()

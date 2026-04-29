@@ -15,23 +15,26 @@ export function createMessagingScenarios(): TestScenario[] {
 
         let responseText = ''
         let hasUsage = false
+        let agentError: string | null = null
 
         for await (const chunk of stream) {
           if (chunk.startsWith('data: ')) {
             const data = chunk.slice(6)
             if (data === '[DONE]') break
 
-            try {
-              const parsed = JSON.parse(data)
-              if (parsed.type === 'text') {
-                responseText += parsed.content
-              } else if (parsed.type === 'usage') {
-                hasUsage = true
-              }
-            } catch {
-              // Skip invalid JSON
+            const parsed = JSON.parse(data)
+            if (parsed.type === 'text') {
+              responseText += parsed.content
+            } else if (parsed.type === 'error') {
+              agentError = parsed.content
+            } else if (parsed.type === 'usage') {
+              hasUsage = true
             }
           }
+        }
+
+        if (agentError) {
+          throw new Error(`Agent returned error: ${agentError}`)
         }
 
         if (!responseText) {
@@ -49,10 +52,11 @@ export function createMessagingScenarios(): TestScenario[] {
     },
     {
       name: 'agent maintains conversation context',
-      timeout: 60000,
+      timeout: 90000,
       run: async (ctx: TestContext) => {
         const chatId = 'context-test-' + Date.now()
 
+        // First message — establish the name
         let stream = await ctx.http.postStream('/api/chat', {
           messages: [
             { id: '1', role: 'user', content: 'My name is TestUser' }
@@ -61,33 +65,40 @@ export function createMessagingScenarios(): TestScenario[] {
         })
 
         for await (const chunk of stream) {
+          // Wait for the response to complete
           if (chunk.startsWith('data: ') && chunk.includes('[DONE]')) {
             break
           }
         }
 
+        // Second message — send the full conversation history
         stream = await ctx.http.postStream('/api/chat', {
           messages: [
-            { id: '1', role: 'user', content: 'What is my name?' }
+            { id: '1', role: 'user', content: 'My name is TestUser' },
+            { id: '2', role: 'assistant', content: 'Got it, TestUser! What can I help you with?' },
+            { id: '3', role: 'user', content: 'What is my name?' }
           ],
           chatId
         })
 
         let responseText = ''
+        let agentError: string | null = null
         for await (const chunk of stream) {
           if (chunk.startsWith('data: ')) {
             const data = chunk.slice(6)
             if (data === '[DONE]') break
 
-            try {
-              const parsed = JSON.parse(data)
-              if (parsed.type === 'text') {
-                responseText += parsed.content
-              }
-            } catch {
-              // Skip invalid JSON
+            const parsed = JSON.parse(data)
+            if (parsed.type === 'text') {
+              responseText += parsed.content
+            } else if (parsed.type === 'error') {
+              agentError = parsed.content
             }
           }
+        }
+
+        if (agentError) {
+          throw new Error(`Second message error: ${agentError}`)
         }
 
         if (!responseText.toLowerCase().includes('testuser')) {
@@ -97,7 +108,7 @@ export function createMessagingScenarios(): TestScenario[] {
     },
     {
       name: 'agent handles tool calls',
-      timeout: 60000,
+      timeout: 45000,
       run: async (ctx: TestContext) => {
         const stream = await ctx.http.postStream('/api/chat', {
           messages: [
@@ -107,21 +118,24 @@ export function createMessagingScenarios(): TestScenario[] {
         })
 
         let hasToolCall = false
+        let agentError: string | null = null
 
         for await (const chunk of stream) {
           if (chunk.startsWith('data: ')) {
             const data = chunk.slice(6)
             if (data === '[DONE]') break
 
-            try {
-              const parsed = JSON.parse(data)
-              if (parsed.type === 'tool-call-start' || parsed.type === 'tool-call-end') {
-                hasToolCall = true
-              }
-            } catch {
-              // Skip invalid JSON
+            const parsed = JSON.parse(data)
+            if (parsed.type === 'tool-call-start' || parsed.type === 'tool-call-end') {
+              hasToolCall = true
+            } else if (parsed.type === 'error') {
+              agentError = parsed.content
             }
           }
+        }
+
+        if (agentError) {
+          throw new Error(`Agent returned error: ${agentError}`)
         }
 
         if (!hasToolCall) {

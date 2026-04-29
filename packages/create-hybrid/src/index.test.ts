@@ -38,7 +38,6 @@ describe("create-hybrid CLI", () => {
 			"IDENTITY.md",
 			"USER.md",
 			"TOOLS.md",
-			"BOOTSTRAP.md",
 			"HEARTBEAT.md"
 		]
 
@@ -59,20 +58,6 @@ describe("create-hybrid CLI", () => {
 
 		const usersDir = join(PROJECT_DIR, "users")
 		expect(existsSync(usersDir)).toBe(true)
-	})
-
-	it("should create ACL.md for owner access control", () => {
-		execSync(
-			`npx tsx "${CLI_PATH}" --name ${PROJECT_NAME} --agent-name "Test Agent"`,
-			{ cwd: TEMP_DIR, timeout: 15000 }
-		)
-
-		const aclPath = join(PROJECT_DIR, "ACL.md")
-		expect(existsSync(aclPath)).toBe(true)
-
-		const content = readFileSync(aclPath, "utf-8")
-		expect(content).toContain("## Owners")
-		expect(content).toContain("YOUR_WALLET_ADDRESS_HERE")
 	})
 
 	it("should create package.json with correct name", () => {
@@ -130,7 +115,6 @@ describe("create-hybrid CLI", () => {
 			"USER.md",
 			"TOOLS.md",
 			"BOOT.md",
-			"BOOTSTRAP.md",
 			"HEARTBEAT.md"
 		]
 

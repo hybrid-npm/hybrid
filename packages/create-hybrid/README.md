@@ -31,7 +31,6 @@ my-agent/
 ├── SOUL.md                  # Agent personality / identity
 ├── AGENTS.md                # Workspace rules and guidelines
 ├── USER.md                  # Human profile template
-└── [Template files: IDENTITY.md, TOOLS.md, BOOTSTRAP.md, HEARTBEAT.md]
 ```
 
 ## Getting Started

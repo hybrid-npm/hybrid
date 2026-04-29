@@ -86,7 +86,7 @@ export class SchedulerService {
 		this.dispatcher = config.dispatcher
 		this.executor = config.executor
 		this.timezone =
-			config.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
+			(config as { timezone?: string }).timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
 		this.enabled = config.enabled ?? true
 		this.state = {
 			running: false,

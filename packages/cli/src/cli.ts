@@ -56,6 +56,7 @@ async function main() {
 		return build(targetFlag !== -1 ? args[targetFlag + 1] : args[1])
 	}
 	if (command === "dev") return dev(args.includes("--docker"))
+	if (command === "msg" || command === "m") return msgCommand(args.slice(1))
 	if (command === "start") return start()
 	if (command === "deploy") return deployCommand(args)
 	if (command === "init") return init(args[1])
@@ -124,6 +125,7 @@ async function main() {
 	console.log("Commands:")
 	console.log("  init <name>               Initialize a new agent")
 	console.log("  dev                       Start development server")
+	console.log("  msg <message>             Send a message to the agent")
 	console.log("  build [--target]          Build for deployment (firecracker)")
 	console.log("  start                     Run built agent")
 	console.log(
@@ -383,16 +385,6 @@ async function init(name?: string) {
 		version: 1,
 		allowFrom: []
 	}
-	const ownerResponse = await prompts({
-		type: "text",
-		name: "address",
-		message: "Enter your wallet address (owner, optional)"
-	})
-	const ownerAddress = ownerResponse?.address?.trim() || ""
-	if (ownerAddress) {
-		acl.allowFrom.push(ownerAddress.toLowerCase())
-		console.log(`\n✅ Added owner: ${ownerAddress.toLowerCase()}`)
-	}
 	writeFileSync(
 		resolve(credentialsDir, "allowFrom.json"),
 		JSON.stringify(acl, null, 2)
@@ -501,7 +493,6 @@ async function build(target?: string) {
 		"IDENTITY.md",
 		"TOOLS.md",
 		"BOOT.md",
-		"BOOTSTRAP.md",
 		"HEARTBEAT.md",
 		"USER.md"
 	]) {
@@ -559,13 +550,15 @@ async function build(target?: string) {
 		version: "1.0.0",
 		type: "module",
 		dependencies: {
-			"@anthropic-ai/claude-agent-sdk": "^0.2.38",
+			"@mariozechner/pi-coding-agent": "^0.70.0",
+			"@sinclair/typebox": "^0.34.49",
 			"@hono/node-server": "^1.13.5",
 			ai: "^6.0.0",
 			"better-sqlite3": "^11.0.0",
 			dotenv: "^16.4.5",
 			hono: "^4.10.8",
 			"sql.js": "^1.11.0",
+			viem: "^2.46.2",
 			zod: "^4.0.0"
 		}
 	}
@@ -613,7 +606,6 @@ function generateDockerfile(distDir: string): string {
 		"IDENTITY.md",
 		"TOOLS.md",
 		"BOOT.md",
-		"BOOTSTRAP.md",
 		"HEARTBEAT.md",
 		"USER.md",
 	]
@@ -645,7 +637,9 @@ CMD ["node", "server/index.cjs"]
 // ============================================================================
 
 async function dev(useDocker: boolean) {
-	const { execSync } = await import("node:child_process")
+	const { spawn } = await import("node:child_process")
+	const { writeFileSync, existsSync, readFileSync } = await import("node:fs")
+	const { generatePrivateKey, privateKeyToAccount } = await import("viem/accounts")
 
 	if (useDocker) {
 		console.log("\n🐳 Docker dev not yet implemented for new structure")
@@ -654,24 +648,154 @@ async function dev(useDocker: boolean) {
 	}
 
 	const projectDir = projectRoot
-	const agentServer = resolve(packageDir, "dist", "server", "index.cjs")
+	const agentSource = resolve(packageDir, "..", "agent", "src", "server", "index.ts")
+	const keyPath = resolve(projectDir, ".hybrid-key.json")
 
-	console.log("\n🚀 Starting development server...\n")
-	console.log(`   Project: ${projectDir}`)
-	console.log(`   Runtime: ${packageDir}\n`)
+	// Generate or load keypair for auth (dev mode allows unsigned requests)
+	let privateKey: `0x${string}`
+	let address: string
+	if (existsSync(keyPath)) {
+		const keyData = JSON.parse(readFileSync(keyPath, "utf-8"))
+		privateKey = keyData.privateKey
+		const account = privateKeyToAccount(privateKey)
+		address = account.address
+	} else {
+		privateKey = generatePrivateKey()
+		const account = privateKeyToAccount(privateKey)
+		address = account.address
+		writeFileSync(keyPath, JSON.stringify({ privateKey }, null, 2))
+	}
+
+	console.log(`  Agent address: ${address}`)
+	console.log(`  Key saved to:  ${keyPath}`)
+	console.log(`\n  Chat with:  hybrid msg "hello"`)
+	console.log(`  API:        http://localhost:8454/api/chat\n`)
+
+	const server = spawn("npx", ["tsx", agentSource], {
+		cwd: resolve(packageDir, "..", "agent"),
+		stdio: "inherit",
+		env: {
+			...process.env,
+			AGENT_PROJECT_ROOT: projectDir,
+			PRIVATE_KEY: privateKey,
+			ANThROPIC_API_KEY: process.env.ANThROPIC_API_KEY,
+			OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
+			ANTHROPIC_BASE_URL: process.env.ANThROPIC_BASE_URL,
+			ANTHROPIC_AUTH_TOKEN: process.env.ANThROPIC_AUTH_TOKEN
+		}
+	})
+
+	server.on("exit", (code) => {
+		if (code && code !== 0) process.exit(code)
+	})
+}
+
+// ============================================================================
+// Msg — Send a message to the agent over HTTP
+// ============================================================================
+
+async function msgCommand(msgArgs: string[]) {
+	const { find } = msgArgs;
+	const message = msgArgs.find((a, i) => !a.startsWith("--"));
+	const urlFlag = msgArgs.find((_, i) => {
+		const prev = msgArgs[i - 1];
+		return prev === "--url";
+	});
+	const noStream = msgArgs.includes("--no-stream") || msgArgs.includes("-n");
+
+	if (!message) {
+		console.error("Usage: hybrid msg <message> [flags]");
+		console.error("");
+		console.error("Send a message to the agent and stream the response.");
+		console.error("");
+		console.error("Flags:");
+		console.error("  --url <url>       Override agent URL (default: http://localhost:8454)");
+		console.error("  -n, --no-stream   Print full response at once");
+		console.error("");
+		console.error("Examples:");
+		console.error('  hybrid msg "Hello!"');
+		console.error('  hybrid msg "hi" --url http://localhost:8454');
+		process.exit(1);
+	}
+
+	const agentUrl = urlFlag || process.env.AGENT_URL || "http://localhost:8454";
+	const chatId = `cli-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+	const bodyStr = JSON.stringify({
+		messages: [
+			{ id: crypto.randomUUID(), role: "user", content: message }
+		],
+		chatId
+	});
+
+	const endpoint = `${agentUrl.replace(/\/+$/, "")}/api/chat`;
+
+	console.error(`\n  → ${endpoint}\n`);
 
 	try {
-		execSync(`node ${agentServer}`, {
-			cwd: projectDir,
-			stdio: "inherit",
-			env: {
-				...process.env,
-				AGENT_PROJECT_ROOT: projectDir
+		const response = await fetch(endpoint, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: bodyStr
+		});
+
+		if (!response.ok) {
+			const body = await response.text();
+			console.error(`  ❌ Agent returned ${response.status}: ${body}`);
+			process.exit(1);
+		}
+
+		const reader = response.body?.getReader();
+		if (!reader) {
+			console.error("  ❌ No response body");
+			process.exit(1);
+		}
+
+		const decoder = new TextDecoder();
+		let buffer = "";
+		let fullResponse = "";
+
+		while (true) {
+			const { done, value } = await reader.read();
+			if (done) break;
+
+			const text = decoder.decode(value, { stream: true });
+			buffer += text;
+			const lines = buffer.split("\n");
+			buffer = lines.pop() || "";
+
+			for (const line of lines) {
+				const trimmed = line.trim();
+				if (!trimmed.startsWith("data: ")) continue;
+				if (trimmed === "data: [DONE]") break;
+
+				try {
+					const parsed = JSON.parse(trimmed.slice(6));
+					if (parsed.type === "text" && parsed.content) {
+						if (noStream) {
+							fullResponse += parsed.content;
+						} else {
+							process.stdout.write(parsed.content);
+						}
+					} else if (parsed.type === "error") {
+						console.error(`\n  ❌ ${parsed.content}`);
+					} else if (parsed.type === "usage") {
+						console.error(`\n\n  tokens: ${parsed.inputTokens} in / ${parsed.outputTokens} out | cost: $${parsed.totalCostUsd?.toFixed(4)}`);
+					}
+				} catch {
+					// skip malformed lines
+				}
 			}
-		})
-	} catch {
-		console.error("\n❌ Failed to start dev server")
-		process.exit(1)
+		}
+
+		if (noStream && fullResponse) {
+			console.log(fullResponse);
+		} else if (!noStream) {
+			console.error("");
+		}
+	} catch (err) {
+		console.error(`  ❌ Failed to connect: ${err instanceof Error ? err.message : err}`);
+		process.exit(1);
 	}
 }
 
