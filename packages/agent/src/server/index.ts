@@ -515,7 +515,6 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 	)
 
 	const authStorage = AuthStorage.create()
-	console.error("[agent-chat] openrouter=" + isUsingOpenRouter + ", model=" + model + ", authTokenLen=" + (authToken?.length ?? 0) + ", apiKeyLen=" + (apiKey?.length ?? 0))
 	if (isUsingOpenRouter) {
 		if (authToken) authStorage.setRuntimeApiKey("openrouter", authToken)
 	} else {
@@ -528,7 +527,6 @@ You are responding on ${channel}, which renders plain text only. Follow these ru
 	const activeModel = isUsingOpenRouter
 		? modelRegistry.find("openrouter", model)
 		: modelRegistry.getAll().find(m => m.id === model)
-	console.error("[agent-chat] model found: " + activeModel?.id + ", provider: " + activeModel?.provider)
 	if (!activeModel) {
 		const errorMsg = `Model ${model} not found`
 		return new ReadableStream<Uint8Array>({
